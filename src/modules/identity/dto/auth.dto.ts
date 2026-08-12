@@ -1,29 +1,46 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+  MaxLength,
+  MinLength,
+} from "class-validator";
 
 export class RegisterDto {
   @IsEmail()
-  email: string;
+  @MaxLength(320)
+  email!: string;
 
-  @MinLength(8)
-  password: string;
+  @IsString()
+  @MinLength(10)
+  @MaxLength(128)
+  password!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   displayName?: string;
 
   @IsOptional()
   @IsString()
+  @Length(2, 2)
   country?: string;
 
   @IsOptional()
   @IsString()
+  @IsIn(["ru", "uk", "pl", "en"])
   language?: string;
 }
 
 export class LoginDto {
   @IsEmail()
-  email: string;
+  @MaxLength(320)
+  email!: string;
 
   @IsString()
-  password: string;
+  @MinLength(1)
+  @MaxLength(128)
+  password!: string;
 }

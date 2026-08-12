@@ -1,9 +1,10 @@
-import { UrgencyLevel } from '../../urgency/urgency.enum';
+import { UrgencyLevel } from "../../urgency/urgency.enum";
 
 /**
- * Контракт, который ОБЯЗАН описать каждый модуль при регистрации (ТЗ, п. 3.1).
- * Это то, что позволяет добавлять модули (obd-module, parking-module, ...)
- * без переписывания vin/service/documents и т.д.
+ * Контракт, который должен описывать каждый модуль при регистрации.
+ *
+ * Благодаря этому новые модули могут подключаться к платформе
+ * без жёсткой зависимости остальных частей системы от их реализации.
  */
 export interface ModuleCommand {
   name: string;
@@ -11,9 +12,12 @@ export interface ModuleCommand {
 }
 
 export interface ModuleEventSpec {
-  /** Тип события, например "fuel.refill" */
+  /**
+   * Тип события, например: "fuel.refill"
+   */
   type: string;
-  direction: 'publishes' | 'subscribes';
+
+  direction: "publishes" | "subscribes";
   description: string;
 }
 
@@ -40,19 +44,23 @@ export interface ModuleTelegramAction {
 
 export interface ModulePermission {
   scope: string;
-  access: 'read' | 'write' | 'read-write';
+  access: "read" | "write" | "read-write";
 }
 
 export interface ModuleContract {
   id: string;
   version: string;
   description: string;
+
   commands: ModuleCommand[];
   events: ModuleEventSpec[];
   data: string[];
+
   aiTools: ModuleAiTool[];
   notifications: ModuleNotification[];
+
   uiSlots: ModuleUiSlot[];
   telegramActions: ModuleTelegramAction[];
+
   permissions: ModulePermission[];
 }

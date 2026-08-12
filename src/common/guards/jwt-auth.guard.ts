@@ -1,32 +1,70 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
 
-/**
- * Минимальный guard для Этапа 1. Проверяет Bearer-токен, кладёт userId в req.userId.
- * Далее (Этап 2+) сюда добавляется полноценная система прав доступа (Permissions из
- * контрактов модулей — ТЗ п. 3.1).
- */
+interface JwtPayload {
+  sub: string;
+  email: string;
+}
+
+interface AuthenticatedRequest {
+  headers: {
+    authorization?: string;
+  };
+  userId?: string;
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
-    const authHeader: string | undefined = request.headers['authorization'];
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
 
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Отсутствует токен авторизации');
+    const authorization = request.headers.authorization;
+
+    if (!authorization?.startsWith("Bearer ")) {
+      throw new UnauthorizedException("Отсутствует токен авторизации");
     }
 
-    const token = authHeader.slice('Bearer '.length);
+    const token = authorization.slice("Bearer ".length).trim();
+
+    if (!token) {
+      throw new UnauthorizedException("Отсутствует токен авторизации");
+    }
+
+    const jwtSecret = this.configService.get<string>("JWT_SECRET");
+
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET environment variable is required");
+    }
+
     try {
-      const payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_SECRET ?? 'change_me_before_prod',
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: jwtSecret,
       });
+
+      if (!payload.sub) {
+        throw new UnauthorizedException("Некорректный токен авторизации");
+      }
+
       request.userId = payload.sub;
+
       return true;
-    } catch {
-      throw new UnauthorizedException('Недействительный или истёкший токен');
+    } catch (error: unknown) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new UnauthorizedException("Недействительный или истёкший токен");
     }
   }
 }

@@ -1,18 +1,19 @@
 /**
- * Единая система уровней срочности для всей платформы (ТЗ, п. 4.12).
- * Любой модуль обязан использовать эту шкалу для событий/уведомлений,
- * а не изобретать свою.
+ * Единая система уровней срочности для всей платформы.
+ *
+ * Все модули должны использовать эту шкалу для событий
+ * и уведомлений вместо создания собственных уровней.
  */
 export enum UrgencyLevel {
-  NORMAL = 'normal', // 🟢 нормально
-  ATTENTION = 'attention', // 🟡 обратить внимание
-  CHECK_SOON = 'check_soon', // 🟠 желательно проверить в ближайшее время
-  STOP = 'stop', // 🔴 прекратить эксплуатацию / обратиться за помощью
+  NORMAL = "normal",
+  ATTENTION = "attention",
+  CHECK_SOON = "check_soon",
+  STOP = "stop",
 }
 
-export const URGENCY_EMOJI: Record<UrgencyLevel, string> = {
-  [UrgencyLevel.NORMAL]: '🟢',
-  [UrgencyLevel.ATTENTION]: '🟡',
-  [UrgencyLevel.CHECK_SOON]: '🟠',
-  [UrgencyLevel.STOP]: '🔴',
+export const URGENCY_EMOJI: Readonly<Record<UrgencyLevel, string>> = {
+  [UrgencyLevel.NORMAL]: "🟢",
+  [UrgencyLevel.ATTENTION]: "🟡",
+  [UrgencyLevel.CHECK_SOON]: "🟠",
+  [UrgencyLevel.STOP]: "🔴",
 };

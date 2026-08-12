@@ -1,10 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ModuleContract } from './interfaces/module-contract.interface';
+import { Injectable, Logger } from "@nestjs/common";
 
-/**
- * Реестр всех подключённых модулей платформы.
- * Каждый модуль регистрирует себя один раз при старте (см. пример в vin.module.ts).
- */
+import { ModuleContract } from "./interfaces/module-contract.interface";
+
 @Injectable()
 export class ModuleRegistryService {
   private readonly logger = new Logger(ModuleRegistryService.name);
@@ -12,10 +9,12 @@ export class ModuleRegistryService {
 
   register(contract: ModuleContract): void {
     if (this.registry.has(contract.id)) {
-      this.logger.warn(`Модуль "${contract.id}" уже зарегистрирован — перезаписываю контракт`);
+      throw new Error(`Module "${contract.id}" is already registered`);
     }
+
     this.registry.set(contract.id, contract);
-    this.logger.log(`Зарегистрирован модуль: ${contract.id} (v${contract.version})`);
+
+    this.logger.log(`Registered module: ${contract.id} (v${contract.version})`);
   }
 
   get(id: string): ModuleContract | undefined {
@@ -24,5 +23,9 @@ export class ModuleRegistryService {
 
   getAll(): ModuleContract[] {
     return Array.from(this.registry.values());
+  }
+
+  has(id: string): boolean {
+    return this.registry.has(id);
   }
 }

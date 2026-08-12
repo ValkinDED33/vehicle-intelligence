@@ -1,29 +1,32 @@
-import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
-import { drizzle, type DrizzleConfig } from "drizzle-orm";
+import { Injectable, OnModuleDestroy } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-
-const DATABASE_URL = process.env.DATABASE_URL ?? "";
 
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
-  private readonly logger = new Logger(DatabaseService.name);
   private readonly pool: Pool;
-  private readonly db;
+  private readonly database: NodePgDatabase;
 
-  constructor() {
-    if (!DATABASE_URL) {
+  constructor(private readonly configService: ConfigService) {
+    const databaseUrl = this.configService.get<string>("DATABASE_URL");
+
+    if (!databaseUrl) {
       throw new Error("DATABASE_URL environment variable is required");
     }
 
-    this.pool = new Pool({ connectionString: DATABASE_URL });
-    this.db = drizzle(this.pool as any);
+    this.pool = new Pool({
+      connectionString: databaseUrl,
+    });
+
+    this.database = drizzle(this.pool);
   }
 
-  get connection() {
-    return this.db;
+  get connection(): NodePgDatabase {
+    return this.database;
   }
 
-  async onModuleDestroy() {
+  async onModuleDestroy(): Promise<void> {
     await this.pool.end();
   }
 }

@@ -1,42 +1,66 @@
-import { Module, OnModuleInit } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { JwtModule } from '@nestjs/jwt';
-import { User, UserSchema } from './schemas/user.schema';
-import { AuthService } from './services/auth.service';
-import { AuthController } from './controllers/auth.controller';
-import { ModuleRegistryService } from '../../common/module-registry/module-registry.service';
+import { Module, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtModule, type JwtModuleOptions } from "@nestjs/jwt";
+
+import { ModuleRegistryService } from "../../common/module-registry/module-registry.service";
+import { AuthController } from "./controllers/auth.controller";
+import { IdentityDbService } from "./identity.db.service";
+import { AuthService } from "./services/auth.service";
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'change_me_before_prod',
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN ?? '7d' },
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): JwtModuleOptions => {
+        const jwtSecret = configService.get<string>("JWT_SECRET");
+
+        if (!jwtSecret) {
+          throw new Error("JWT_SECRET environment variable is required");
+        }
+
+        return {
+          secret: jwtSecret,
+          signOptions: {
+            expiresIn: "7d",
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [IdentityDbService, AuthService],
   exports: [AuthService],
 })
 export class IdentityModule implements OnModuleInit {
   constructor(private readonly moduleRegistry: ModuleRegistryService) {}
 
-  onModuleInit() {
+  onModuleInit(): void {
     this.moduleRegistry.register({
-      id: 'identity',
-      version: '0.1.0',
-      description: 'Аккаунты, авторизация, профиль владельца, страна/язык',
+      id: "identity",
+      version: "0.1.0",
+      description: "Accounts, authentication, and owner preferences",
       commands: [
-        { name: 'register', description: 'Регистрация нового пользователя' },
-        { name: 'login', description: 'Вход и получение JWT' },
+        {
+          name: "register",
+          description: "Register a new user",
+        },
+        {
+          name: "login",
+          description: "Authenticate a user and issue JWT",
+        },
       ],
       events: [],
-      data: ['users'],
+      data: ["users"],
       aiTools: [],
       notifications: [],
-      uiSlots: [{ slot: 'account-settings', description: 'Настройки профиля пользователя' }],
-      telegramActions: [{ command: '/start', description: 'Регистрация/привязка аккаунта в Telegram' }],
-      permissions: [{ scope: 'self.profile', access: 'read-write' }],
+      uiSlots: [],
+      telegramActions: [],
+      permissions: [
+        {
+          scope: "self.profile",
+          access: "read-write",
+        },
+      ],
     });
   }
 }

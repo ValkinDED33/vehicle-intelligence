@@ -1,26 +1,32 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 
-export type UserDocument = HydratedDocument<User>;
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
 
-@Schema({ timestamps: true })
-export class User {
-  @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  email: string;
+  email: varchar("email", { length: 320 }).notNull().unique(),
 
-  @Prop({ required: true })
-  passwordHash: string;
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
 
-  @Prop()
-  displayName?: string;
+  displayName: varchar("display_name", { length: 120 }),
 
-  /** ISO 3166-1 alpha-2, например "PL", "UA" */
-  @Prop({ default: 'PL' })
-  country: string;
+  country: varchar("country", { length: 2 }).notNull().default("PL"),
 
-  /** ISO 639-1, например "ru", "uk", "pl", "en" */
-  @Prop({ default: 'ru' })
-  language: string;
-}
+  language: varchar("language", { length: 5 }).notNull().default("ru"),
 
-export const UserSchema = SchemaFactory.createForClass(User);
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "date",
+  })
+    .notNull()
+    .defaultNow(),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+    mode: "date",
+  })
+    .notNull()
+    .defaultNow(),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;

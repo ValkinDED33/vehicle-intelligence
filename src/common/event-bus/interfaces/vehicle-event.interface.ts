@@ -1,20 +1,65 @@
 /**
- * Единый формат события для всей платформы (ТЗ, п. 3.2).
- * Любой модуль публикует и подписывается на события ТОЛЬКО в этом формате.
+ * Единый формат платформенного события.
+ *
+ * Событие может относиться к конкретному автомобилю,
+ * но не каждое платформенное событие обязано иметь vehicleId.
  */
-export type EventOrigin = 'telegram' | 'web' | 'ocr' | 'ai-inferred' | 'system';
+export type EventOrigin = "telegram" | "web" | "ocr" | "ai-inferred" | "system";
 
 export interface VehicleEvent<TPayload = Record<string, unknown>> {
   eventId: string;
-  vehicleId: string;
+
+  /**
+   * ID автомобиля, если событие относится к конкретному автомобилю.
+   */
+  vehicleId?: string;
+
+  /**
+   * ID модуля, который опубликовал событие.
+   */
   sourceModule: string;
-  /** Например: "fuel.refill", "service.oil_change", "document.attached" */
+
+  /**
+   * Тип события.
+   *
+   * Примеры:
+   * "fuel.refill"
+   * "service.oil_change"
+   * "document.attached"
+   */
   type: string;
+
+  /**
+   * Когда событие фактически произошло.
+   */
   occurredAt: Date;
+
+  /**
+   * Пробег автомобиля на момент события, если известен.
+   */
   mileageKm?: number;
+
+  /**
+   * Данные конкретного события.
+   */
   payload: TPayload;
-  /** 0..1 — насколько источник уверен в данных (OCR/AI могут быть <1) */
+
+  /**
+   * Уверенность источника в данных.
+   *
+   * Ожидаемый диапазон: 0..1.
+   * Для ручных/системных данных обычно 1.
+   * OCR/AI могут иметь значение ниже 1.
+   */
   confidence: number;
+
+  /**
+   * Откуда пришли исходные данные.
+   */
   origin: EventOrigin;
+
+  /**
+   * Идентификаторы или ссылки на связанные вложения.
+   */
   attachments?: string[];
 }

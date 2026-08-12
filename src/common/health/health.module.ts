@@ -1,12 +1,8 @@
-import { Global, Module } from "@nestjs/common";
-import { HealthController } from "./health.controller";
-import { DatabaseService } from "../database/database.service";
+import { Module } from "@nestjs/common";
 
-@Global()
+import { HealthController } from "./health.controller";
+
 @Module({
-  imports: [],
   controllers: [HealthController],
-  providers: [DatabaseService],
-  exports: [DatabaseService],
 })
 export class HealthModule {}

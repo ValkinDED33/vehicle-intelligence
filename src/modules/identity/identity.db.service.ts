@@ -1,18 +1,23 @@
 import { Injectable } from "@nestjs/common";
+import { eq } from "drizzle-orm";
+
 import { DatabaseService } from "../../common/database/database.service";
-import { sql } from "drizzle-orm";
+import { type NewUser, type User, users } from "./schemas/user.schema";
 
 @Injectable()
 export class IdentityDbService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findByEmail(email: string) {
-    const res = await this.databaseService.connection.execute(
-      `SELECT id, email, password_hash, display_name, country, language FROM users WHERE email = $1`,
-      [email],
-    );
-    // Drizzle returns driver-specific shape; keep this minimal for now
-    return (res as any).all?.()[0] ?? null;
+  async findByEmail(email: string): Promise<User | null> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [user] = await this.databaseService.connection
+      .select()
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+
+    return user ?? null;
   }
 
   async createUser(data: {
@@ -21,18 +26,24 @@ export class IdentityDbService {
     displayName?: string;
     country?: string;
     language?: string;
-  }) {
-    const res = await this.databaseService.connection.execute(
-      `INSERT INTO users (email, password_hash, display_name, country, language) VALUES ($1,$2,$3,$4,$5) RETURNING id, email, display_name, country, language`,
-      [
-        data.email,
-        data.passwordHash,
-        data.displayName ?? null,
-        data.country ?? "PL",
-        data.language ?? "ru",
-      ],
-    );
+  }): Promise<User> {
+    const newUser: NewUser = {
+      email: data.email.trim().toLowerCase(),
+      passwordHash: data.passwordHash,
+      displayName: data.displayName?.trim() || null,
+      country: data.country ?? "PL",
+      language: data.language ?? "ru",
+    };
 
-    return (res as any).all?.()[0] ?? null;
+    const [createdUser] = await this.databaseService.connection
+      .insert(users)
+      .values(newUser)
+      .returning();
+
+    if (!createdUser) {
+      throw new Error("Failed to create user");
+    }
+
+    return createdUser;
   }
 }
