@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { resolvePagination } from "../../common/dto/pagination-query.dto";
 import {
   type NewVehicleHistoryEvent,
   type VehicleHistoryEvent,
@@ -25,6 +26,8 @@ export interface VehicleHistoryQuery {
   type?: string;
   from?: Date;
   to?: Date;
+  limit?: number;
+  offset?: number;
 }
 
 @Injectable()
@@ -91,7 +94,9 @@ export class VehicleHistoryDbService {
       .select()
       .from(vehicleHistoryEvents)
       .where(and(...conditions))
-      .orderBy(desc(vehicleHistoryEvents.occurredAt));
+      .orderBy(desc(vehicleHistoryEvents.occurredAt))
+      .limit(resolvePagination(query).limit)
+      .offset(resolvePagination(query).offset);
   }
 
   async getLatestForVehicle(

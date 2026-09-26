@@ -20,9 +20,9 @@
     "incremental": true,
     "skipLibCheck": true,
 
-    "strictNullChecks": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
 
     "forceConsistentCasingInFileNames": true
   },

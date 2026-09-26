@@ -1,3 +1,4 @@
+import { Type } from "class-transformer";
 import {
   IsDateString,
   IsIn,
@@ -10,6 +11,8 @@ import {
   MaxLength,
   Min,
 } from "class-validator";
+
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 
 export class CreateExpenseDto {
   @IsString()
@@ -112,7 +115,7 @@ export class CreateExpenseDto {
   occurredAt?: string;
 }
 
-export class ExpenseHistoryQueryDto {
+export class ExpenseHistoryQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsDateString()
   from?: string;
@@ -128,11 +131,13 @@ export class ExpenseHistoryQueryDto {
 }
 
 export class MonthlyCostOfOwnershipQueryDto {
+  @Type(() => Number)
   @IsInt()
   @Min(2000)
   @Max(2200)
   year!: number;
 
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(12)

@@ -31,26 +31,11 @@ export class MileageService {
   ): Promise<MileageReading> {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
-    const latestReading = await this.mileageDbService.getLatest(vehicleId);
-
-    if (latestReading && input.odometerKm < latestReading.odometerKm) {
-      throw new BadRequestException(
-        `Новый пробег (${input.odometerKm} км) меньше последнего сохранённого (${latestReading.odometerKm} км)`,
-      );
+    if (input.recordedAt && input.recordedAt.getTime() > Date.now() + 60_000) {
+      throw new BadRequestException("recordedAt не может быть в будущем");
     }
 
-    if (
-      latestReading?.engineHours !== null &&
-      latestReading?.engineHours !== undefined &&
-      input.engineHours !== undefined &&
-      input.engineHours < latestReading.engineHours
-    ) {
-      throw new BadRequestException(
-        `Новые моточасы (${input.engineHours}) меньше последнего сохранённого значения (${latestReading.engineHours})`,
-      );
-    }
-
-    const reading = await this.mileageDbService.createReading({
+    const reading = await this.mileageDbService.createReadingGuarded({
       vehicleId,
       odometerKm: input.odometerKm,
       engineHours: input.engineHours,
@@ -115,6 +100,10 @@ export class MileageService {
   private mapSourceToOrigin(
     source: string,
   ): "telegram" | "web" | "ocr" | "ai-inferred" | "system" {
+    if (source.startsWith("vdb:")) {
+      return "system";
+    }
+
     switch (source) {
       case "telegram":
         return "telegram";

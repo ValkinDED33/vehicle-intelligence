@@ -11,6 +11,8 @@ import {
   Min,
 } from "class-validator";
 
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
+
 export class CreateVehicleHistoryEventDto {
   @IsString()
   @MaxLength(120)
@@ -52,7 +54,7 @@ export class CreateVehicleHistoryEventDto {
   eventId?: string;
 }
 
-export class VehicleHistoryQueryDto {
+export class VehicleHistoryQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)

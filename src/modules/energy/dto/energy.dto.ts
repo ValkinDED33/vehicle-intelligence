@@ -13,6 +13,8 @@ import {
   Min,
 } from "class-validator";
 
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
+
 export class CreateEnergyEntryDto {
   @IsString()
   @IsIn(["fuel", "charge"])
@@ -102,7 +104,7 @@ export class CreateEnergyEntryDto {
   occurredAt?: string;
 }
 
-export class EnergyHistoryQueryDto {
+export class EnergyHistoryQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsDateString()
   from?: string;

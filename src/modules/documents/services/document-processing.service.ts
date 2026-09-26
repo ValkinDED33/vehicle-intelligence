@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -81,6 +82,10 @@ export class DocumentProcessingService {
   private validateProcessableDocument(document: VehicleDocument): void {
     if (!document.storageBucket || !document.storageKey) {
       throw new BadRequestException("Document file has not been uploaded");
+    }
+
+    if (document.processingStatus === "processing") {
+      throw new ConflictException("Document is already being processed");
     }
 
     const mimeType = document.mimeType?.trim().toLowerCase();

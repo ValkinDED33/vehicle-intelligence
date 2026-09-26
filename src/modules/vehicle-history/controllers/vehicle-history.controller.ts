@@ -35,6 +35,8 @@ export class VehicleHistoryController {
       type: query.type,
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
+      limit: query.limit,
+      offset: query.offset,
     });
   }
 

@@ -1,6 +1,4 @@
 import { Module } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { JwtModule, type JwtModuleOptions } from "@nestjs/jwt";
 
 import { ObjectStorageModule } from "../../common/object-storage/object-storage.module";
 import { GarageModule } from "../garage/garage.module";
@@ -29,23 +27,6 @@ import { PdfRendererService } from "./services/pdf-renderer.service";
     GarageModule,
     ObjectStorageModule,
 
-    JwtModule.registerAsync({
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): JwtModuleOptions => {
-        const jwtSecret = configService.get<string>("JWT_SECRET");
-
-        if (!jwtSecret) {
-          throw new Error("JWT_SECRET environment variable is required");
-        }
-
-        return {
-          secret: jwtSecret,
-          signOptions: {
-            expiresIn: "7d",
-          },
-        };
-      },
-    }),
   ],
 
   controllers: [DocumentsController],

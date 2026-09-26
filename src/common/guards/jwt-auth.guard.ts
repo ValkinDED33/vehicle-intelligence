@@ -4,8 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { JwtService } from "@nestjs/jwt";
+import { JsonWebTokenError, JwtService, TokenExpiredError } from "@nestjs/jwt";
 
 interface JwtPayload {
   sub: string;
@@ -21,10 +20,7 @@ interface AuthenticatedRequest {
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly jwtService: JwtService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -41,16 +37,8 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("Отсутствует токен авторизации");
     }
 
-    const jwtSecret = this.configService.get<string>("JWT_SECRET");
-
-    if (!jwtSecret) {
-      throw new Error("JWT_SECRET environment variable is required");
-    }
-
     try {
-      const payload = this.jwtService.verify<JwtPayload>(token, {
-        secret: jwtSecret,
-      });
+      const payload = this.jwtService.verify<JwtPayload>(token);
 
       if (!payload.sub) {
         throw new UnauthorizedException("Некорректный токен авторизации");
@@ -64,7 +52,15 @@ export class JwtAuthGuard implements CanActivate {
         throw error;
       }
 
-      throw new UnauthorizedException("Недействительный или истёкший токен");
+      if (error instanceof TokenExpiredError) {
+        throw new UnauthorizedException("Токен авторизации истёк");
+      }
+
+      if (error instanceof JsonWebTokenError) {
+        throw new UnauthorizedException("Недействительный токен авторизации");
+      }
+
+      throw error;
     }
   }
 }

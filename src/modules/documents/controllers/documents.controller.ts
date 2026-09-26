@@ -179,6 +179,9 @@ export class DocumentsController {
       expiresTo: query.expiresTo,
 
       processingStatus: query.processingStatus,
+
+      limit: query.limit,
+      offset: query.offset,
     });
   }
 

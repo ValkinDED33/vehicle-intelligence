@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { resolvePagination } from "../../common/dto/pagination-query.dto";
 import {
   type EnergyEntry,
   type NewEnergyEntry,
@@ -42,6 +43,8 @@ export interface EnergyHistoryQuery {
   to?: Date;
   energyType?: string;
   kind?: string;
+  limit?: number;
+  offset?: number;
 }
 
 @Injectable()
@@ -153,7 +156,9 @@ export class EnergyDbService {
       .select()
       .from(energyEntries)
       .where(and(...conditions))
-      .orderBy(desc(energyEntries.occurredAt), desc(energyEntries.createdAt));
+      .orderBy(desc(energyEntries.occurredAt), desc(energyEntries.createdAt))
+      .limit(resolvePagination(query).limit)
+      .offset(resolvePagination(query).offset);
   }
 
   async listFullTankFuelEntries(vehicleId: string): Promise<EnergyEntry[]> {

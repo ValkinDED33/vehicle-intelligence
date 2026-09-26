@@ -71,6 +71,9 @@ export class ExpensesController {
       to: query.to ? new Date(query.to) : undefined,
 
       category: query.category,
+
+      limit: query.limit,
+      offset: query.offset,
     });
   }
 

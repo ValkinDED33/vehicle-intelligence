@@ -1,7 +1,7 @@
 import {
   BadRequestException,
   Injectable,
-  ServiceUnavailableException,
+  Logger,
 } from "@nestjs/common";
 
 import { GarageService } from "../../garage/services/garage.service";
@@ -14,6 +14,8 @@ import { Inject } from "@nestjs/common";
 
 @Injectable()
 export class ExternalReportsService {
+  private readonly logger = new Logger(ExternalReportsService.name);
+
   constructor(
     private readonly garageService: GarageService,
     private readonly externalReportsDbService: ExternalReportsDbService,
@@ -43,7 +45,7 @@ export class ExternalReportsService {
       const result =
         await this.vehicleHistoryProvider.getHistory(vin);
 
-      return this.externalReportsDbService.createReport({
+      return await this.externalReportsDbService.createReport({
         vehicleId,
         provider: result.provider,
         reportType: "vehicle-history",
@@ -52,11 +54,36 @@ export class ExternalReportsService {
         rawPayload: result.rawPayload,
       });
     } catch (error) {
-      if (error instanceof ServiceUnavailableException) {
-        throw error;
-      }
+      await this.saveFailedReport(vehicleId, vin, error);
 
       throw error;
+    }
+  }
+
+  private async saveFailedReport(
+    vehicleId: string,
+    vin: string,
+    error: unknown,
+  ): Promise<void> {
+    try {
+      await this.externalReportsDbService.createReport({
+        vehicleId,
+        provider: "vehicle-databases",
+        reportType: "vehicle-history",
+        vin,
+        status: "failed",
+        rawPayload: {
+          error: error instanceof Error ? error.message : "unknown error",
+        },
+      });
+    } catch (persistError) {
+      this.logger.warn(
+        `Failed to persist failed vehicle-history report for vehicle ${vehicleId}: ${
+          persistError instanceof Error
+            ? persistError.message
+            : String(persistError)
+        }`,
+      );
     }
   }
 

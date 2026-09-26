@@ -14,6 +14,7 @@ import {
   CreateMileageReadingDto,
   MileageHistoryQueryDto,
 } from "../dto/mileage.dto";
+import { MileageAnomalyService } from "../services/mileage-anomaly.service";
 import { MileageService } from "../services/mileage.service";
 
 interface AuthenticatedRequest {
@@ -23,7 +24,10 @@ interface AuthenticatedRequest {
 @Controller("vehicles/:vehicleId/mileage")
 @UseGuards(JwtAuthGuard)
 export class MileageController {
-  constructor(private readonly mileageService: MileageService) {}
+  constructor(
+    private readonly mileageService: MileageService,
+    private readonly mileageAnomalyService: MileageAnomalyService,
+  ) {}
 
   @Post()
   recordReading(
@@ -57,6 +61,8 @@ export class MileageController {
     return this.mileageService.getHistory(request.userId, vehicleId, {
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
+      limit: query.limit,
+      offset: query.offset,
     });
   }
 
@@ -66,5 +72,13 @@ export class MileageController {
     @Param("vehicleId") vehicleId: string,
   ) {
     return this.mileageService.isStale(request.userId, vehicleId);
+  }
+
+  @Get("anomalies")
+  getAnomalies(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+  ) {
+    return this.mileageAnomalyService.analyze(request.userId, vehicleId);
   }
 }

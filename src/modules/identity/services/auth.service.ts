@@ -25,7 +25,7 @@ export class AuthService {
     const existingUser = await this.identityDbService.findByEmail(email);
 
     if (existingUser) {
-      throw new ConflictException("Пользователь с таким email уже существует");
+      throw new ConflictException("Не удалось завершить регистрацию");
     }
 
     const passwordHash = await bcrypt.hash(
@@ -45,9 +45,7 @@ export class AuthService {
       return this.buildAuthResponse(user);
     } catch (error: unknown) {
       if (this.isUniqueConstraintViolation(error)) {
-        throw new ConflictException(
-          "Пользователь с таким email уже существует",
-        );
+        throw new ConflictException("Не удалось завершить регистрацию");
       }
 
       throw error;

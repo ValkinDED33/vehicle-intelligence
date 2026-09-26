@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 
 import { DatabaseService } from "../../../common/database/database.service";
+import { resolvePagination } from "../../../common/dto/pagination-query.dto";
 import {
   type NewVehicleDocument,
   type VehicleDocument,
@@ -35,6 +36,9 @@ export interface VehicleDocumentQuery {
   expiresTo?: Date;
 
   processingStatus?: string;
+
+  limit?: number;
+  offset?: number;
 }
 
 export interface ConfirmStoredDocumentData {
@@ -148,7 +152,9 @@ export class DocumentRepository {
       .select()
       .from(vehicleDocuments)
       .where(and(...conditions))
-      .orderBy(desc(vehicleDocuments.createdAt));
+      .orderBy(desc(vehicleDocuments.createdAt))
+      .limit(resolvePagination(query).limit)
+      .offset(resolvePagination(query).offset);
   }
 
   async confirmStoredObject(

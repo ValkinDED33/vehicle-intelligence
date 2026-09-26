@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 
 import { GarageService } from "../../garage/services/garage.service";
 import {
@@ -23,6 +23,8 @@ import { DocumentValidatorService } from "./document-validator.service";
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     private readonly garageService: GarageService,
     private readonly documentsDbService: DocumentsDbService,
@@ -197,14 +199,6 @@ export class DocumentsService {
 
     const document = result.document;
 
-    const hasStoredObject = Boolean(
-      document.storageBucket && document.storageKey,
-    );
-
-    if (hasStoredObject) {
-      await this.documentStorageService.deleteStoredObject(document);
-    }
-
     const deleted = await this.documentsDbService.deleteDocument(
       vehicleId,
       documentId,
@@ -214,10 +208,25 @@ export class DocumentsService {
       throw new NotFoundException("Vehicle document not found");
     }
 
+    let objectDeleted = false;
+
+    if (document.storageBucket && document.storageKey) {
+      try {
+        await this.documentStorageService.deleteStoredObject(document);
+        objectDeleted = true;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete stored object for document ${documentId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
     return {
       id: deleted.id,
       deleted: true,
-      objectDeleted: hasStoredObject,
+      objectDeleted,
     };
   }
 

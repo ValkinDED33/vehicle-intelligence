@@ -9,6 +9,8 @@ import {
   Min,
 } from "class-validator";
 
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
+
 export class CreateMileageReadingDto {
   @IsInt()
   @Min(0)
@@ -45,7 +47,7 @@ export class CreateMileageReadingDto {
   recordedAt?: string;
 }
 
-export class MileageHistoryQueryDto {
+export class MileageHistoryQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsDateString()
   from?: string;

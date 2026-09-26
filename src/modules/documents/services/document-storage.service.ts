@@ -8,14 +8,26 @@ import {
   type ObjectStorageObjectMetadata,
   type ObjectStorageProvider,
 } from "../../../common/object-storage/object-storage.types";
+import {
+  ALLOWED_DOCUMENT_MIME_TYPES,
+  MAX_DOCUMENT_SIZE_BYTES,
+} from "../dto/create-document-upload.dto";
 import { type VehicleDocument } from "../schemas/vehicle-document.schema";
 
-const MAX_PROCESSING_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_PROCESSING_SIZE_BYTES = MAX_DOCUMENT_SIZE_BYTES;
+
+const UPLOAD_TARGET_TTL_MS = 60 * 60 * 1000;
+
+interface IssuedUpload {
+  key: string;
+  fileSizeBytes: number;
+  expiresAt: number;
+}
 
 export interface CreateDocumentUploadInput {
   originalFileName: string;
   mimeType: string;
-  fileSizeBytes?: number;
+  fileSizeBytes: number;
 }
 
 export interface CreateDocumentUploadResult {
@@ -47,6 +59,9 @@ export interface StoredDocumentContent {
 
 @Injectable()
 export class DocumentStorageService {
+  // Single-instance store of issued presign keys so confirm() accepts only the exact key that was signed.
+  private readonly issuedUploads = new Map<string, IssuedUpload>();
+
   constructor(
     private readonly configService: ConfigService,
 
@@ -84,6 +99,8 @@ export class DocumentStorageService {
         documentId,
       },
     });
+
+    this.rememberIssuedUpload(documentId, key, input.fileSizeBytes);
 
     return {
       documentId,
@@ -123,11 +140,48 @@ export class DocumentStorageService {
       );
     }
 
-    return this.objectStorage.getObjectMetadata({
+    const issued = this.issuedUploads.get(documentId);
+
+    if (!issued || issued.key !== input.key) {
+      throw new BadRequestException(
+        "Object key was not issued for this document upload",
+      );
+    }
+
+    if (issued.expiresAt < Date.now()) {
+      this.issuedUploads.delete(documentId);
+
+      throw new BadRequestException("Upload target has expired");
+    }
+
+    const metadata = await this.objectStorage.getObjectMetadata({
       bucket: input.bucket,
 
       key: input.key,
     });
+
+    if (
+      !metadata.contentType ||
+      !(ALLOWED_DOCUMENT_MIME_TYPES as readonly string[]).includes(
+        metadata.contentType,
+      )
+    ) {
+      throw new BadRequestException("Uploaded content type is not allowed");
+    }
+
+    if (
+      metadata.contentLength === undefined ||
+      metadata.contentLength !== issued.fileSizeBytes ||
+      metadata.contentLength > MAX_PROCESSING_SIZE_BYTES
+    ) {
+      throw new BadRequestException(
+        "Uploaded object size does not match the declared file size",
+      );
+    }
+
+    this.issuedUploads.delete(documentId);
+
+    return metadata;
   }
 
   async createDownloadTarget(
@@ -228,18 +282,41 @@ export class DocumentStorageService {
       throw new BadRequestException("Original file name is required");
     }
 
-    if (!input.mimeType.trim()) {
-      throw new BadRequestException("MIME type is required");
+    if (
+      !(ALLOWED_DOCUMENT_MIME_TYPES as readonly string[]).includes(input.mimeType)
+    ) {
+      throw new BadRequestException("MIME type is not allowed");
     }
 
-    if (
-      input.fileSizeBytes !== undefined &&
-      (!Number.isSafeInteger(input.fileSizeBytes) || input.fileSizeBytes <= 0)
-    ) {
+    if (!Number.isSafeInteger(input.fileSizeBytes) || input.fileSizeBytes <= 0) {
       throw new BadRequestException(
         "File size must be a positive safe integer",
       );
     }
+
+    if (input.fileSizeBytes > MAX_PROCESSING_SIZE_BYTES) {
+      throw new BadRequestException("File exceeds maximum allowed size");
+    }
+  }
+
+  private rememberIssuedUpload(
+    documentId: string,
+    key: string,
+    fileSizeBytes: number,
+  ): void {
+    const now = Date.now();
+
+    for (const [id, upload] of this.issuedUploads) {
+      if (upload.expiresAt < now) {
+        this.issuedUploads.delete(id);
+      }
+    }
+
+    this.issuedUploads.set(documentId, {
+      key,
+      fileSizeBytes,
+      expiresAt: now + UPLOAD_TARGET_TTL_MS,
+    });
   }
 
   private getBucket(): string {

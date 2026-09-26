@@ -17,10 +17,6 @@ interface HealthCheckResponse {
     database: "ok";
     objectStorage: "ok";
   };
-  objectStorage: {
-    provider: string;
-    bucket: string;
-  };
 }
 
 @Controller("health")
@@ -42,7 +38,6 @@ export class HealthController {
       throw new ServiceUnavailableException({
         status: "error",
         service: "object-storage",
-        reason: "B2_BUCKET is not configured",
       });
     }
 
@@ -63,8 +58,6 @@ export class HealthController {
       throw new ServiceUnavailableException({
         status: "error",
         service: "object-storage",
-        provider: this.objectStorage.providerName,
-        bucket,
       });
     }
 
@@ -74,12 +67,6 @@ export class HealthController {
       services: {
         database: "ok",
         objectStorage: "ok",
-      },
-
-      objectStorage: {
-        provider: this.objectStorage.providerName,
-
-        bucket,
       },
     };
   }

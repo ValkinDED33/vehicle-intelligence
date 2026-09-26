@@ -1,7 +1,9 @@
 import { Type } from "class-transformer";
 import { IsDate, IsIn, IsOptional, IsString, MaxLength } from "class-validator";
 
-export class DocumentHistoryQueryDto {
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
+
+export class DocumentHistoryQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(32)

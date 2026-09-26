@@ -1,7 +1,8 @@
-import { Injectable } from "@nestjs/common";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { BadRequestException, Injectable } from "@nestjs/common";
+import { and, desc, eq, gte, lte, max, sql } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { resolvePagination } from "../../common/dto/pagination-query.dto";
 import {
   type MileageReading,
   type NewMileageReading,
@@ -20,32 +21,95 @@ export interface CreateMileageReadingData {
 export interface MileageHistoryQuery {
   from?: Date;
   to?: Date;
+  limit?: number;
+  offset?: number;
 }
+
+const CHRONOLOGICAL_READ_LIMIT = 1000;
 
 @Injectable()
 export class MileageDbService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async createReading(data: CreateMileageReadingData): Promise<MileageReading> {
-    const newReading: NewMileageReading = {
-      vehicleId: data.vehicleId,
-      odometerKm: data.odometerKm,
-      engineHours: data.engineHours ?? null,
-      source: data.source ?? "manual",
-      confidence: data.confidence ?? 1,
-      recordedAt: data.recordedAt ?? new Date(),
-    };
+  async createReadingGuarded(
+    data: CreateMileageReadingData,
+  ): Promise<MileageReading> {
+    return this.databaseService.connection.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${data.vehicleId}))`,
+      );
 
-    const [createdReading] = await this.databaseService.connection
-      .insert(mileageReadings)
-      .values(newReading)
-      .returning();
+      // External historical imports (vdb:*) are treated as evidence, not as
+      // trusted current input: a lower-than-max odometer there is a potential
+      // rollback we must STORE so anomaly detection can flag it, not reject.
+      const enforceMonotonic = !(data.source ?? "manual").startsWith("vdb:");
 
-    if (!createdReading) {
-      throw new Error("Failed to persist mileage reading");
-    }
+      const [bounds] = await tx
+        .select({
+          maxOdometerKm: max(mileageReadings.odometerKm),
+          maxEngineHours: max(mileageReadings.engineHours),
+        })
+        .from(mileageReadings)
+        .where(eq(mileageReadings.vehicleId, data.vehicleId));
 
-    return createdReading;
+      const maxOdometerKm = bounds?.maxOdometerKm;
+      const maxEngineHours = bounds?.maxEngineHours;
+
+      if (
+        enforceMonotonic &&
+        maxOdometerKm !== null &&
+        maxOdometerKm !== undefined
+      ) {
+        const maxKm =
+          typeof maxOdometerKm === "string"
+            ? Number(maxOdometerKm)
+            : maxOdometerKm;
+
+        if (data.odometerKm < maxKm) {
+          throw new BadRequestException(
+            `Новый пробег (${data.odometerKm} км) меньше максимального сохранённого (${maxKm} км)`,
+          );
+        }
+      }
+
+      if (
+        enforceMonotonic &&
+        data.engineHours !== undefined &&
+        maxEngineHours !== null &&
+        maxEngineHours !== undefined
+      ) {
+        const maxHours =
+          typeof maxEngineHours === "string"
+            ? Number(maxEngineHours)
+            : maxEngineHours;
+
+        if (data.engineHours < maxHours) {
+          throw new BadRequestException(
+            `Новые моточасы (${data.engineHours}) меньше максимального сохранённого значения (${maxHours})`,
+          );
+        }
+      }
+
+      const newReading: NewMileageReading = {
+        vehicleId: data.vehicleId,
+        odometerKm: data.odometerKm,
+        engineHours: data.engineHours ?? null,
+        source: data.source ?? "manual",
+        confidence: data.confidence ?? 1,
+        recordedAt: data.recordedAt ?? new Date(),
+      };
+
+      const [createdReading] = await tx
+        .insert(mileageReadings)
+        .values(newReading)
+        .returning();
+
+      if (!createdReading) {
+        throw new Error("Failed to persist mileage reading");
+      }
+
+      return createdReading;
+    });
   }
 
   async getLatest(vehicleId: string): Promise<MileageReading | null> {
@@ -60,6 +124,23 @@ export class MileageDbService {
       .limit(1);
 
     return reading ?? null;
+  }
+
+  /**
+   * All readings in chronological order (oldest first) for anomaly analysis.
+   * Bounded to the most recent {@link CHRONOLOGICAL_READ_LIMIT} rows.
+   */
+  async listChronological(vehicleId: string): Promise<MileageReading[]> {
+    return this.databaseService.connection
+      .select()
+      .from(mileageReadings)
+      .where(eq(mileageReadings.vehicleId, vehicleId))
+      .orderBy(
+        desc(mileageReadings.recordedAt),
+        desc(mileageReadings.createdAt),
+      )
+      .limit(CHRONOLOGICAL_READ_LIMIT)
+      .then((rows) => rows.reverse());
   }
 
   async listForVehicle(
@@ -83,6 +164,8 @@ export class MileageDbService {
       .orderBy(
         desc(mileageReadings.recordedAt),
         desc(mileageReadings.createdAt),
-      );
+      )
+      .limit(resolvePagination(query).limit)
+      .offset(resolvePagination(query).offset);
   }
 }

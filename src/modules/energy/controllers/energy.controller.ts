@@ -73,6 +73,9 @@ export class EnergyController {
 
       energyType: query.energyType,
       kind: query.kind,
+
+      limit: query.limit,
+      offset: query.offset,
     });
   }
 

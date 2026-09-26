@@ -1,8 +1,4 @@
-import { HttpModule } from "@nestjs/axios";
-import { Module, OnModuleInit } from "@nestjs/common";
-import { JwtModule } from "@nestjs/jwt";
-
-import { ModuleRegistryService } from "../../common/module-registry/module-registry.service";
+import { Module } from "@nestjs/common";
 
 import { GarageModule } from "../garage/garage.module";
 import { VehicleProfileModule } from "../vehicle-profile/vehicle-profile.module";
@@ -18,18 +14,6 @@ import { VinDbService } from "./vin.db.service";
   imports: [
     GarageModule,
     VehicleProfileModule,
-
-    HttpModule.register({
-      timeout: 15_000,
-      maxRedirects: 3,
-    }),
-
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: {
-        expiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
-      },
-    }),
   ],
 
   controllers: [VinController],
@@ -47,48 +31,4 @@ import { VinDbService } from "./vin.db.service";
 
   exports: [VinService],
 })
-export class VinModule implements OnModuleInit {
-  constructor(private readonly moduleRegistry: ModuleRegistryService) {}
-
-  onModuleInit(): void {
-    this.moduleRegistry.register({
-      id: "vin",
-      version: "0.1.0",
-      description: "VIN decoding and normalized vehicle data ingestion",
-
-      commands: [
-        {
-          name: "vin.decode",
-          description: "Decode VIN for a vehicle",
-        },
-        {
-          name: "vin.latest",
-          description: "Get latest VIN decode result",
-        },
-        {
-          name: "vin.history",
-          description: "Get VIN decode history",
-        },
-      ],
-
-      events: [],
-
-      data: ["vin_decodes"],
-
-      aiTools: [],
-
-      notifications: [],
-
-      uiSlots: [],
-
-      telegramActions: [],
-
-      permissions: [
-        {
-          scope: "self.vehicle-vin",
-          access: "read-write",
-        },
-      ],
-    });
-  }
-}
+export class VinModule {}

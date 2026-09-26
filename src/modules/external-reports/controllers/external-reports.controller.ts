@@ -10,6 +10,7 @@ import {
 
 import { JwtAuthGuard } from "../../../common/guards/jwt-auth.guard";
 import { ExternalReportsService } from "../services/external-reports.service";
+import { VehicleDatabasesSourcesService } from "../services/vehicle-databases-sources.service";
 
 interface AuthenticatedRequest {
   userId: string;
@@ -20,7 +21,37 @@ interface AuthenticatedRequest {
 export class ExternalReportsController {
   constructor(
     private readonly externalReportsService: ExternalReportsService,
+    private readonly vehicleDatabasesSourcesService: VehicleDatabasesSourcesService,
   ) {}
+
+  @Get("sources")
+  listSources() {
+    return this.vehicleDatabasesSourcesService.listSources();
+  }
+
+  @Post("sources")
+  fetchAllSources(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+  ) {
+    return this.vehicleDatabasesSourcesService.fetchAllSources(
+      request.userId,
+      vehicleId,
+    );
+  }
+
+  @Post("sources/:source")
+  fetchSource(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+    @Param("source") source: string,
+  ) {
+    return this.vehicleDatabasesSourcesService.fetchSource(
+      request.userId,
+      vehicleId,
+      source,
+    );
+  }
 
   @Post("vehicle-history")
   fetchVehicleHistory(

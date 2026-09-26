@@ -22,8 +22,7 @@ export interface RecordVehicleHistoryEventInput {
   occurredAt?: Date;
 
   /**
-   * Позволяет сохранить внешний eventId,
-   * например если событие уже было создано EventBus.
+   * Позволяет сохранить внешний eventId для идемпотентности.
    */
   eventId?: string;
 }

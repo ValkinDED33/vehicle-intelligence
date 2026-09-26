@@ -1,4 +1,0 @@
-Vehicle Intelligence Documents E2E
-Document: DOC-E2E-001
-VIN: WVWZZZ1KZ7B071116
-Odometer: 100750 km

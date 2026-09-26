@@ -17,6 +17,8 @@ export interface RenderedPdfBatch {
 @Injectable()
 export class PdfRendererService {
   private static readonly SCALE = 1.6;
+  private static readonly MAX_PAGES = 40;
+  private static readonly MAX_PIXELS = 4000 * 4000;
 
   async *renderBatches(
     pdfBuffer: Buffer,
@@ -42,8 +44,10 @@ export class PdfRendererService {
       throw new Error("PDF contains no pages");
     }
 
-    for (let firstPage = 1; firstPage <= pdf.numPages; firstPage += batchSize) {
-      const lastPage = Math.min(firstPage + batchSize - 1, pdf.numPages);
+    const totalPages = Math.min(pdf.numPages, PdfRendererService.MAX_PAGES);
+
+    for (let firstPage = 1; firstPage <= totalPages; firstPage += batchSize) {
+      const lastPage = Math.min(firstPage + batchSize - 1, totalPages);
 
       const pages: RenderedPdfPage[] = [];
 
@@ -55,9 +59,14 @@ export class PdfRendererService {
         const page = await pdf.getPage(pageNumber);
 
         try {
-          const viewport = page.getViewport({
-            scale: PdfRendererService.SCALE,
-          });
+          const baseViewport = page.getViewport({ scale: 1 });
+          const basePixels = baseViewport.width * baseViewport.height;
+          const scale =
+            basePixels > PdfRendererService.MAX_PIXELS
+              ? Math.sqrt(PdfRendererService.MAX_PIXELS / basePixels)
+              : PdfRendererService.SCALE;
+
+          const viewport = page.getViewport({ scale });
 
           const canvas = createCanvas(
             Math.ceil(viewport.width),

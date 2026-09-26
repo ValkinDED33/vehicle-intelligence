@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { resolvePagination } from "../../common/dto/pagination-query.dto";
 import {
   type Expense,
   type NewExpense,
@@ -40,6 +41,8 @@ export interface ExpenseHistoryQuery {
   from?: Date;
   to?: Date;
   category?: string;
+  limit?: number;
+  offset?: number;
 }
 
 @Injectable()
@@ -130,6 +133,8 @@ export class ExpensesDbService {
       .select()
       .from(expenses)
       .where(and(...conditions))
-      .orderBy(desc(expenses.occurredAt), desc(expenses.createdAt));
+      .orderBy(desc(expenses.occurredAt), desc(expenses.createdAt))
+      .limit(resolvePagination(query).limit)
+      .offset(resolvePagination(query).offset);
   }
 }
