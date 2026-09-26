@@ -110,6 +110,8 @@ export class VinService {
       engineCode: result.engineCode,
       engineFamily: result.engineFamily,
       displacementCc: result.displacementCc,
+      powerKw: result.powerKw,
+      powerHp: result.powerHp,
       fuelType: result.fuelType,
       transmissionType: result.transmissionType,
       driveType: result.driveType,

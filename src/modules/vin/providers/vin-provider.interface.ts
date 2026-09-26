@@ -39,6 +39,9 @@ export interface VinDecodeResult {
   engineFamily?: string;
   displacementCc?: number;
 
+  powerKw?: number;
+  powerHp?: number;
+
   fuelType?: VinFuelType;
   transmissionType?: VinTransmissionType;
   driveType?: VinDriveType;

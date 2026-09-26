@@ -32,6 +32,24 @@ export function mapVehicleDatabasesResponse(
     ),
   );
 
+  const powerHp = toPositiveInteger(
+    getValue(
+      specification,
+      "Engine horsepower",
+      "Horsepower",
+      "Engine HP",
+    ),
+  );
+
+  const powerKw = toPositiveInteger(
+    getValue(
+      specification,
+      "Engine kilowatts",
+      "Kilowatts",
+      "Engine kW",
+    ),
+  );
+
   const fuelType = mapFuelType(
     getString(general, "Fuel type") ?? getString(specification, "Fuel type"),
   );
@@ -52,6 +70,8 @@ export function mapVehicleDatabasesResponse(
     modelYear,
     engineFamily: engineType,
     displacementCc,
+    powerHp,
+    powerKw,
     fuelType,
     transmissionType,
     driveType,
@@ -139,6 +159,16 @@ function toInteger(value: unknown): number | undefined {
   const parsed = Number(value);
 
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function toPositiveInteger(value: unknown): number | undefined {
+  const parsed = toInteger(value);
+
+  if (parsed === undefined || parsed <= 0) {
     return undefined;
   }
 
