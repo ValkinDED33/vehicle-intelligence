@@ -1,0 +1,2 @@
+{"message":"batteryUsableCapacityKwh cannot exceed batteryGrossCapacityKwh","error":"Bad Request","statusCode":400}
+HTTP_A=400

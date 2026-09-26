@@ -1,6 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
 
-import { AI_PROVIDER, type AiProvider } from "./ai-provider.interface";
+import {
+  AI_PROVIDER,
+  type AiProvider,
+  type AiTextRequest,
+  type AiTextResponse,
+  type AiVisionRequest,
+  type AiVisionResponse,
+} from "./ai-provider.interface";
 
 @Injectable()
 export class AiGatewayService {
@@ -9,7 +16,15 @@ export class AiGatewayService {
     private readonly provider: AiProvider,
   ) {}
 
-  async complete(systemPrompt: string, userPrompt: string): Promise<string> {
-    return this.provider.complete(systemPrompt, userPrompt);
+  async complete(request: AiTextRequest): Promise<AiTextResponse> {
+    return this.provider.complete(request);
+  }
+
+  async analyzeImages(request: AiVisionRequest): Promise<AiVisionResponse> {
+    return this.provider.analyzeImages(request);
+  }
+
+  getProviderName(): string {
+    return this.provider.providerName;
   }
 }

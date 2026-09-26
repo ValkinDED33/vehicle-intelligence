@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "vehicle_profiles_vehicle_current_uidx" ON "vehicle_profiles" USING btree ("vehicle_id") WHERE "vehicle_profiles"."is_current" = true;

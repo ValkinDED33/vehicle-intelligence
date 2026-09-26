@@ -2,18 +2,21 @@ import { Global, Module } from "@nestjs/common";
 
 import { AiGatewayService } from "./ai-gateway.service";
 import { AI_PROVIDER } from "./ai-provider.interface";
-import { NullAiProvider } from "./providers/null-ai.provider";
+import { GroqProvider } from "./providers/groq.provider";
 
 @Global()
 @Module({
   providers: [
-    NullAiProvider,
+    GroqProvider,
+
     {
       provide: AI_PROVIDER,
-      useExisting: NullAiProvider,
+      useExisting: GroqProvider,
     },
+
     AiGatewayService,
   ],
+
   exports: [AiGatewayService],
 })
 export class AiGatewayModule {}
