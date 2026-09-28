@@ -98,10 +98,18 @@ function safeJsonParse(text: string): unknown {
 function extractMessage(body: unknown, status: number): string {
   if (body && typeof body === "object" && "message" in body) {
     const message = (body as { message: unknown }).message;
-    if (typeof message === "string") return message;
+    if (typeof message === "string") {
+      if (/quota exhausted/i.test(message)) {
+        return "Лимит запросов Vehicle Databases исчерпан. Проверьте квоту или дождитесь её обновления.";
+      }
+      if (/api key is not configured/i.test(message)) {
+        return "VIN-провайдер не настроен: добавьте VIN_PROVIDER_API_KEY на Render.";
+      }
+      return message;
+    }
     if (Array.isArray(message)) return message.join("; ");
   }
-  if (status === 503) return "Внешний провайдер временно недоступен (квота).";
+  if (status === 503) return "Внешний провайдер временно недоступен или исчерпана квота.";
   return `Ошибка запроса (${status})`;
 }
 

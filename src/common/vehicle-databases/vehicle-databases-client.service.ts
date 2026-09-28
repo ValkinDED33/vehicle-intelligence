@@ -9,6 +9,11 @@ import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import { firstValueFrom } from "rxjs";
 
+interface ProviderUnavailableBody {
+  message: string;
+  code: "VIN_PROVIDER_NOT_CONFIGURED" | "VIN_PROVIDER_QUOTA_EXHAUSTED" | "VIN_PROVIDER_RATE_LIMITED" | "VIN_PROVIDER_TEMPORARILY_UNAVAILABLE";
+}
+
 interface VehicleDatabasesEnvelope<TData> {
   status?: string;
   data?: TData;
@@ -77,9 +82,11 @@ export class VehicleDatabasesClientService {
       ?.trim();
 
     if (!apiKey) {
-      throw new ServiceUnavailableException(
-        "VIN provider API key is not configured",
-      );
+      throw new ServiceUnavailableException({
+        message:
+          "VIN-провайдер не настроен: добавьте VIN_PROVIDER_API_KEY в Render.",
+        code: "VIN_PROVIDER_NOT_CONFIGURED",
+      } satisfies ProviderUnavailableBody);
     }
 
     try {
@@ -153,9 +160,11 @@ export class VehicleDatabasesClientService {
               `${options.apiName} provider call quota exhausted`,
             );
 
-            throw new ServiceUnavailableException(
-              `${options.apiName} provider quota exhausted`,
-            );
+            throw new ServiceUnavailableException({
+              message:
+                "Лимит запросов Vehicle Databases исчерпан. Проверьте квоту или дождитесь её обновления.",
+              code: "VIN_PROVIDER_QUOTA_EXHAUSTED",
+            } satisfies ProviderUnavailableBody);
           }
 
           this.logger.error(
@@ -170,9 +179,11 @@ export class VehicleDatabasesClientService {
         if (status === 429) {
           this.logger.warn(`${options.apiName} rate limit exceeded`);
 
-          throw new ServiceUnavailableException(
-            `${options.apiName} rate limit exceeded`,
-          );
+          throw new ServiceUnavailableException({
+            message:
+              "Vehicle Databases временно ограничил частоту запросов. Попробуйте позже.",
+            code: "VIN_PROVIDER_RATE_LIMITED",
+          } satisfies ProviderUnavailableBody);
         }
 
         if (status !== undefined && status >= 500) {
@@ -180,9 +191,11 @@ export class VehicleDatabasesClientService {
             `${options.apiName} upstream error: HTTP ${status}`,
           );
 
-          throw new ServiceUnavailableException(
-            `${options.apiName} is temporarily unavailable`,
-          );
+          throw new ServiceUnavailableException({
+            message:
+              "Vehicle Databases временно недоступен. Попробуйте позже.",
+            code: "VIN_PROVIDER_TEMPORARILY_UNAVAILABLE",
+          } satisfies ProviderUnavailableBody);
         }
 
         this.logger.error(
