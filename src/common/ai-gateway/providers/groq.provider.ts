@@ -14,49 +14,48 @@ import {
 export class GroqProvider implements AiProvider {
   readonly providerName = "groq";
 
-  private readonly client: OpenAI;
-  private readonly model: string;
+  private client: OpenAI | null = null;
+  private readonly model: string | null;
   private readonly textMaxTokens: number;
   private readonly visionMaxTokens: number;
+  private readonly baseURL: string | null;
+  private readonly apiKey: string | null;
+  private readonly timeout: number;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>("GROQ_API_KEY");
-    const model = this.configService.get<string>("GROQ_MODEL");
-    const baseURL = this.configService.get<string>("GROQ_BASE_URL");
-
-    const timeout = this.readPositiveNumber("GROQ_TIMEOUT_MS", 30000);
-
+    this.apiKey = this.configService.get<string>("GROQ_API_KEY") ?? null;
+    this.model = this.configService.get<string>("GROQ_MODEL") ?? null;
+    this.baseURL = this.configService.get<string>("GROQ_BASE_URL") ?? null;
+    this.timeout = this.readPositiveNumber("GROQ_TIMEOUT_MS", 30000);
     this.textMaxTokens = this.readPositiveNumber("GROQ_TEXT_MAX_TOKENS", 1000);
-
     this.visionMaxTokens = this.readPositiveNumber(
       "GROQ_VISION_MAX_TOKENS",
       1000,
     );
+  }
 
-    if (!apiKey) {
-      throw new Error("GROQ_API_KEY environment variable is required");
+  private ensure(): { client: OpenAI; model: string } {
+    if (!this.apiKey || !this.model || !this.baseURL) {
+      throw new Error(
+        "AI provider is not configured (missing GROQ_API_KEY / GROQ_MODEL / GROQ_BASE_URL)",
+      );
     }
-
-    if (!model) {
-      throw new Error("GROQ_MODEL environment variable is required");
+    if (!this.client) {
+      this.client = new OpenAI({
+        apiKey: this.apiKey,
+        baseURL: this.baseURL,
+        timeout: this.timeout,
+      });
     }
-
-    if (!baseURL) {
-      throw new Error("GROQ_BASE_URL environment variable is required");
-    }
-
-    this.client = new OpenAI({
-      apiKey,
-      baseURL,
-      timeout,
-    });
-
-    this.model = model;
+    const active: OpenAI = this.client;
+    const activeModel: string = this.model;
+    return { client: active, model: activeModel };
   }
 
   async complete(request: AiTextRequest): Promise<AiTextResponse> {
-    const response = await this.client.chat.completions.create({
-      model: this.model,
+    const ready = this.ensure();
+    const response = await ready.client.chat.completions.create({
+      model: ready.model,
 
       messages: [
         {
@@ -85,13 +84,14 @@ export class GroqProvider implements AiProvider {
 
     return {
       provider: this.providerName,
-      model: response.model || this.model,
+      model: response.model || ready.model,
       text,
       responseId: response.id,
     };
   }
 
   async analyzeImages(request: AiVisionRequest): Promise<AiVisionResponse> {
+    const ready = this.ensure();
     if (request.images.length === 0) {
       throw new Error("At least one image is required");
     }
@@ -124,8 +124,8 @@ export class GroqProvider implements AiProvider {
       });
     }
 
-    const response = await this.client.chat.completions.create({
-      model: this.model,
+    const response = await ready.client.chat.completions.create({
+      model: ready.model,
 
       messages: [
         {
@@ -143,12 +143,14 @@ export class GroqProvider implements AiProvider {
       reasoning_effort: "none" as never,
     });
 
-    const text = this.extractFinalText(response.choices[0]?.message?.content);
+    const visionText = this.extractFinalText(
+      response.choices[0]?.message?.content,
+    );
 
     return {
       provider: this.providerName,
-      model: response.model || this.model,
-      text,
+      model: response.model || ready.model,
+      text: visionText,
       responseId: response.id,
     };
   }

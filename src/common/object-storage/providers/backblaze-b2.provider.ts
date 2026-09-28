@@ -26,19 +26,28 @@ import {
 export class BackblazeB2Provider implements ObjectStorageProvider {
   readonly providerName = "backblaze-b2";
 
-  private readonly client: S3Client;
+  private client: S3Client | null = null;
 
   constructor(private readonly configService: ConfigService) {
+    // Optional integration: do NOT throw in constructor, otherwise the API
+    // fails to boot (status 1) when B2 keys are missing on Render.
+  }
+
+  private ensureClient(): S3Client {
+    if (this.client) return this.client;
     const endpoint = this.configService.get<string>("B2_S3_ENDPOINT");
 
     const region = this.configService.get<string>("B2_S3_REGION");
 
     const keyId = this.configService.get<string>("B2_KEY_ID");
 
-    const applicationKey = this.configService.get<string>("B2_APPLICATION_KEY");
+    const applicationKey =
+      this.configService.get<string>("B2_APPLICATION_KEY");
 
     if (!endpoint || !region || !keyId || !applicationKey) {
-      throw new Error("Backblaze B2 configuration is incomplete");
+      throw new Error(
+        "Object storage is not configured (missing B2_S3_ENDPOINT / B2_S3_REGION / B2_KEY_ID / B2_APPLICATION_KEY)",
+      );
     }
 
     this.client = new S3Client({
@@ -50,10 +59,11 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
         secretAccessKey: applicationKey,
       },
     });
+    return this.client;
   }
 
   async assertAccess(input: AssertObjectStorageAccessInput): Promise<void> {
-    await this.client.send(
+    await this.ensureClient().send(
       new HeadBucketCommand({
         Bucket: input.bucket,
       }),
@@ -63,6 +73,7 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
   async createSignedUpload(
     input: ObjectStorageUploadRequest,
   ): Promise<ObjectStorageUploadTarget> {
+    const client = this.ensureClient();
     const expiresInSeconds = 15 * 60;
 
     const command = new PutObjectCommand({
@@ -73,7 +84,7 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
       Metadata: input.metadata,
     });
 
-    const uploadUrl = await getSignedUrl(this.client, command, {
+    const uploadUrl = await getSignedUrl(client, command, {
       expiresIn: expiresInSeconds,
     });
 
@@ -93,6 +104,7 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
   async createSignedDownload(
     input: CreateSignedDownloadInput,
   ): Promise<ObjectStorageDownloadTarget> {
+    const downloadClient = this.ensureClient();
     const expiresInSeconds = input.expiresInSeconds ?? 15 * 60;
 
     const command = new GetObjectCommand({
@@ -101,7 +113,7 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
       VersionId: input.versionId,
     });
 
-    const downloadUrl = await getSignedUrl(this.client, command, {
+    const downloadUrl = await getSignedUrl(downloadClient, command, {
       expiresIn: expiresInSeconds,
     });
 
@@ -117,7 +129,7 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
   async getObjectMetadata(
     input: GetObjectMetadataInput,
   ): Promise<ObjectStorageObjectMetadata> {
-    const response = await this.client.send(
+    const response = await this.ensureClient().send(
       new HeadObjectCommand({
         Bucket: input.bucket,
         Key: input.key,
@@ -145,7 +157,7 @@ export class BackblazeB2Provider implements ObjectStorageProvider {
   }
 
   async deleteObject(input: DeleteObjectInput): Promise<void> {
-    await this.client.send(
+    await this.ensureClient().send(
       new DeleteObjectCommand({
         Bucket: input.bucket,
         Key: input.key,
