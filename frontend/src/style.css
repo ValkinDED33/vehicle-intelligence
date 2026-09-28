@@ -235,9 +235,15 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .ai-dialog p{font-size:13px;color:#aab8d2;line-height:1.6;margin:0}
 .modal-close{position:absolute;right:18px;top:18px;color:var(--mut)}
 .chat-placeholder{padding:18px;background:rgba(12,37,70,.7);border:1px solid rgba(90,140,220,.25);border-radius:12px;margin:20px 0;font-size:13px;text-align:left}
+.ai-messages{display:grid;gap:9px;max-height:300px;overflow:auto;margin:18px 0;text-align:left}
+.ai-messages .chat-placeholder{margin:0}
+.ai-message{border:1px solid rgba(90,140,220,.25);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
+.ai-message.user{background:rgba(103,61,238,.18);border-color:rgba(124,92,255,.45);margin-left:40px;color:#eef4ff}
+.ai-message.assistant{background:rgba(12,37,70,.72);margin-right:28px;color:#cbd8ed}
 .ai-dialog form{display:flex;gap:8px}
 .ai-dialog input{flex:1;min-width:0;text-align:left}
 .ai-dialog form button{background:linear-gradient(140deg,#753bea,#4b25c6);border-radius:10px;padding:10px;box-shadow:0 0 16px rgba(101,54,225,.5)}
+.ai-dialog form button:disabled{opacity:.55;cursor:default}
 .scrim{display:none}
 
 /* ---------- responsive ---------- */

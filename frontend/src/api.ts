@@ -637,6 +637,22 @@ export const externalReportsApi = {
     ),
 };
 
+// ---------- assistant ----------
+
+export interface AssistantChatResponse {
+  answer: string;
+  provider: string;
+  model: string;
+}
+
+export const assistantApi = {
+  chat: (input: { message: string; vehicleId?: string }) =>
+    request<AssistantChatResponse>("/assistant/chat", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+};
+
 // ---------- helpers ----------
 
 export function num(value: string | number | null | undefined): number | null {

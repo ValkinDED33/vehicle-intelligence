@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   Bell,
@@ -14,7 +14,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { garageApi, type Vehicle } from "../api";
+import { assistantApi, garageApi, type Vehicle } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, PageHeader } from "../components/CommonComponents";
 import { SECTIONS, sections } from "../constants/dashboard";
@@ -60,9 +60,14 @@ function InnerPage(props: PageProps & { page: string }) {
 
 const VEHICLE_KEY='cara.vehicleId';
 
+type AiMessage = {
+  role: "assistant" | "user";
+  text: string;
+};
+
 export function Shell(){
   const {user,logout}=useAuth();
-  const [page,setPage]=useState('Главная'); const [mobile,setMobile]=useState(false); const [ai,setAi]=useState(false); const [query,setQuery]=useState(''); const [search,setSearch]=useState(false); const [soundOn,setSoundOn]=useState(soundEnabled());
+  const [page,setPage]=useState('Главная'); const [mobile,setMobile]=useState(false); const [ai,setAi]=useState(false); const [query,setQuery]=useState(''); const [aiQuery,setAiQuery]=useState(''); const [aiBusy,setAiBusy]=useState(false); const [aiMessages,setAiMessages]=useState<AiMessage[]>([]); const [search,setSearch]=useState(false); const [soundOn,setSoundOn]=useState(soundEnabled());
   const [vehicles,setVehicles]=useState<Vehicle[]>([]);
   const [vehiclesLoading,setVehiclesLoading]=useState(true);
   const [vehiclesError,setVehiclesError]=useState<string|null>(null);
@@ -105,6 +110,23 @@ export function Shell(){
 
   const pageProps={vehicle,vehicles,data,refresh,navigate,selectVehicle,loadVehicles,afterMutate,openAi,vehiclesLoading,vehiclesError,userName,logout};
 
+  const sendAiMessage=async(e:FormEvent)=>{
+    e.preventDefault();
+    const text=aiQuery.trim();
+    if(!text||aiBusy)return;
+    setAiQuery('');
+    setAiBusy(true);
+    setAiMessages(prev=>[...prev,{role:'user',text}]);
+    try{
+      const res=await assistantApi.chat({message:text,vehicleId:vehicle?.id});
+      setAiMessages(prev=>[...prev,{role:'assistant',text:res.answer}]);
+    }catch(err){
+      setAiMessages(prev=>[...prev,{role:'assistant',text:errText(err)}]);
+    }finally{
+      setAiBusy(false);
+    }
+  };
+
   return <div className="app">
    <aside className={'sidebar '+(mobile?'open':'')}>
     <div className="brand"><span className="brand-mark">C</span><div><strong>CARA</strong><small>AI CAR ASSISTANT</small></div><button className="close-menu" onClick={()=>setMobile(false)}><X size={20}/></button></div>
@@ -140,6 +162,6 @@ export function Shell(){
     {page==='Главная'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
    </main>
    {mobile&&<div className="scrim" onClick={()=>setMobile(false)}/>}
-   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Спросите меня об автомобиле. Подключение к AI backend появится после настройки API.</p><div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${vehicleTitle(vehicle)}`:''}?</div><form onSubmit={e=>{e.preventDefault();if(query.trim())setQuery('')}}><input autoFocus placeholder="Напишите вопрос..." value={query} onChange={e=>setQuery(e.target.value)}/><button aria-label="Отправить"><Send size={18}/></button></form></div></div>}
+   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Спросите меня об автомобиле — я отвечу с учётом текущего профиля, пробега и напоминаний.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${vehicleTitle(vehicle)}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишите вопрос..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Отправить" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
   </div>;
 }

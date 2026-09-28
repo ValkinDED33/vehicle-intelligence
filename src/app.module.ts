@@ -10,6 +10,7 @@ import { HealthModule } from "./common/health/health.module";
 import { ObjectStorageModule } from "./common/object-storage/object-storage.module";
 import { VehicleDatabasesModule } from "./common/vehicle-databases/vehicle-databases.module";
 
+import { AssistantModule } from "./modules/assistant/assistant.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { EnergyModule } from "./modules/energy/energy.module";
 import { ExpensesModule } from "./modules/expenses/expenses.module";
@@ -68,6 +69,7 @@ import { VinModule } from "./modules/vin/vin.module";
     ServiceRecordsModule,
     DocumentsModule,
     ExternalReportsModule,
+    AssistantModule,
   ],
   providers: [
     {
