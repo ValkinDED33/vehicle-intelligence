@@ -30,6 +30,12 @@ export interface CreateVehicleProfileData {
 
   driveType?: string;
 
+  bodyType?: string;
+  doorCount?: number;
+  seatCount?: number;
+  trimLevel?: string;
+  exteriorColor?: string;
+
   fuelTankCapacityLiters?: number;
   adBlueTankCapacityLiters?: number;
 
@@ -141,6 +147,31 @@ export class VehicleProfileDbService {
           data.driveType !== undefined
             ? this.normalizeLowercase(data.driveType)
             : (latestProfile?.driveType ?? null),
+
+        bodyType:
+          data.bodyType !== undefined
+            ? this.normalizeLowercase(data.bodyType)
+            : (latestProfile?.bodyType ?? null),
+
+        doorCount:
+          data.doorCount !== undefined
+            ? data.doorCount
+            : (latestProfile?.doorCount ?? null),
+
+        seatCount:
+          data.seatCount !== undefined
+            ? data.seatCount
+            : (latestProfile?.seatCount ?? null),
+
+        trimLevel:
+          data.trimLevel !== undefined
+            ? this.normalizeText(data.trimLevel)
+            : (latestProfile?.trimLevel ?? null),
+
+        exteriorColor:
+          data.exteriorColor !== undefined
+            ? this.normalizeText(data.exteriorColor)
+            : (latestProfile?.exteriorColor ?? null),
 
         fuelTankCapacityLiters:
           data.fuelTankCapacityLiters !== undefined

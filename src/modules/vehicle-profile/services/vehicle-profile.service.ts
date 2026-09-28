@@ -66,11 +66,19 @@ export class VehicleProfileService {
 
         driveType: dto.driveType,
 
+        bodyType: dto.bodyType,
+        doorCount: dto.doorCount,
+        seatCount: dto.seatCount,
+        trimLevel: dto.trimLevel,
+        exteriorColor: dto.exteriorColor,
+
         fuelTankCapacityLiters: dto.fuelTankCapacityLiters,
         adBlueTankCapacityLiters: dto.adBlueTankCapacityLiters,
 
         batteryGrossCapacityKwh: dto.batteryGrossCapacityKwh,
         batteryUsableCapacityKwh: dto.batteryUsableCapacityKwh,
+
+        confirmedAt: dto.source?.startsWith("manual") ? new Date() : undefined,
       });
     } catch (error) {
       if (

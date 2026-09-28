@@ -374,6 +374,11 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .spec-grid div{border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(6,18,38,.5)}
 .spec-grid span{display:block;font-size:9.5px;letter-spacing:1px;color:var(--dim);margin-bottom:5px;text-transform:uppercase}
 .spec-grid b{font-size:13px;font-weight:600}
+.profile-correction-panel{padding:18px;margin-top:14px;display:grid;gap:14px}
+.correction-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.profile-correction-panel select{width:100%;background:#061428;border:1px solid #315071;color:white;border-radius:9px;padding:10px;outline:none}
+.profile-correction-panel select:focus{border-color:#4c8dff;box-shadow:0 0 12px rgba(76,141,255,.35)}
+.save-profile-btn{justify-self:start;display:inline-flex;align-items:center;gap:8px}
 .decode-panel{padding:18px;margin-top:14px}
 .decode-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
 .decode-head h2{margin:0 0 6px;display:flex;align-items:center;gap:8px}

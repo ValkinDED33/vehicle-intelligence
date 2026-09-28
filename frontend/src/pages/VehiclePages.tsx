@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { AlertTriangle, Check, CircleHelp, ClipboardList, Gauge, Loader2, Plus, RefreshCw, Search, Wrench } from "lucide-react";
-import { fmtDate, fmtMoney, fmtNumber, garageApi, mileageApi, vinApi } from "../api";
+import { fmtDate, fmtMoney, fmtNumber, garageApi, mileageApi, profileApi, vinApi } from "../api";
 import { AddVehicleForm } from "../components/AddVehicleForm";
 import { EmptyState, Field, NoVehicle, Spinner } from "../components/CommonComponents";
 import { URGENCY_META } from "../constants/dashboard";
@@ -44,9 +44,28 @@ function GaragePage(props: PageProps) {
 function ProfilePage(props: PageProps) {
   const {vehicle,data,afterMutate}=props;
   const [busy,setBusy]=useState(false);
+  const [savingProfile,setSavingProfile]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err',text:string}|null>(null);
-  if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
+  const [correction,setCorrection]=useState({
+    fuelType:'',
+    bodyType:'',
+    doorCount:'',
+    seatCount:'',
+    trimLevel:'',
+    exteriorColor:'',
+  });
   const profile=data.profile;
+  useEffect(()=>{
+    setCorrection({
+      fuelType:profile?.fuelType??'',
+      bodyType:profile?.bodyType??'',
+      doorCount:profile?.doorCount!=null?String(profile.doorCount):'',
+      seatCount:profile?.seatCount!=null?String(profile.seatCount):'',
+      trimLevel:profile?.trimLevel??'',
+      exteriorColor:profile?.exteriorColor??'',
+    });
+  },[profile?.id]);
+  if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const decode=async()=>{
     if(!vehicle.vin){setMessage({kind:'err',text:'У автомобиля не указан VIN — сначала добавьте его в гараже.'});return}
     setBusy(true);setMessage(null);
@@ -57,6 +76,23 @@ function ProfilePage(props: PageProps) {
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
+  const saveCorrection=async(e:FormEvent)=>{
+    e.preventDefault();
+    setSavingProfile(true);setMessage(null);
+    try{
+      await profileApi.create(vehicle.id,{
+        source:'manual-confirmed',
+        fuelType:emptyToUndefined(correction.fuelType),
+        bodyType:emptyToUndefined(correction.bodyType),
+        doorCount:numberOrUndefined(correction.doorCount),
+        seatCount:numberOrUndefined(correction.seatCount),
+        trimLevel:emptyToUndefined(correction.trimLevel),
+        exteriorColor:emptyToUndefined(correction.exteriorColor),
+      });
+      setMessage({kind:'ok',text:'Подтверждённые данные сохранены — теперь они выше приоритета, чем ответ VIN-провайдера.'});
+      await afterMutate();
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSavingProfile(false)}
+  };
   const rows:[string,string][]=profile?[
     ['Двигатель',[profile.engineFamily,profile.engineCode].filter(Boolean).join(' ')||'—'],
     ['Объём',profile.displacementCc?`${fmtNumber(profile.displacementCc)} см³`:'—'],
@@ -65,6 +101,11 @@ function ProfilePage(props: PageProps) {
     ['Мощность',profile.powerHp?`${fmtNumber(profile.powerHp)} л.с. (${fmtNumber(profile.powerKw)} кВт)`:'—'],
     ['Коробка',[formatTransmission(profile.transmissionType),profile.transmissionCode].filter(v=>v&&v!=='—').join(' ')||'—'],
     ['Привод',formatDrive(profile.driveType)],
+    ['Кузов',formatBody(profile.bodyType)],
+    ['Дверей',profile.doorCount!=null?String(profile.doorCount):'—'],
+    ['Мест',profile.seatCount!=null?String(profile.seatCount):'—'],
+    ['Комплектация',profile.trimLevel??'—'],
+    ['Цвет',profile.exteriorColor??'—'],
     ['Бак',profile.fuelTankCapacityLiters?`${profile.fuelTankCapacityLiters} л`:'—'],
     ['Батарея',profile.batteryUsableCapacityKwh?`${profile.batteryUsableCapacityKwh} кВт⋅ч (полная ${profile.batteryGrossCapacityKwh??'—'})`:'—'],
     ['Версия профиля',`v${profile.version} · ${formatProfileSource(profile.source)}`],
@@ -81,6 +122,22 @@ function ProfilePage(props: PageProps) {
    {profile
     ?<div className="panel spec-panel"><h2>ТЕХНИЧЕСКИЙ ПРОФИЛЬ</h2><div className="spec-grid">{rows.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div></div>
     :<EmptyState icon={ClipboardList} title="Профиль ещё не заполнен" text="Нажмите «Расшифровать VIN» — данные подтянутся из Vehicle Databases и сохранятся в профиле автомобиля."/>}
+   <form className="panel profile-correction-panel" onSubmit={saveCorrection}>
+    <div className="panel-heading"><h2>ПОДТВЕРЖДЁННЫЕ ДАННЫЕ ВЛАДЕЛЬЦА</h2><span className="tag green">выше VIN-провайдера</span></div>
+    <div className="correction-grid">
+     <Field label="Топливо"><select value={correction.fuelType} onChange={e=>setCorrection({...correction,fuelType:e.target.value})}>
+      <option value="">Не указано</option><option value="petrol">Бензин</option><option value="diesel">Дизель</option><option value="lpg">LPG</option><option value="cng">CNG</option><option value="hybrid">Гибрид</option><option value="phev">PHEV</option><option value="electric">Электро</option>
+     </select></Field>
+     <Field label="Кузов"><select value={correction.bodyType} onChange={e=>setCorrection({...correction,bodyType:e.target.value})}>
+      <option value="">Не указано</option><option value="hatchback">Хэтчбек</option><option value="sedan">Седан</option><option value="wagon">Универсал</option><option value="coupe">Купе</option><option value="suv">SUV</option><option value="mpv">MPV</option><option value="van">Фургон</option><option value="pickup">Пикап</option><option value="convertible">Кабриолет</option><option value="other">Другое</option>
+     </select></Field>
+     <Field label="Дверей"><input value={correction.doorCount} onChange={e=>setCorrection({...correction,doorCount:e.target.value.replace(/[^\d]/g,'')})} placeholder="3" inputMode="numeric"/></Field>
+     <Field label="Мест"><input value={correction.seatCount} onChange={e=>setCorrection({...correction,seatCount:e.target.value.replace(/[^\d]/g,'')})} placeholder="5" inputMode="numeric"/></Field>
+     <Field label="Комплектация"><input value={correction.trimLevel} onChange={e=>setCorrection({...correction,trimLevel:e.target.value})} placeholder="GOAL"/></Field>
+     <Field label="Цвет"><input value={correction.exteriorColor} onChange={e=>setCorrection({...correction,exteriorColor:e.target.value})} placeholder="например, серебристый"/></Field>
+    </div>
+    <button className="ghost-btn save-profile-btn" type="submit" disabled={savingProfile}>{savingProfile?<Loader2 size={15} className="spin"/>:<Check size={15}/>} СОХРАНИТЬ ПОДТВЕРЖДЕНИЕ</button>
+   </form>
    <VinDecodedFacts decode={data.vinDecode}/>
   </>;
 }
@@ -266,12 +323,30 @@ function formatDrive(value:string|null|undefined):string{
   return value?map[value]??value:'—';
 }
 
+function formatBody(value:string|null|undefined):string{
+  const map:Record<string,string>={hatchback:'хэтчбек',sedan:'седан',wagon:'универсал',coupe:'купе',suv:'SUV',mpv:'MPV',van:'фургон',pickup:'пикап',convertible:'кабриолет',other:'другой'};
+  return value?map[value]??value:'—';
+}
+
 function formatAspiration(value:string|null|undefined):string{
   const map:Record<string,string>={turbo:'турбо',supercharged:'компрессор',naturally_aspirated:'атмосферный'};
   return value?map[value]??value:'—';
 }
 
+function emptyToUndefined(value:string):string|undefined{
+  const trimmed=value.trim();
+  return trimmed?trimmed:undefined;
+}
+
+function numberOrUndefined(value:string):number|undefined{
+  if(!value.trim())return undefined;
+  const parsed=Number(value);
+  return Number.isFinite(parsed)?parsed:undefined;
+}
+
 function formatProfileSource(value:string):string{
+  if(value==='manual-confirmed')return 'подтверждено владельцем';
+  if(value==='manual')return 'ручной профиль';
   if(value==='vin:vincario')return 'Vincario VIN';
   if(value==='vin:vehicle-databases')return 'Vehicle Databases VIN';
   if(value.startsWith('vdb:'))return `Vehicle Databases · ${value.slice(4)}`;

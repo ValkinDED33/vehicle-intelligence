@@ -68,6 +68,22 @@ export const vehicleProfiles = pgTable(
       length: 32,
     }),
 
+    bodyType: varchar("body_type", {
+      length: 64,
+    }),
+
+    doorCount: integer("door_count"),
+
+    seatCount: integer("seat_count"),
+
+    trimLevel: varchar("trim_level", {
+      length: 120,
+    }),
+
+    exteriorColor: varchar("exterior_color", {
+      length: 120,
+    }),
+
     /**
      * Полная ёмкость топливного бака.
      * Применяется только если у автомобиля

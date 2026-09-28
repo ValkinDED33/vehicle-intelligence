@@ -85,6 +85,33 @@ export class CreateVehicleProfileDto {
   driveType?: string;
 
   @IsOptional()
+  @IsString()
+  @IsIn(["hatchback", "sedan", "wagon", "coupe", "suv", "mpv", "van", "pickup", "convertible", "other"])
+  bodyType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(8)
+  doorCount?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  seatCount?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  trimLevel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  exteriorColor?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(500)

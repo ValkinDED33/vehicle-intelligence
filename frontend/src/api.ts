@@ -216,6 +216,11 @@ export interface VehicleProfile {
   transmissionType: string | null;
   transmissionCode: string | null;
   driveType: string | null;
+  bodyType: string | null;
+  doorCount: number | null;
+  seatCount: number | null;
+  trimLevel: string | null;
+  exteriorColor: string | null;
   fuelTankCapacityLiters: number | null;
   adBlueTankCapacityLiters: number | null;
   batteryGrossCapacityKwh: number | null;
@@ -230,6 +235,11 @@ export const profileApi = {
     request<VehicleProfile | null>(`/vehicles/${vehicleId}/profile/current`),
   history: (vehicleId: string) =>
     request<VehicleProfile[]>(`/vehicles/${vehicleId}/profile/history`),
+  create: (vehicleId: string, input: Partial<VehicleProfile>) =>
+    request<VehicleProfile>(`/vehicles/${vehicleId}/profile`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };
 
 // ---------- mileage ----------
