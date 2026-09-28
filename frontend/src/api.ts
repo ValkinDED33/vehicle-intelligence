@@ -594,6 +594,9 @@ export const vinApi = {
 export interface ReportSource {
   key: string;
   apiName: string;
+  input: "vin" | "ymm" | "ymmt" | "plate" | "image";
+  fetchableByVehicleVin: boolean;
+  note?: string;
 }
 
 export interface SourceFetchSummary {

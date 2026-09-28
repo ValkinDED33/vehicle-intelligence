@@ -4,10 +4,11 @@
   "private": true,
   "description": "Backend API for the Vehicle Intelligence platform",
   "engines": {
-    "node": ">=24.15.0"
+    "node": ">=24.15.0 <25"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
@@ -15,7 +16,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "dev:web": "npm --prefix frontend run dev",
-    "build:web": "npm --prefix frontend run build"
+    "build:web": "npm --prefix frontend ci --no-audit --no-fund && npm --prefix frontend run build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",

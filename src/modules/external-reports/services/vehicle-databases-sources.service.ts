@@ -17,6 +17,7 @@ import {
 } from "../normalization/source-normalization.service";
 import {
   VEHICLE_DATABASES_SOURCE_MAP,
+  VEHICLE_DATABASES_SOURCES,
   VEHICLE_DATABASES_VIN_SOURCES,
   type VehicleDatabasesSourceDefinition,
 } from "../providers/vehicle-databases/source-catalog";
@@ -49,11 +50,22 @@ export class VehicleDatabasesSourcesService {
     private readonly sourceNormalizationService: SourceNormalizationService,
   ) {}
 
-  listSources(): Array<{ key: string; apiName: string }> {
-    return VEHICLE_DATABASES_VIN_SOURCES.map(({ key, apiName }) => ({
-      key,
-      apiName,
-    }));
+  listSources(): Array<{
+    key: string;
+    apiName: string;
+    input: VehicleDatabasesSourceDefinition["input"];
+    fetchableByVehicleVin: boolean;
+    note?: string;
+  }> {
+    return VEHICLE_DATABASES_SOURCES.map(
+      ({ key, apiName, input, note, enabled }) => ({
+        key,
+        apiName,
+        input,
+        fetchableByVehicleVin: input === "vin" && enabled !== false,
+        note,
+      }),
+    );
   }
 
   async fetchSource(
@@ -65,6 +77,18 @@ export class VehicleDatabasesSourcesService {
 
     if (!definition) {
       throw new NotFoundException(`Unknown external source: ${sourceKey}`);
+    }
+
+    if (definition.enabled === false) {
+      throw new BadRequestException(
+        `${definition.apiName} is disabled for this vehicle flow. ${definition.note ?? ""}`.trim(),
+      );
+    }
+
+    if (definition.input !== "vin") {
+      throw new BadRequestException(
+        `${definition.apiName} cannot be fetched from vehicle VIN alone. ${definition.note ?? "Use a dedicated endpoint for this source."}`,
+      );
     }
 
     const vin = await this.resolveVin(ownerId, vehicleId);
@@ -153,6 +177,12 @@ export class VehicleDatabasesSourcesService {
     vin: string,
     definition: VehicleDatabasesSourceDefinition,
   ): Promise<SourceFetchResult> {
+    if (!definition.urlTemplate) {
+      throw new BadRequestException(
+        `${definition.apiName} does not have a configured endpoint`,
+      );
+    }
+
     try {
       const rawPayload = await this.vehicleDatabasesClient.fetch({
         apiName: definition.apiName,

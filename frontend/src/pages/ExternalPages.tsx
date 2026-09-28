@@ -25,13 +25,14 @@ function IntegrationsPage(props:PageProps){
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   if(!vehicle.vin)return <EmptyState icon={PlugZap} title="Нужен VIN" text="Внешние отчёты Vehicle Databases запрашиваются по VIN. Укажите VIN в карточке автомобиля."/>;
   if(sources===null)return <Spinner/>;
+  const vinSources=sources.filter(s=>s.fetchableByVehicleVin);
   const fetchAll=async()=>{
     setBusy('all');setMessage(null);setResults(null);
     try{
       const res=await externalReportsApi.fetchAll(vehicle.id);
       setResults(res);
       const ok=res.filter(r=>r.status==='success'||r.status==='no-data').length;
-      setMessage({kind:'ok',text:`Обработано источников: ${res.length} (успешно/без данных: ${ok}).`});
+      setMessage({kind:'ok',text:`Обработано VIN-источников: ${res.length} из ${vinSources.length} (успешно/без данных: ${ok}).`});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
@@ -46,15 +47,15 @@ function IntegrationsPage(props:PageProps){
   };
   return <>
    <div className="page-actions">
-    <button className="primary" onClick={()=>void fetchAll()} disabled={busy!==null}>{busy==='all'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {busy==='all'?'ЗАБИРАЕМ ОТЧЁТЫ...':'СКАЧАТЬ ВСЕ ОТЧЁТЫ ПО VIN'}</button>
-    <span className="hint-note">Данные: Vehicle Databases. Сырые ответы сохраняются в «Отчётах».</span>
+    <button className="primary" onClick={()=>void fetchAll()} disabled={busy!==null||vinSources.length===0}>{busy==='all'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {busy==='all'?'ЗАБИРАЕМ ОТЧЁТЫ...':'СКАЧАТЬ VIN-ОТЧЁТЫ'}</button>
+    <span className="hint-note">Данные: Vehicle Databases. VIN-источники загружаются сразу; OCR/YMMT требуют отдельный ввод.</span>
    </div>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    <div className="sources-grid">
     {sources.map(s=><div key={s.key} className="panel source-card">
       <div className={'icon-disc '+(results?.find(r=>r.source===s.key)?.status==='success'?'green':'')}><PlugZap size={17}/></div>
-      <div className="source-copy"><b>{s.apiName}</b><small>{s.key}</small></div>
-      <button className="ghost-btn" onClick={()=>void fetchOne(s.key)} disabled={busy!==null}>{busy===s.key?'...':'Запросить'}</button>
+      <div className="source-copy"><b>{s.apiName}</b><small>{s.key} · {s.fetchableByVehicleVin?'VIN':'нужен '+s.input}</small>{!s.fetchableByVehicleVin&&s.note&&<small>{s.note}</small>}</div>
+      <button className="ghost-btn" onClick={()=>void fetchOne(s.key)} disabled={busy!==null||!s.fetchableByVehicleVin}>{busy===s.key?'...':s.fetchableByVehicleVin?'Запросить':'Отдельный поток'}</button>
      </div>)}
     {!sources.length&&<div className="state-note">Список источников пуст.</div>}
    </div>
