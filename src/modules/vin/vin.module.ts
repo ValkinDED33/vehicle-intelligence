@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { HttpModule } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 
 import { GarageModule } from "../garage/garage.module";
@@ -14,6 +15,7 @@ import { VinDbService } from "./vin.db.service";
 
 @Module({
   imports: [
+    HttpModule,
     GarageModule,
     VehicleProfileModule,
   ],
