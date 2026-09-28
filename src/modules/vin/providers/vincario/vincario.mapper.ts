@@ -27,6 +27,14 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
     120,
   );
 
+  const engineType = firstString(decode, attributes, vehicle, [
+    "Engine",
+    "Engine Type",
+    "engine",
+    "Engine Description",
+    "Engine Configuration",
+  ], 120);
+
   return {
     provider: "vincario",
     make,
@@ -47,13 +55,7 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
       "Engine Model",
       "Engine Version",
     ], 64),
-    engineFamily: firstString(decode, attributes, vehicle, [
-      "Engine",
-      "Engine Type",
-      "engine",
-      "Engine Description",
-      "Engine Configuration",
-    ], 120),
+    engineFamily: normalizeEngineFamily(engineType),
     displacementCc: toDisplacementCc(
       firstValue(decode, attributes, vehicle, [
         "Displacement (ccm)",
@@ -80,7 +82,8 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
       ]),
     ),
     fuelType: mapFuelType(
-      firstString(decode, attributes, vehicle, ["Fuel Type", "Fuel", "Fuel System", "fuel"], 64),
+      firstString(decode, attributes, vehicle, ["Fuel Type", "Fuel", "Fuel System", "fuel"], 64) ??
+        engineType,
     ),
     transmissionType: mapTransmissionType(
       firstString(decode, attributes, vehicle, [
@@ -185,7 +188,11 @@ function toPositiveInteger(value: unknown): number | undefined {
 function mapFuelType(value?: string): VinFuelType | undefined {
   const normalized = value?.toLowerCase();
   if (!normalized) return undefined;
-  if (normalized.includes("diesel")) return "diesel";
+  if (
+    normalized.includes("diesel") ||
+    normalized.includes("tdi") ||
+    normalized.includes("t-di")
+  ) return "diesel";
   if (normalized.includes("electric")) return "electric";
   if (normalized.includes("hybrid")) return "hybrid";
   if (normalized.includes("lpg")) return "lpg";
@@ -193,6 +200,37 @@ function mapFuelType(value?: string): VinFuelType | undefined {
   if (normalized.includes("hydrogen")) return "hydrogen";
   if (normalized.includes("gas") || normalized.includes("petrol")) return "petrol";
   return undefined;
+}
+
+function normalizeEngineFamily(value?: string): string | undefined {
+  const normalized = value?.trim();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  const lower = normalized.toLowerCase();
+
+  if (lower.includes("tdi") || lower.includes("t-di")) {
+    return "TDI";
+  }
+
+  if (lower.includes("tsi") || lower.includes("t-si")) {
+    return "TSI";
+  }
+
+  if (lower.includes("tfsi") || lower.includes("t-fsi")) {
+    return "TFSI";
+  }
+
+  // Vincario sometimes returns mechanical layout strings such as
+  // "4-Stroke / 4 / Row-T-DI". They are useful as raw data but noisy as the
+  // displayed engine family unless we can collapse them to a known badge.
+  if (normalized.includes("/") || /stroke/i.test(normalized)) {
+    return undefined;
+  }
+
+  return normalized.length <= 120 ? normalized : normalized.slice(0, 120);
 }
 
 function mapTransmissionType(value?: string): VinTransmissionType | undefined {

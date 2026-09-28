@@ -586,7 +586,24 @@ export const maintenanceApi = {
 // ---------- VIN ----------
 
 export interface VinDecode {
+  id?: string;
+  vehicleId?: string;
+  provider?: string;
   vin: string;
+  make?: string | null;
+  model?: string | null;
+  modelYear?: number | null;
+  engineCode?: string | null;
+  engineFamily?: string | null;
+  displacementCc?: number | null;
+  fuelType?: string | null;
+  powerKw?: number | null;
+  powerHp?: number | null;
+  transmissionType?: string | null;
+  driveType?: string | null;
+  rawPayload?: unknown;
+  decodedAt?: string;
+  createdAt?: string;
   [key: string]: unknown;
 }
 

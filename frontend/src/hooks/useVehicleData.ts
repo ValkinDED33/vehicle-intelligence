@@ -7,6 +7,7 @@ import {
   mileageApi,
   profileApi,
   serviceRecordsApi,
+  vinApi,
   type AnomalyReport,
   type EnergyEntry,
   type EnergyMonthlySummary,
@@ -18,6 +19,7 @@ import {
   type MileageReading,
   type ServiceRecord,
   type VehicleProfile,
+  type VinDecode,
 } from "../api";
 import type { VehicleData } from "../types/dashboard";
 
@@ -33,6 +35,7 @@ export const EMPTY_DATA: VehicleData = {
   maintenance: [],
   events: [],
   profile: null,
+  vinDecode: null,
   services: [],
   loading: false,
   failed: false,
@@ -63,6 +66,7 @@ export function useVehicleData(vehicleId: string | null) {
       maintenanceApi.status(vehicleId),
       historyApi.list(vehicleId, { limit: 16 }),
       profileApi.current(vehicleId),
+      vinApi.latest(vehicleId),
       serviceRecordsApi.list(vehicleId),
     ]);
 
@@ -89,7 +93,8 @@ export function useVehicleData(vehicleId: string | null) {
       maintenance: pick<MaintenanceStatus[]>(8, []),
       events: pick<HistoryEvent[]>(9, []),
       profile: pick<VehicleProfile | null>(10, null),
-      services: pick<ServiceRecord[]>(11, []),
+      vinDecode: pick<VinDecode | null>(11, null),
+      services: pick<ServiceRecord[]>(12, []),
       loading: false,
       failed: !anyOk,
     });
@@ -101,4 +106,3 @@ export function useVehicleData(vehicleId: string | null) {
 
   return { data, refresh };
 }
-

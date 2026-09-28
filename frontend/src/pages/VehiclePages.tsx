@@ -5,6 +5,7 @@ import { AddVehicleForm } from "../components/AddVehicleForm";
 import { EmptyState, Field, NoVehicle, Spinner } from "../components/CommonComponents";
 import { URGENCY_META } from "../constants/dashboard";
 import type { PageProps } from "../types/dashboard";
+import type { VinDecode } from "../api";
 import { serviceProgress } from "../utils/calculations";
 import { errText, intervalLines, reminderDetail, urgencyScore, vehicleLine, vehicleTitle } from "../utils/formatters";
 
@@ -59,14 +60,14 @@ function ProfilePage(props: PageProps) {
   const rows:[string,string][]=profile?[
     ['Двигатель',[profile.engineFamily,profile.engineCode].filter(Boolean).join(' ')||'—'],
     ['Объём',profile.displacementCc?`${fmtNumber(profile.displacementCc)} см³`:'—'],
-    ['Топливо',profile.fuelType??'—'],
-    ['Наддув',profile.aspirationType??'—'],
+    ['Топливо',formatFuel(profile.fuelType)],
+    ['Наддув',formatAspiration(profile.aspirationType)],
     ['Мощность',profile.powerHp?`${fmtNumber(profile.powerHp)} л.с. (${fmtNumber(profile.powerKw)} кВт)`:'—'],
-    ['Коробка',[profile.transmissionType,profile.transmissionCode].filter(Boolean).join(' ')||'—'],
-    ['Привод',profile.driveType??'—'],
+    ['Коробка',[formatTransmission(profile.transmissionType),profile.transmissionCode].filter(v=>v&&v!=='—').join(' ')||'—'],
+    ['Привод',formatDrive(profile.driveType)],
     ['Бак',profile.fuelTankCapacityLiters?`${profile.fuelTankCapacityLiters} л`:'—'],
     ['Батарея',profile.batteryUsableCapacityKwh?`${profile.batteryUsableCapacityKwh} кВт⋅ч (полная ${profile.batteryGrossCapacityKwh??'—'})`:'—'],
-    ['Версия профиля',`v${profile.version} · источник ${profile.source}`],
+    ['Версия профиля',`v${profile.version} · ${formatProfileSource(profile.source)}`],
     ['Подтверждён',fmtDate(profile.confirmedAt)],
   ]:[
     ['Марка',vehicle.make??'—'],['Год',vehicle.modelYear??'—'],['VIN',vehicle.vin??'—'],
@@ -80,7 +81,201 @@ function ProfilePage(props: PageProps) {
    {profile
     ?<div className="panel spec-panel"><h2>ТЕХНИЧЕСКИЙ ПРОФИЛЬ</h2><div className="spec-grid">{rows.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div></div>
     :<EmptyState icon={ClipboardList} title="Профиль ещё не заполнен" text="Нажмите «Расшифровать VIN» — данные подтянутся из Vehicle Databases и сохранятся в профиле автомобиля."/>}
+   <VinDecodedFacts decode={data.vinDecode}/>
   </>;
+}
+
+type DecodeFact = {
+  label: string;
+  value: string;
+};
+
+type DecodeGroup = {
+  title: string;
+  facts: DecodeFact[];
+};
+
+function VinDecodedFacts({decode}:{decode:VinDecode|null}) {
+  const facts=decode?extractVinFacts(decode):[];
+  if(!decode||!facts.length)return <div className="panel decode-panel">
+   <div className="panel-heading"><h2>ПОЛНАЯ РАСШИФРОВКА VIN</h2></div>
+   <div className="state-note">Полная расшифровка появится после успешного VIN decode.</div>
+  </div>;
+  const groups=groupDecodeFacts(facts);
+  const hasColor=facts.some(f=>/color|colour|paint|цвет/i.test(f.label));
+  const hasTrim=facts.some(f=>/trim|variant|version|grade|комплек/i.test(f.label));
+  return <div className="panel decode-panel">
+   <div className="decode-head">
+    <div>
+     <h2>ПОЛНАЯ РАСШИФРОВКА VIN</h2>
+     <p>{formatVinProvider(decode.provider)}{decode.decodedAt?` · ${fmtDate(decode.decodedAt,true)}`:''} · {facts.length} полей</p>
+    </div>
+    {decode.vin&&<span className="decode-vin">{decode.vin}</span>}
+   </div>
+   {(!hasColor||!hasTrim)&&<div className="state-note">Провайдер не вернул {[
+    !hasTrim?'комплектацию/trim':null,
+    !hasColor?'цвет/paint':null,
+   ].filter(Boolean).join(' и ')} для этого VIN. Остальные полученные поля сохранены и показаны ниже.</div>}
+   <div className="decode-groups">
+    {groups.map(group=><section key={group.title} className="decode-group">
+     <h3>{group.title}</h3>
+     <div className="decode-grid">
+      {group.facts.map(f=><div key={`${group.title}-${f.label}`} className="decode-item">
+       <span>{translateDecodeLabel(f.label)}</span>
+       <b>{f.value}</b>
+      </div>)}
+     </div>
+    </section>)}
+   </div>
+  </div>;
+}
+
+function extractVinFacts(decode:VinDecode):DecodeFact[] {
+  const raw=isRecord(decode.rawPayload)?decode.rawPayload:null;
+  const rawDecode=raw?.decode;
+  const candidates:Array<{label:unknown;value:unknown}>=[];
+  if(Array.isArray(rawDecode)){
+    for(const item of rawDecode){
+      if(isRecord(item))candidates.push({label:item.label??item.name??item.key,value:item.value});
+    }
+  }else if(isRecord(rawDecode)){
+    for(const [label,value] of Object.entries(rawDecode))candidates.push({label,value});
+  }
+  if(!candidates.length&&raw){
+    const payload=isRecord(raw.data)?raw.data:raw;
+    for(const [label,value] of Object.entries(payload)){
+      if(!["success","status","message","decode"].includes(label))candidates.push({label,value});
+    }
+  }
+  const seen=new Set<string>();
+  return candidates
+    .map(({label,value})=>({label:String(label??"").trim(),value:formatDecodeValue(value)}))
+    .filter(f=>f.label&&f.value&&f.value!=="—")
+    .filter(f=>{
+      const key=`${f.label.toLowerCase()}=${f.value.toLowerCase()}`;
+      if(seen.has(key))return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function groupDecodeFacts(facts:DecodeFact[]):DecodeGroup[] {
+  const buckets:DecodeGroup[]=[
+    {title:"Идентификация",facts:[]},
+    {title:"Кузов и комплектация",facts:[]},
+    {title:"Двигатель и трансмиссия",facts:[]},
+    {title:"Размеры, масса и колёса",facts:[]},
+    {title:"Оснащение и безопасность",facts:[]},
+    {title:"Производство и документы",facts:[]},
+    {title:"Прочее",facts:[]},
+  ];
+  for(const fact of facts){
+    bucketForDecodeLabel(fact.label,buckets).facts.push(fact);
+  }
+  return buckets.filter(group=>group.facts.length);
+}
+
+function bucketForDecodeLabel(label:string,buckets:DecodeGroup[]):DecodeGroup {
+  const l=label.toLowerCase();
+  if(/vin|vehicle id|make$|model$|model year|product type|series/.test(l))return buckets[0];
+  if(/body|trim|variant|version|color|colour|paint|doors|seats/.test(l))return buckets[1];
+  if(/engine|fuel|transmission|drive|emission|co2|power|displacement|turbo/.test(l))return buckets[2];
+  if(/wheel|wheelbase|height|length|width|track|weight|speed|axle|tire|tyre/.test(l))return buckets[3];
+  if(/abs|brake|suspension|steering|airbag|lamp|light|safety/.test(l))return buckets[4];
+  if(/manufacturer|plant|country|logo|market|checksum/.test(l))return buckets[5];
+  return buckets[6];
+}
+
+function formatDecodeValue(value:unknown):string {
+  if(value===null||value===undefined||value==="")return "—";
+  if(typeof value==="string")return value.trim();
+  if(typeof value==="number"||typeof value==="boolean")return String(value);
+  if(Array.isArray(value))return value.map(formatDecodeValue).filter(v=>v&&v!=="—").join(", ");
+  if(isRecord(value)){
+    return Object.entries(value)
+      .map(([k,v])=>`${k}: ${formatDecodeValue(v)}`)
+      .filter(v=>!v.endsWith(": —"))
+      .join("; ");
+  }
+  return String(value);
+}
+
+function translateDecodeLabel(label:string):string {
+  const map:Record<string,string>={
+    "VIN":"VIN",
+    "Vehicle ID":"ID автомобиля",
+    "Make":"Марка",
+    "Model":"Модель",
+    "Model Year":"Год модели",
+    "Product Type":"Тип ТС",
+    "Body":"Кузов",
+    "Series":"Серия",
+    "Drive":"Привод",
+    "Transmission":"Коробка",
+    "Engine Manufacturer":"Производитель двигателя",
+    "Engine Type":"Тип двигателя",
+    "Emission Standard":"Экостандарт",
+    "Average CO2 Emission":"Средний CO2",
+    "Manufacturer":"Производитель",
+    "Plant Country":"Страна сборки",
+    "Number of Wheels":"Колёс",
+    "Number of Axles":"Осей",
+    "Number of Doors":"Дверей",
+    "Number of Seats":"Мест",
+    "Rear Brakes":"Задние тормоза",
+    "Brake System":"Тормозная система",
+    "Suspension":"Подвеска",
+    "Steering Type":"Рулевое управление",
+    "Wheel Size":"Размер колёс",
+    "Wheelbase":"Колёсная база",
+    "Height":"Высота",
+    "Length":"Длина",
+    "Width":"Ширина",
+    "Track Front":"Колея передняя",
+    "Track Rear":"Колея задняя",
+    "Max Speed":"Макс. скорость",
+    "Weight Empty":"Снаряженная масса",
+    "Max Weight":"Макс. масса",
+    "ABS":"ABS",
+  };
+  return map[label]??label;
+}
+
+function formatVinProvider(provider:string|undefined):string {
+  if(provider==="vincario")return "Vincario";
+  if(provider==="vehicle-databases")return "Vehicle Databases";
+  return provider??"VIN provider";
+}
+
+function isRecord(value:unknown):value is Record<string,unknown> {
+  return typeof value==="object"&&value!==null&&!Array.isArray(value);
+}
+
+function formatFuel(value:string|null|undefined):string{
+  const map:Record<string,string>={petrol:'бензин',diesel:'дизель',lpg:'LPG',cng:'CNG',hybrid:'гибрид',phev:'plug-in hybrid',electric:'электро',hydrogen:'водород'};
+  return value?map[value]??value:'—';
+}
+
+function formatTransmission(value:string|null|undefined):string{
+  const map:Record<string,string>={manual:'МКПП',automatic:'АКПП',dct:'робот DCT',cvt:'вариатор',other:'другая'};
+  return value?map[value]??value:'—';
+}
+
+function formatDrive(value:string|null|undefined):string{
+  const map:Record<string,string>={fwd:'передний',rwd:'задний',awd:'полный AWD','4wd':'полный 4WD',other:'другой'};
+  return value?map[value]??value:'—';
+}
+
+function formatAspiration(value:string|null|undefined):string{
+  const map:Record<string,string>={turbo:'турбо',supercharged:'компрессор',naturally_aspirated:'атмосферный'};
+  return value?map[value]??value:'—';
+}
+
+function formatProfileSource(value:string):string{
+  if(value==='vin:vincario')return 'Vincario VIN';
+  if(value==='vin:vehicle-databases')return 'Vehicle Databases VIN';
+  if(value.startsWith('vdb:'))return `Vehicle Databases · ${value.slice(4)}`;
+  return value;
 }
 
 function MileagePage(props: PageProps) {

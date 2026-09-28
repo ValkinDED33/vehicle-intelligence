@@ -11,6 +11,7 @@ import type {
   ServiceRecord,
   Vehicle,
   VehicleProfile,
+  VinDecode,
 } from "../api";
 
 export interface VehicleData {
@@ -25,6 +26,7 @@ export interface VehicleData {
   maintenance: MaintenanceStatus[];
   events: HistoryEvent[];
   profile: VehicleProfile | null;
+  vinDecode: VinDecode | null;
   services: ServiceRecord[];
   loading: boolean;
   failed: boolean;
