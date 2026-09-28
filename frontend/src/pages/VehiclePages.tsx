@@ -50,8 +50,9 @@ function ProfilePage(props: PageProps) {
     if(!vehicle.vin){setMessage({kind:'err',text:'У автомобиля не указан VIN — сначала добавьте его в гараже.'});return}
     setBusy(true);setMessage(null);
     try{
-      await vinApi.decode(vehicle.id);
-      setMessage({kind:'ok',text:'VIN расшифрован — профиль и карточка обновлены.'});
+      const decoded=await vinApi.decode(vehicle.id);
+      const hasProfileData=Boolean(decoded.engineCode||decoded.engineFamily||decoded.displacementCc||decoded.fuelType||decoded.powerKw||decoded.powerHp||decoded.transmissionType||decoded.driveType);
+      setMessage({kind:'ok',text:hasProfileData?'VIN расшифрован — профиль и карточка обновлены.':'VIN расшифрован — карточка обновлена, но провайдер не вернул технические данные для профиля.'});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };

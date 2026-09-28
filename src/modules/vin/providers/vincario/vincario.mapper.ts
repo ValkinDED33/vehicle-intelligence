@@ -8,7 +8,7 @@ import {
 type UnknownRecord = Record<string, unknown>;
 
 export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
-  const decode = getRecord(payload, "decode");
+  const decode = getLabelValueRecord(payload, "decode");
   const attributes = getRecord(payload, "attributes");
   const vehicle = getRecord(payload, "vehicle");
 
@@ -34,6 +34,7 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
     modelYear: toModelYear(
       firstValue(decode, attributes, vehicle, [
         "Model Year",
+        "Model year",
         "ModelYear",
         "Year",
         "year",
@@ -43,15 +44,21 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
       "Engine Code",
       "EngineCode",
       "engineCode",
+      "Engine Model",
+      "Engine Version",
     ], 64),
     engineFamily: firstString(decode, attributes, vehicle, [
       "Engine",
       "Engine Type",
       "engine",
+      "Engine Description",
+      "Engine Configuration",
     ], 120),
     displacementCc: toDisplacementCc(
       firstValue(decode, attributes, vehicle, [
         "Displacement (ccm)",
+        "Engine Displacement (ccm)",
+        "Engine Displacement (cc)",
         "Displacement",
         "Engine Displacement",
       ]),
@@ -59,6 +66,7 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
     powerHp: toPositiveInteger(
       firstValue(decode, attributes, vehicle, [
         "Engine Power (HP)",
+        "Engine Power (hp)",
         "Power HP",
         "Horsepower",
       ]),
@@ -66,21 +74,23 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
     powerKw: toPositiveInteger(
       firstValue(decode, attributes, vehicle, [
         "Engine Power (kW)",
+        "Engine Power (KW)",
         "Power kW",
         "Kilowatts",
       ]),
     ),
     fuelType: mapFuelType(
-      firstString(decode, attributes, vehicle, ["Fuel Type", "Fuel", "fuel"], 64),
+      firstString(decode, attributes, vehicle, ["Fuel Type", "Fuel", "Fuel System", "fuel"], 64),
     ),
     transmissionType: mapTransmissionType(
       firstString(decode, attributes, vehicle, [
         "Transmission",
         "Transmission Type",
+        "Transmission Style",
       ], 64),
     ),
     driveType: mapDriveType(
-      firstString(decode, attributes, vehicle, ["Drive", "Drive Type", "Drivetrain"], 64),
+      firstString(decode, attributes, vehicle, ["Drive", "Drive Type", "Drivetrain", "Driven Wheels"], 64),
     ),
     rawPayload: payload,
   };
@@ -91,6 +101,33 @@ function getRecord(record: UnknownRecord, key: string): UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as UnknownRecord)
     : {};
+}
+
+function getLabelValueRecord(record: UnknownRecord, key: string): UnknownRecord {
+  const value = record[key];
+
+  if (!Array.isArray(value)) {
+    return getRecord(record, key);
+  }
+
+  const result: UnknownRecord = {};
+
+  for (const item of value) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      continue;
+    }
+
+    const row = item as UnknownRecord;
+    const label = row.label;
+
+    if (typeof label !== "string" || !label.trim()) {
+      continue;
+    }
+
+    result[label.trim()] = row.value;
+  }
+
+  return result;
 }
 
 function firstValue(
