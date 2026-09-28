@@ -16,7 +16,7 @@ export class DatabaseService implements OnModuleDestroy {
     }
 
     this.pool = new Pool({
-      connectionString: databaseUrl,
+      connectionString: this.normalizeDatabaseUrl(databaseUrl),
     });
 
     this.database = drizzle(this.pool);
@@ -28,5 +28,20 @@ export class DatabaseService implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.pool.end();
+  }
+
+  private normalizeDatabaseUrl(value: string): string {
+    const url = new URL(value);
+    const sslMode = url.searchParams.get("sslmode");
+
+    if (
+      sslMode === "prefer" ||
+      sslMode === "require" ||
+      sslMode === "verify-ca"
+    ) {
+      url.searchParams.set("sslmode", "verify-full");
+    }
+
+    return url.toString();
   }
 }

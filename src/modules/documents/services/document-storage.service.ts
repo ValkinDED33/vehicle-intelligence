@@ -16,14 +16,6 @@ import { type VehicleDocument } from "../schemas/vehicle-document.schema";
 
 const MAX_PROCESSING_SIZE_BYTES = MAX_DOCUMENT_SIZE_BYTES;
 
-const UPLOAD_TARGET_TTL_MS = 60 * 60 * 1000;
-
-interface IssuedUpload {
-  key: string;
-  fileSizeBytes: number;
-  expiresAt: number;
-}
-
 export interface CreateDocumentUploadInput {
   originalFileName: string;
   mimeType: string;
@@ -48,6 +40,7 @@ export interface CreateDocumentUploadResult {
 export interface ConfirmDocumentUploadInput {
   bucket: string;
   key: string;
+  document: VehicleDocument;
 }
 
 export interface StoredDocumentContent {
@@ -59,9 +52,6 @@ export interface StoredDocumentContent {
 
 @Injectable()
 export class DocumentStorageService {
-  // Single-instance store of issued presign keys so confirm() accepts only the exact key that was signed.
-  private readonly issuedUploads = new Map<string, IssuedUpload>();
-
   constructor(
     private readonly configService: ConfigService,
 
@@ -99,8 +89,6 @@ export class DocumentStorageService {
         documentId,
       },
     });
-
-    this.rememberIssuedUpload(documentId, key, input.fileSizeBytes);
 
     return {
       documentId,
@@ -140,17 +128,22 @@ export class DocumentStorageService {
       );
     }
 
-    const issued = this.issuedUploads.get(documentId);
+    if (!input.document.uploadIntentKey) {
+      throw new BadRequestException(
+        "No active upload target was issued for this document",
+      );
+    }
 
-    if (!issued || issued.key !== input.key) {
+    if (input.document.uploadIntentKey !== input.key) {
       throw new BadRequestException(
         "Object key was not issued for this document upload",
       );
     }
 
-    if (issued.expiresAt < Date.now()) {
-      this.issuedUploads.delete(documentId);
-
+    if (
+      !input.document.uploadIntentExpiresAt ||
+      input.document.uploadIntentExpiresAt.getTime() < Date.now()
+    ) {
       throw new BadRequestException("Upload target has expired");
     }
 
@@ -171,15 +164,14 @@ export class DocumentStorageService {
 
     if (
       metadata.contentLength === undefined ||
-      metadata.contentLength !== issued.fileSizeBytes ||
+      input.document.uploadIntentFileSizeBytes === null ||
+      metadata.contentLength !== input.document.uploadIntentFileSizeBytes ||
       metadata.contentLength > MAX_PROCESSING_SIZE_BYTES
     ) {
       throw new BadRequestException(
         "Uploaded object size does not match the declared file size",
       );
     }
-
-    this.issuedUploads.delete(documentId);
 
     return metadata;
   }
@@ -297,26 +289,6 @@ export class DocumentStorageService {
     if (input.fileSizeBytes > MAX_PROCESSING_SIZE_BYTES) {
       throw new BadRequestException("File exceeds maximum allowed size");
     }
-  }
-
-  private rememberIssuedUpload(
-    documentId: string,
-    key: string,
-    fileSizeBytes: number,
-  ): void {
-    const now = Date.now();
-
-    for (const [id, upload] of this.issuedUploads) {
-      if (upload.expiresAt < now) {
-        this.issuedUploads.delete(id);
-      }
-    }
-
-    this.issuedUploads.set(documentId, {
-      key,
-      fileSizeBytes,
-      expiresAt: now + UPLOAD_TARGET_TTL_MS,
-    });
   }
 
   private getBucket(): string {

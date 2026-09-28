@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 
 import { DatabaseService } from "../../../common/database/database.service";
 import { resolvePagination } from "../../../common/dto/pagination-query.dto";
@@ -55,6 +55,12 @@ export interface ConfirmStoredDocumentData {
   checksum?: string;
 
   processingStatus?: string;
+}
+
+export interface UploadIntentData {
+  key: string;
+  fileSizeBytes: number;
+  expiresAt: Date;
 }
 
 @Injectable()
@@ -171,6 +177,12 @@ export class DocumentRepository {
 
         storageKey: data.storageKey,
 
+        uploadIntentKey: null,
+
+        uploadIntentFileSizeBytes: null,
+
+        uploadIntentExpiresAt: null,
+
         storageVersionId: data.storageVersionId ?? null,
 
         originalFileName: data.originalFileName ?? null,
@@ -182,6 +194,10 @@ export class DocumentRepository {
         checksum: data.checksum ?? null,
 
         processingStatus: data.processingStatus ?? "pending",
+
+        processingStartedAt: null,
+
+        processingError: null,
 
         updatedAt: new Date(),
       })
@@ -196,12 +212,68 @@ export class DocumentRepository {
     return document ?? null;
   }
 
+  async setUploadIntent(
+    vehicleId: string,
+    documentId: string,
+    data: UploadIntentData,
+  ): Promise<VehicleDocument | null> {
+    const [document] = await this.databaseService.connection
+      .update(vehicleDocuments)
+      .set({
+        uploadIntentKey: data.key,
+        uploadIntentFileSizeBytes: data.fileSizeBytes,
+        uploadIntentExpiresAt: data.expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(vehicleDocuments.id, documentId),
+          eq(vehicleDocuments.vehicleId, vehicleId),
+        ),
+      )
+      .returning();
+
+    return document ?? null;
+  }
+
+  async acquireProcessingLease(
+    vehicleId: string,
+    documentId: string,
+    staleBefore: Date,
+  ): Promise<VehicleDocument | null> {
+    const [document] = await this.databaseService.connection
+      .update(vehicleDocuments)
+      .set({
+        processingStatus: "processing",
+        processingStartedAt: new Date(),
+        processingError: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(vehicleDocuments.id, documentId),
+          eq(vehicleDocuments.vehicleId, vehicleId),
+          isNotNull(vehicleDocuments.storageBucket),
+          isNotNull(vehicleDocuments.storageKey),
+          or(
+            ne(vehicleDocuments.processingStatus, "processing"),
+            isNull(vehicleDocuments.processingStartedAt),
+            lt(vehicleDocuments.processingStartedAt, staleBefore),
+          ),
+        ),
+      )
+      .returning();
+
+    return document ?? null;
+  }
+
   async updateProcessingResult(
     vehicleId: string,
     documentId: string,
     data: {
       processingStatus: string;
       extractedText?: string;
+      processingError?: string | null;
     },
   ): Promise<VehicleDocument | null> {
     const [document] = await this.databaseService.connection
@@ -210,6 +282,10 @@ export class DocumentRepository {
         processingStatus: data.processingStatus,
 
         extractedText: data.extractedText ?? null,
+
+        processingStartedAt: null,
+
+        processingError: data.processingError ?? null,
 
         updatedAt: new Date(),
       })

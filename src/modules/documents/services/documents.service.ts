@@ -76,11 +76,27 @@ export class DocumentsService {
 
     await this.requireDocument(vehicleId, documentId);
 
-    return this.documentStorageService.createUploadTarget(
+    const uploadTarget = await this.documentStorageService.createUploadTarget(
       vehicleId,
       documentId,
       input,
     );
+
+    const updated = await this.documentsDbService.setUploadIntent(
+      vehicleId,
+      documentId,
+      {
+        key: uploadTarget.key,
+        fileSizeBytes: input.fileSizeBytes,
+        expiresAt: uploadTarget.expiresAt,
+      },
+    );
+
+    if (!updated) {
+      throw new NotFoundException("Vehicle document not found");
+    }
+
+    return uploadTarget;
   }
 
   async confirmUpload(
@@ -95,7 +111,7 @@ export class DocumentsService {
   ): Promise<ConfirmDocumentUploadResult> {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
-    await this.requireDocument(vehicleId, documentId);
+    const document = await this.requireDocument(vehicleId, documentId);
 
     const metadata =
       await this.documentStorageService.getUploadedObjectMetadata(
@@ -104,6 +120,7 @@ export class DocumentsService {
         {
           bucket: input.bucket,
           key: input.key,
+          document: document.document,
         },
       );
 

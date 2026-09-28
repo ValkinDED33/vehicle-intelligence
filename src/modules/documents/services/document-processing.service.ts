@@ -14,6 +14,8 @@ import { DocumentAnalysisService } from "./document-analysis.service";
 
 @Injectable()
 export class DocumentProcessingService {
+  private static readonly PROCESSING_LEASE_MS = 30 * 60 * 1000;
+
   constructor(
     private readonly documentsDbService: DocumentsDbService,
     private readonly documentAnalysisService: DocumentAnalysisService,
@@ -23,29 +25,24 @@ export class DocumentProcessingService {
     vehicleId: string,
     documentId: string,
   ): Promise<VehicleDocumentWithFields> {
-    const result = await this.documentsDbService.findByIdForVehicle(
+    const lease = await this.documentsDbService.acquireProcessingLease(
       vehicleId,
       documentId,
+      new Date(Date.now() - DocumentProcessingService.PROCESSING_LEASE_MS),
     );
 
-    if (!result) {
-      throw new NotFoundException("Vehicle document not found");
+    if (!lease) {
+      await this.explainProcessingLeaseFailure(vehicleId, documentId);
+
+      throw new ConflictException("Document is not available for processing");
     }
 
-    const document = result.document;
-
-    this.validateProcessableDocument(document);
-
-    await this.documentsDbService.updateProcessingResult(
-      vehicleId,
-      documentId,
-      {
-        processingStatus: "processing",
-      },
-    );
-
     try {
-      const analysis = await this.documentAnalysisService.analyze(document);
+      this.validateProcessableDocument(lease, {
+        allowActiveProcessing: true,
+      });
+
+      const analysis = await this.documentAnalysisService.analyze(lease);
 
       const updated = await this.documentsDbService.replaceExtractedFields(
         vehicleId,
@@ -72,6 +69,7 @@ export class DocumentProcessingService {
         documentId,
         {
           processingStatus: "failed",
+          processingError: this.toProcessingError(error),
         },
       );
 
@@ -79,12 +77,18 @@ export class DocumentProcessingService {
     }
   }
 
-  private validateProcessableDocument(document: VehicleDocument): void {
+  private validateProcessableDocument(
+    document: VehicleDocument,
+    options: { allowActiveProcessing?: boolean } = {},
+  ): void {
     if (!document.storageBucket || !document.storageKey) {
       throw new BadRequestException("Document file has not been uploaded");
     }
 
-    if (document.processingStatus === "processing") {
+    if (
+      !options.allowActiveProcessing &&
+      document.processingStatus === "processing"
+    ) {
       throw new ConflictException("Document is already being processed");
     }
 
@@ -102,5 +106,30 @@ export class DocumentProcessingService {
         `Unsupported document MIME type: ${mimeType}`,
       );
     }
+  }
+
+  private async explainProcessingLeaseFailure(
+    vehicleId: string,
+    documentId: string,
+  ): Promise<never> {
+    const result = await this.documentsDbService.findByIdForVehicle(
+      vehicleId,
+      documentId,
+    );
+
+    if (!result) {
+      throw new NotFoundException("Vehicle document not found");
+    }
+
+    this.validateProcessableDocument(result.document);
+
+    throw new ConflictException("Document is already being processed");
+  }
+
+  private toProcessingError(error: unknown): string {
+    const message =
+      error instanceof Error ? error.message : "Unknown document error";
+
+    return message.slice(0, 4000);
   }
 }

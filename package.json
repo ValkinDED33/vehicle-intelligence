@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Backend API for the Vehicle Intelligence platform",
+  "engines": {
+    "node": ">=24.15.0"
+  },
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -17,16 +20,16 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
     "@aws-sdk/s3-request-presigner": "^3.1116.0",
-    "@napi-rs/canvas": "^1.0.7",
+    "@napi-rs/canvas": "^1.0.9",
     "@nestjs/axios": "^12.0.1",
-    "@nestjs/common": "^10.4.0",
-    "@nestjs/config": "^3.2.3",
-    "@nestjs/core": "^10.4.0",
-    "@nestjs/jwt": "^10.2.0",
-    "@nestjs/platform-express": "^10.4.0",
+    "@nestjs/common": "^12.1.1",
+    "@nestjs/config": "^12.0.1",
+    "@nestjs/core": "^12.1.1",
+    "@nestjs/jwt": "^12.0.2",
+    "@nestjs/platform-express": "^12.1.1",
     "@nestjs/throttler": "^6.7.1",
     "axios": "^1.20.0",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "drizzle-orm": "^0.45.2",
@@ -37,12 +40,15 @@
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.4.5",
-    "@types/bcrypt": "^5.0.2",
+    "@nestjs/cli": "^12.0.8",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^20.14.0",
     "@types/pg": "^8.23.1",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "typescript": "^5.5.0"
+  },
+  "overrides": {
+    "esbuild": "^0.25.12"
   }
 }

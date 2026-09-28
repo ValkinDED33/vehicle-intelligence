@@ -18,12 +18,14 @@ import {
   DocumentRepository,
   type ConfirmStoredDocumentData,
   type CreateVehicleDocumentData as CreateVehicleDocumentMetadata,
+  type UploadIntentData,
   type VehicleDocumentQuery,
 } from "./repositories/document.repository";
 
 export type {
   CreateDocumentFieldData,
   ConfirmStoredDocumentData,
+  UploadIntentData,
   VehicleDocumentQuery,
 };
 
@@ -142,12 +144,33 @@ export class DocumentsDbService {
     data: {
       processingStatus: string;
       extractedText?: string;
+      processingError?: string | null;
     },
   ): Promise<VehicleDocument | null> {
     return this.documentRepository.updateProcessingResult(
       vehicleId,
       documentId,
       data,
+    );
+  }
+
+  async setUploadIntent(
+    vehicleId: string,
+    documentId: string,
+    data: UploadIntentData,
+  ): Promise<VehicleDocument | null> {
+    return this.documentRepository.setUploadIntent(vehicleId, documentId, data);
+  }
+
+  async acquireProcessingLease(
+    vehicleId: string,
+    documentId: string,
+    staleBefore: Date,
+  ): Promise<VehicleDocument | null> {
+    return this.documentRepository.acquireProcessingLease(
+      vehicleId,
+      documentId,
+      staleBefore,
     );
   }
 
@@ -203,6 +226,8 @@ export class DocumentsDbService {
         .set({
           processingStatus: data.processingStatus,
           extractedText: data.extractedText ?? null,
+          processingStartedAt: null,
+          processingError: null,
           updatedAt: new Date(),
         })
         .where(

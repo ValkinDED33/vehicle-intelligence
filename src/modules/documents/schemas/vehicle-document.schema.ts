@@ -95,6 +95,21 @@ export const vehicleDocuments = pgTable(
     storageKey: text("storage_key"),
 
     /**
+     * Last signed upload target issued for this document.
+     *
+     * Kept durably so upload confirmation survives app restarts and works
+     * across multiple web instances.
+     */
+    uploadIntentKey: text("upload_intent_key"),
+
+    uploadIntentFileSizeBytes: integer("upload_intent_file_size_bytes"),
+
+    uploadIntentExpiresAt: timestamp("upload_intent_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+
+    /**
      * Версия объекта, если storage provider
      * поддерживает versioning.
      */
@@ -153,6 +168,13 @@ export const vehicleDocuments = pgTable(
       .notNull()
       .default("none"),
 
+    processingStartedAt: timestamp("processing_started_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+
+    processingError: text("processing_error"),
+
     /**
      * OCR/AI может сохранить сюда извлечённый текст.
      *
@@ -198,6 +220,11 @@ export const vehicleDocuments = pgTable(
       table.storageProvider,
       table.storageBucket,
       table.storageKey,
+    ),
+
+    uploadIntentIndex: index("vehicle_documents_upload_intent_idx").on(
+      table.uploadIntentKey,
+      table.uploadIntentExpiresAt,
     ),
 
     checksumIndex: index("vehicle_documents_checksum_idx").on(table.checksum),
