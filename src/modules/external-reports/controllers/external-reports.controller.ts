@@ -9,7 +9,9 @@ import {
 } from "@nestjs/common";
 
 import { JwtAuthGuard } from "../../../common/guards/jwt-auth.guard";
+import { CepikReportsService } from "../services/cepik-reports.service";
 import { ExternalReportsService } from "../services/external-reports.service";
+import { OneAutoReportsService } from "../services/one-auto-reports.service";
 import { VehicleDatabasesSourcesService } from "../services/vehicle-databases-sources.service";
 
 interface AuthenticatedRequest {
@@ -22,11 +24,16 @@ export class ExternalReportsController {
   constructor(
     private readonly externalReportsService: ExternalReportsService,
     private readonly vehicleDatabasesSourcesService: VehicleDatabasesSourcesService,
+    private readonly cepikReportsService: CepikReportsService,
+    private readonly oneAutoReportsService: OneAutoReportsService,
   ) {}
 
   @Get("sources")
   listSources() {
-    return this.vehicleDatabasesSourcesService.listSources();
+    return [
+      ...this.vehicleDatabasesSourcesService.listSources(),
+      ...this.oneAutoReportsService.listSources(),
+    ];
   }
 
   @Post("sources")
@@ -47,6 +54,68 @@ export class ExternalReportsController {
     @Param("source") source: string,
   ) {
     return this.vehicleDatabasesSourcesService.fetchSource(
+      request.userId,
+      vehicleId,
+      source,
+    );
+  }
+
+  @Post("cepik/vehicles")
+  fetchCepikVehicles(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+    @Query("wojewodztwo") wojewodztwo: string,
+    @Query("dataOd") dataOd: string,
+    @Query("dataDo") dataDo?: string,
+    @Query("typDaty") typDaty?: "1" | "2",
+    @Query("tylkoZarejestrowane") tylkoZarejestrowane?: string,
+    @Query("limit") limit?: string,
+    @Query("page") page?: string,
+  ) {
+    return this.cepikReportsService.fetchVehicles(request.userId, vehicleId, {
+      wojewodztwo,
+      dataOd,
+      dataDo,
+      typDaty,
+      tylkoZarejestrowane: tylkoZarejestrowane !== "false",
+      limit,
+      page,
+    });
+  }
+
+  @Post("cepik/vehicles/:cepikRecord")
+  fetchCepikVehicleById(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+    @Param("cepikRecord") cepikRecord: string,
+  ) {
+    return this.cepikReportsService.fetchVehicleByCepikId(
+      request.userId,
+      vehicleId,
+      cepikRecord,
+    );
+  }
+
+  @Get("cepik/dictionaries")
+  listCepikDictionaries(
+    @Query("limit") limit?: string,
+    @Query("page") page?: string,
+  ) {
+    return this.cepikReportsService.listDictionaries(limit, page);
+  }
+
+  @Get("cepik/dictionaries/:name")
+  getCepikDictionary(@Param("name") name: string) {
+    return this.cepikReportsService.getDictionary(name);
+  }
+
+  @Post("oneauto/sources/:source")
+  fetchOneAutoSource(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+    @Param("source") source: string,
+  ) {
+    return this.oneAutoReportsService.fetchSource(
       request.userId,
       vehicleId,
       source,

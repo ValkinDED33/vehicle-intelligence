@@ -8,7 +8,7 @@ export interface VehicleDatabasesSourceDefinition {
    *
    * Only "vin" sources can be fetched by the generic vehicle VIN flow.
    */
-  input: "vin" | "ymm" | "ymmt" | "plate" | "image";
+  input: "vin" | "ymm" | "ymmt" | "plate" | "image" | "registry";
   /** Absolute URL template; {vin} is replaced with the encoded VIN. */
   urlTemplate?: string;
   /** Why this source is catalogued but not part of generic VIN fetch-all. */
@@ -179,6 +179,12 @@ export const VEHICLE_DATABASES_SOURCES: readonly VehicleDatabasesSourceDefinitio
       apiName: "OEM Parts API",
       input: "ymmt",
       note: "Subscribed service; public docs do not expose a stable endpoint in the current documentation.",
+    },
+    {
+      key: "cepik-pojazdy",
+      apiName: "CEPiK Polish vehicle registry",
+      input: "registry",
+      note: "Alternative public Polish registry source. Requires wojewodztwo and registration date range; not fetched by generic VIN flow.",
     },
   ] as const;
 

@@ -629,7 +629,7 @@ export const vinApi = {
 export interface ReportSource {
   key: string;
   apiName: string;
-  input: "vin" | "ymm" | "ymmt" | "plate" | "image";
+  input: "vin" | "ymm" | "ymmt" | "plate" | "image" | "registry";
   fetchableByVehicleVin: boolean;
   note?: string;
 }
@@ -664,6 +664,38 @@ export const externalReportsApi = {
   fetchSource: (vehicleId: string, source: string) =>
     request<{ report: ExternalReport; normalization: unknown }>(
       `/vehicles/${vehicleId}/external-reports/sources/${source}`,
+      { method: "POST" },
+    ),
+  fetchCepikVehicles: (
+    vehicleId: string,
+    input: {
+      wojewodztwo: string;
+      dataOd: string;
+      dataDo?: string;
+      typDaty?: "1" | "2";
+      tylkoZarejestrowane?: boolean;
+      limit?: string;
+      page?: string;
+    },
+  ) =>
+    request<{ report: ExternalReport; normalization: unknown }>(
+      `/vehicles/${vehicleId}/external-reports/cepik/vehicles${qs(input)}`,
+      { method: "POST" },
+    ),
+  fetchCepikVehicleById: (vehicleId: string, cepikId: string) =>
+    request<{ report: ExternalReport; normalization: unknown }>(
+      `/vehicles/${vehicleId}/external-reports/cepik/vehicles/${encodeURIComponent(cepikId)}`,
+      { method: "POST" },
+    ),
+  cepikDictionaries: (vehicleId: string) =>
+    request<unknown>(`/vehicles/${vehicleId}/external-reports/cepik/dictionaries`),
+  cepikDictionary: (vehicleId: string, name: string) =>
+    request<unknown>(
+      `/vehicles/${vehicleId}/external-reports/cepik/dictionaries/${encodeURIComponent(name)}`,
+    ),
+  fetchOneAutoSource: (vehicleId: string, source: string) =>
+    request<{ report: ExternalReport; normalization: unknown }>(
+      `/vehicles/${vehicleId}/external-reports/oneauto/sources/${source}`,
       { method: "POST" },
     ),
   list: (vehicleId: string, type?: string) =>

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { HttpModule } from "@nestjs/axios";
 
 import { GarageModule } from "../garage/garage.module";
 import { MileageModule } from "../mileage/mileage.module";
@@ -24,10 +25,16 @@ import { VinSuggestionNormalizer } from "./normalization/normalizers/vin-suggest
 import { VehicleDatabasesHistoryProvider } from "./providers/vehicle-history/vehicle-databases-history.provider";
 import { VEHICLE_HISTORY_PROVIDER_TOKEN } from "./providers/vehicle-history/vehicle-history-provider.interface";
 import { ExternalReportsService } from "./services/external-reports.service";
+import { CepikReportsService } from "./services/cepik-reports.service";
+import { OneAutoReportsService } from "./services/one-auto-reports.service";
 import { VehicleDatabasesSourcesService } from "./services/vehicle-databases-sources.service";
 
 @Module({
   imports: [
+    HttpModule.register({
+      timeout: 30_000,
+      maxRedirects: 3,
+    }),
     GarageModule,
     VehicleProfileModule,
     VehicleHistoryModule,
@@ -39,6 +46,8 @@ import { VehicleDatabasesSourcesService } from "./services/vehicle-databases-sou
   providers: [
     ExternalReportsDbService,
     ExternalReportsService,
+    CepikReportsService,
+    OneAutoReportsService,
 
     VehicleDatabasesHistoryProvider,
     VehicleDatabasesSourcesService,
