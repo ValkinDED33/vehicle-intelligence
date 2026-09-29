@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, Injectable } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
-import { AxiosError } from "axios";
+import { isAxiosError } from "axios";
 import { firstValueFrom } from "rxjs";
 
 import { GarageService } from "../../garage/services/garage.service";
@@ -219,7 +219,7 @@ export class CepikReportsService {
 
       return response.data;
     } catch (error) {
-      if (error instanceof AxiosError) {
+      if (isAxiosError(error)) {
         const status = error.response?.status;
         const message = this.extractUpstreamMessage(error.response?.data);
 
