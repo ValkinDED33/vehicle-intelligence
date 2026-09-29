@@ -429,6 +429,15 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .good.warn{color:#f8a639}
 
 /* ---------- integrations / settings ---------- */
+.provider-accordion{margin:14px 0;overflow:hidden}
+.provider-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;text-align:left}
+.provider-head span{display:grid;gap:3px}
+.provider-head b{font-size:13px;letter-spacing:.9px;text-transform:uppercase}
+.provider-head small{font-size:10.5px;color:var(--dim)}
+.provider-head svg{color:#80a9fa;transition:transform .18s}
+.provider-accordion.open .provider-head svg{transform:rotate(180deg)}
+.provider-body{border-top:1px solid var(--line);padding:14px 16px 16px}
+.provider-body .sources-grid{margin:0}
 .sources-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:16px 0}
 .source-card{display:flex;align-items:center;gap:11px;padding:12px 14px}
 .source-copy{flex:1;min-width:0}

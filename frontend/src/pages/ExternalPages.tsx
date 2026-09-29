@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ChartNoAxesCombined, Download, Loader2, LogOut, PlugZap } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChartNoAxesCombined, ChevronDown, Download, Loader2, LogOut, PlugZap } from "lucide-react";
 import { API_BASE, externalReportsApi, fmtDate, type ExternalReport, type ReportSource, type SourceFetchSummary } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, EventCard, NoVehicle, Spinner } from "../components/CommonComponents";
@@ -12,6 +12,12 @@ function IntegrationsPage(props:PageProps){
   const [busy,setBusy]=useState<string|null>(null);
   const [results,setResults]=useState<SourceFetchSummary[]|null>(null);
   const [message,setMessage]=useState<{kind:'ok'|'err',text:string}|null>(null);
+  const [openProviders,setOpenProviders]=useState<Record<string,boolean>>({
+    oneauto:true,
+    cepik:true,
+    vehicleDatabases:false,
+    other:false,
+  });
   const [cepik,setCepik]=useState({
     wojewodztwo:'14',
     dataOd:'',
@@ -37,6 +43,11 @@ function IntegrationsPage(props:PageProps){
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   if(sources===null)return <Spinner/>;
   const vinSources=sources.filter(s=>s.fetchableByVehicleVin&&!s.key.startsWith('oneauto-'));
+  const oneAutoSources=sources.filter(s=>s.key.startsWith('oneauto-'));
+  const vehicleDatabaseSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&s.input==='vin'&&s.fetchableByVehicleVin);
+  const otherSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&(!s.fetchableByVehicleVin||s.input!=='vin'));
+  const wojewodztwoOptions=wojewodztwa.length?wojewodztwa:CEPIK_WOJEWODZTWA;
+  const toggleProvider=(key:string)=>setOpenProviders(prev=>({...prev,[key]:!prev[key]}));
   const fetchAll=async()=>{
     setBusy('all');setMessage(null);setResults(null);
     try{
@@ -97,29 +108,37 @@ function IntegrationsPage(props:PageProps){
    </div>
    {!vehicle.vin&&<div className="state-note">VIN-источники недоступны, потому что у автомобиля не указан VIN. CEPiK можно запросить отдельно, если известен регион и период регистрации в Польше.</div>}
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
-   <div className="panel cepik-panel">
-    <div className="panel-heading"><h2>CEPiK · польский реестр</h2><span className="tag purple">альтернатива</span></div>
+   <ProviderAccordion title="OneAutoAPI" meta={`${oneAutoSources.length} VIN источников`} open={openProviders.oneauto} onToggle={()=>toggleProvider('oneauto')}>
+    <div className="sources-grid">
+     {oneAutoSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOneAuto(s.key)}/>)}
+     {!oneAutoSources.length&&<div className="state-note">OneAutoAPI источники не найдены.</div>}
+    </div>
+   </ProviderAccordion>
+   <ProviderAccordion title="CEPiK" meta="польский реестр" open={openProviders.cepik} onToggle={()=>toggleProvider('cepik')}>
     <div className="cepik-grid">
-     <label><span>Województwo</span>{wojewodztwa.length?<select value={cepik.wojewodztwo} onChange={e=>setCepik({...cepik,wojewodztwo:e.target.value})}>{wojewodztwa.map(w=><option key={w.code} value={w.code}>{w.code} · {w.name}</option>)}</select>:<input value={cepik.wojewodztwo} onChange={e=>setCepik({...cepik,wojewodztwo:e.target.value.replace(/[^\d]/g,'')})} placeholder="14"/>}</label>
-     <label><span>Дата от YYYYMMDD</span><input value={cepik.dataOd} onChange={e=>setCepik({...cepik,dataOd:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20070101"/></label>
-     <label><span>Дата до YYYYMMDD</span><input value={cepik.dataDo} onChange={e=>setCepik({...cepik,dataDo:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20071231"/></label>
-     <label><span>Тип даты</span><select value={cepik.typDaty} onChange={e=>setCepik({...cepik,typDaty:e.target.value as '1'|'2'})}><option value="1">первая регистрация в PL</option><option value="2">последняя регистрация</option></select></label>
-     <label><span>Лимит</span><input value={cepik.limit} onChange={e=>setCepik({...cepik,limit:e.target.value.replace(/[^\d]/g,'')})} placeholder="25"/></label>
-     <label><span>CEPiK ID записи</span><input value={cepik.detailId} onChange={e=>setCepik({...cepik,detailId:e.target.value.replace(/[^\d]/g,'')})} placeholder="id из /pojazdy"/></label>
+      <label><span>Województwo</span><select value={cepik.wojewodztwo} onChange={e=>setCepik({...cepik,wojewodztwo:e.target.value})}>{wojewodztwoOptions.map(w=><option key={w.code} value={w.code}>{w.code} · {w.name}</option>)}</select></label>
+      <label><span>Дата от YYYYMMDD</span><input value={cepik.dataOd} onChange={e=>setCepik({...cepik,dataOd:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20070101"/></label>
+      <label><span>Дата до YYYYMMDD</span><input value={cepik.dataDo} onChange={e=>setCepik({...cepik,dataDo:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20071231"/></label>
+      <label><span>Тип даты</span><select value={cepik.typDaty} onChange={e=>setCepik({...cepik,typDaty:e.target.value as '1'|'2'})}><option value="1">первая регистрация в PL</option><option value="2">последняя регистрация</option></select></label>
+      <label><span>Лимит</span><input value={cepik.limit} onChange={e=>setCepik({...cepik,limit:e.target.value.replace(/[^\d]/g,'')})} placeholder="25"/></label>
+      <label><span>CEPiK ID записи</span><input value={cepik.detailId} onChange={e=>setCepik({...cepik,detailId:e.target.value.replace(/[^\d]/g,'')})} placeholder="id из /pojazdy"/></label>
+     </div>
+     <div className="page-actions">
+      <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepik()} disabled={busy!==null||!cepik.wojewodztwo||!cepik.dataOd}>{busy==='cepik-pojazdy'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} ПОИСК CEPIK</button>
+      <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepikDetail()} disabled={busy!==null||!cepik.detailId}>{busy==='cepik-pojazdy-detail'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} ДЕТАЛИ ПО ID</button>
+     </div>
+   </ProviderAccordion>
+   <ProviderAccordion title="Vehicle Databases" meta={`${vehicleDatabaseSources.length} VIN источников`} open={openProviders.vehicleDatabases} onToggle={()=>toggleProvider('vehicleDatabases')}>
+    <div className="sources-grid">
+     {vehicleDatabaseSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
     </div>
-    <div className="page-actions">
-     <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepik()} disabled={busy!==null||!cepik.wojewodztwo||!cepik.dataOd}>{busy==='cepik-pojazdy'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} ПОИСК CEPIK</button>
-     <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepikDetail()} disabled={busy!==null||!cepik.detailId}>{busy==='cepik-pojazdy-detail'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} ДЕТАЛИ ПО ID</button>
+   </ProviderAccordion>
+   <ProviderAccordion title="Отдельные потоки" meta={`${otherSources.length} источников`} open={openProviders.other} onToggle={()=>toggleProvider('other')}>
+    <div className="sources-grid">
+     {otherSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
+     {!otherSources.length&&<div className="state-note">Отдельных потоков нет.</div>}
     </div>
-   </div>
-   <div className="sources-grid">
-    {sources.map(s=><div key={s.key} className="panel source-card">
-      <div className={'icon-disc '+(results?.find(r=>r.source===s.key)?.status==='success'?'green':'')}><PlugZap size={17}/></div>
-      <div className="source-copy"><b>{s.apiName}</b><small>{s.key} · {s.fetchableByVehicleVin?'VIN':'нужен '+s.input}</small>{!s.fetchableByVehicleVin&&s.note&&<small>{s.note}</small>}</div>
-      <button className="ghost-btn" onClick={()=>s.key==='cepik-pojazdy'?void fetchCepik():s.key.startsWith('oneauto-')?void fetchOneAuto(s.key):void fetchOne(s.key)} disabled={busy!==null||(!s.fetchableByVehicleVin&&s.key!=='cepik-pojazdy')||(!vehicle.vin&&s.fetchableByVehicleVin)}>{busy===s.key?'...':s.key==='cepik-pojazdy'?'Форма выше':s.key.startsWith('oneauto-')?'OneAuto':s.fetchableByVehicleVin?'Запросить':'Отдельный поток'}</button>
-     </div>)}
-    {!sources.length&&<div className="state-note">Список источников пуст.</div>}
-   </div>
+   </ProviderAccordion>
    {results&&results.length>1&&<div className="panel list-panel">
     <h2>РЕЗУЛЬТАТЫ ЗАГРУЗКИ</h2>
     <table className="data-table"><thead><tr><th>Источник</th><th>Статус</th><th>Детали</th></tr></thead><tbody>
@@ -133,6 +152,45 @@ function IntegrationsPage(props:PageProps){
    </div>
   </>;
 }
+
+function ProviderAccordion({title,meta,open,onToggle,children}:{title:string;meta:string;open:boolean;onToggle:()=>void;children:ReactNode}){
+  return <section className={'panel provider-accordion '+(open?'open':'')}>
+   <button className="provider-head" type="button" onClick={onToggle}>
+    <span><b>{title}</b><small>{meta}</small></span>
+    <ChevronDown size={18}/>
+   </button>
+   {open&&<div className="provider-body">{children}</div>}
+  </section>;
+}
+
+function SourceCard({source,result,busy,vehicleHasVin,onClick}:{source:ReportSource;result:SourceFetchSummary|undefined;busy:string|null;vehicleHasVin:boolean;onClick:()=>void}){
+  const disabled=busy!==null||(!source.fetchableByVehicleVin&&source.key!=='cepik-pojazdy')||(!vehicleHasVin&&source.fetchableByVehicleVin);
+  return <div className="panel source-card">
+   <div className={'icon-disc '+(result?.status==='success'?'green':'')}><PlugZap size={17}/></div>
+   <div className="source-copy"><b>{source.apiName}</b><small>{source.key} · {source.fetchableByVehicleVin?'VIN':'нужен '+source.input}</small>{!source.fetchableByVehicleVin&&source.note&&<small>{source.note}</small>}</div>
+   <button className="ghost-btn" onClick={onClick} disabled={disabled}>{busy===source.key?'...':source.key==='cepik-pojazdy'?'Форма выше':source.key.startsWith('oneauto-')?'OneAuto':source.fetchableByVehicleVin?'Запросить':'Отдельный поток'}</button>
+  </div>;
+}
+
+const CEPIK_WOJEWODZTWA:Array<{code:string;name:string}>=[
+  {code:"02",name:"DOLNOŚLĄSKIE"},
+  {code:"04",name:"KUJAWSKO-POMORSKIE"},
+  {code:"06",name:"LUBELSKIE"},
+  {code:"08",name:"LUBUSKIE"},
+  {code:"10",name:"ŁÓDZKIE"},
+  {code:"12",name:"MAŁOPOLSKIE"},
+  {code:"14",name:"MAZOWIECKIE"},
+  {code:"16",name:"OPOLSKIE"},
+  {code:"18",name:"PODKARPACKIE"},
+  {code:"20",name:"PODLASKIE"},
+  {code:"22",name:"POMORSKIE"},
+  {code:"24",name:"ŚLĄSKIE"},
+  {code:"26",name:"ŚWIĘTOKRZYSKIE"},
+  {code:"28",name:"WARMIŃSKO-MAZURSKIE"},
+  {code:"30",name:"WIELKOPOLSKIE"},
+  {code:"32",name:"ZACHODNIOPOMORSKIE"},
+  {code:"XX",name:"NIEOKREŚLONE"},
+];
 
 function extractCepikDictionary(raw:unknown):Array<{code:string;name:string}>{
   const data=isRecord(raw)?raw.data:null;
