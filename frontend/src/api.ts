@@ -681,7 +681,7 @@ export interface AssistantChatResponse {
 }
 
 export const assistantApi = {
-  chat: (input: { message: string; vehicleId?: string }) =>
+  chat: (input: { message: string; vehicleId?: string; history?: { role: "user" | "assistant"; text: string }[] }) =>
     request<AssistantChatResponse>("/assistant/chat", {
       method: "POST",
       body: JSON.stringify(input),
