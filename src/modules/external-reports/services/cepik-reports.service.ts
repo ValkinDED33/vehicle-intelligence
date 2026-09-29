@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadGatewayException, BadRequestException, Injectable } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
+import { AxiosError } from "axios";
 import { firstValueFrom } from "rxjs";
 
 import { GarageService } from "../../garage/services/garage.service";
@@ -63,12 +64,8 @@ export class CepikReportsService {
       url.searchParams.set("data-do", normalizedQuery.dataDo);
     }
 
-    const response = await firstValueFrom(
-      this.httpService.get<Record<string, unknown>>(url.toString(), {
-        headers: {
-          Accept: "application/json",
-        },
-      }),
+    const response = await this.getCepik<Record<string, unknown>>(
+      `${url.pathname}${url.search}`,
     );
 
     const rawPayload = {
@@ -80,7 +77,7 @@ export class CepikReportsService {
         modelYear: vehicle.modelYear ?? null,
         country: vehicle.country,
       },
-      response: response.data,
+      response,
     };
 
     const report = await this.externalReportsDbService.createReport({
@@ -211,15 +208,28 @@ export class CepikReportsService {
   }
 
   private async getCepik<T>(pathWithQuery: string): Promise<T> {
-    const response = await firstValueFrom(
-      this.httpService.get<T>(new URL(pathWithQuery, this.baseUrl).toString(), {
-        headers: {
-          Accept: "application/json",
-        },
-      }),
-    );
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<T>(new URL(pathWithQuery, this.baseUrl).toString(), {
+          headers: {
+            Accept: "application/json",
+          },
+        }),
+      );
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status;
+        const message = this.extractUpstreamMessage(error.response?.data);
+
+        throw new BadGatewayException(
+          `CEPiK request failed${status ? ` (${status})` : ""}: ${message}`,
+        );
+      }
+
+      throw error;
+    }
   }
 
   private assertPositiveInteger(
@@ -235,5 +245,31 @@ export class CepikReportsService {
         max != null ? `${label} must be ${min}..${max}` : `${label} must be >= ${min}`,
       );
     }
+  }
+
+  private extractUpstreamMessage(data: unknown): string {
+    if (typeof data === "string" && data.trim()) {
+      return data.trim().slice(0, 300);
+    }
+
+    if (data && typeof data === "object") {
+      const record = data as Record<string, unknown>;
+      const error = record.errors;
+
+      if (Array.isArray(error) && error.length > 0) {
+        return JSON.stringify(error[0]).slice(0, 300);
+      }
+
+      const message =
+        record.message ?? record.error ?? record.detail ?? record.title;
+
+      if (typeof message === "string" && message.trim()) {
+        return message.trim().slice(0, 300);
+      }
+
+      return JSON.stringify(record).slice(0, 300);
+    }
+
+    return "upstream request failed";
   }
 }

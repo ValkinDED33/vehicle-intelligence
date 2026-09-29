@@ -1,10 +1,12 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Injectable,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
+import { AxiosError } from "axios";
 import { firstValueFrom } from "rxjs";
 
 import { GarageService } from "../../garage/services/garage.service";
@@ -129,14 +131,7 @@ export class OneAutoReportsService {
     const url = new URL(definition.path, this.baseUrl);
     url.searchParams.set("vehicle_identification_number", vin);
 
-    const response = await firstValueFrom(
-      this.httpService.get<Record<string, unknown>>(url.toString(), {
-        headers: {
-          Accept: "application/json",
-          "x-api-key": this.apiKey,
-        },
-      }),
-    );
+    const response = await this.fetchOneAuto(definition, url);
 
     const report = await this.externalReportsDbService.createReport({
       vehicleId,
@@ -155,5 +150,52 @@ export class OneAutoReportsService {
           "OneAutoAPI report is stored as a provider-specific raw report; manual review is required before applying facts.",
       },
     };
+  }
+
+  private async fetchOneAuto(
+    definition: OneAutoSourceDefinition,
+    url: URL,
+  ): Promise<{ data: Record<string, unknown> }> {
+    try {
+      return await firstValueFrom(
+        this.httpService.get<Record<string, unknown>>(url.toString(), {
+          headers: {
+            Accept: "application/json",
+            "x-api-key": this.apiKey,
+          },
+        }),
+      );
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status;
+        const upstreamMessage = this.extractUpstreamMessage(error.response?.data);
+
+        throw new BadGatewayException(
+          `OneAutoAPI ${definition.apiName} failed${status ? ` (${status})` : ""}: ${upstreamMessage}`,
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private extractUpstreamMessage(data: unknown): string {
+    if (typeof data === "string" && data.trim()) {
+      return data.trim().slice(0, 300);
+    }
+
+    if (data && typeof data === "object") {
+      const record = data as Record<string, unknown>;
+      const message =
+        record.message ?? record.error ?? record.detail ?? record.title;
+
+      if (typeof message === "string" && message.trim()) {
+        return message.trim().slice(0, 300);
+      }
+
+      return JSON.stringify(record).slice(0, 300);
+    }
+
+    return "upstream request failed";
   }
 }

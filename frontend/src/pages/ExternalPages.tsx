@@ -26,7 +26,6 @@ function IntegrationsPage(props:PageProps){
     limit:'25',
     detailId:'',
   });
-  const [wojewodztwa,setWojewodztwa]=useState<Array<{code:string;name:string}>>([]);
   const vehicleId=vehicle?.id??null;
   useEffect(()=>{
     setSources(null);setResults(null);setMessage(null);
@@ -35,9 +34,6 @@ function IntegrationsPage(props:PageProps){
     externalReportsApi.sources(vehicleId)
       .then(list=>{if(!cancelled)setSources(list)})
       .catch(()=>{if(!cancelled)setSources([])});
-    externalReportsApi.cepikDictionary(vehicleId,'wojewodztwa')
-      .then(raw=>{if(!cancelled)setWojewodztwa(extractCepikDictionary(raw))})
-      .catch(()=>{if(!cancelled)setWojewodztwa([])});
     return ()=>{cancelled=true};
   },[vehicleId]);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
@@ -46,7 +42,7 @@ function IntegrationsPage(props:PageProps){
   const oneAutoSources=sources.filter(s=>s.key.startsWith('oneauto-'));
   const vehicleDatabaseSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&s.input==='vin'&&s.fetchableByVehicleVin);
   const otherSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&(!s.fetchableByVehicleVin||s.input!=='vin'));
-  const wojewodztwoOptions=wojewodztwa.length?wojewodztwa:CEPIK_WOJEWODZTWA;
+  const wojewodztwoOptions=CEPIK_WOJEWODZTWA;
   const toggleProvider=(key:string)=>setOpenProviders(prev=>({...prev,[key]:!prev[key]}));
   const fetchAll=async()=>{
     setBusy('all');setMessage(null);setResults(null);
@@ -168,8 +164,40 @@ function SourceCard({source,result,busy,vehicleHasVin,onClick}:{source:ReportSou
   return <div className="panel source-card">
    <div className={'icon-disc '+(result?.status==='success'?'green':'')}><PlugZap size={17}/></div>
    <div className="source-copy"><b>{source.apiName}</b><small>{source.key} · {source.fetchableByVehicleVin?'VIN':'нужен '+source.input}</small>{!source.fetchableByVehicleVin&&source.note&&<small>{source.note}</small>}</div>
-   <button className="ghost-btn" onClick={onClick} disabled={disabled}>{busy===source.key?'...':source.key==='cepik-pojazdy'?'Форма выше':source.key.startsWith('oneauto-')?'OneAuto':source.fetchableByVehicleVin?'Запросить':'Отдельный поток'}</button>
+   <button className="ghost-btn" onClick={onClick} disabled={disabled}>{busy===source.key?'...':buttonLabelForSource(source)}</button>
   </div>;
+}
+
+function buttonLabelForSource(source:ReportSource):string{
+  const labels:Record<string,string>={
+    "oneauto-oe-build-sheet-europe-vin":"Получить комплектацию",
+    "oneauto-oe-build-sheet-vin":"Получить build sheet",
+    "oneauto-oe-service-schedule-vin":"Получить регламент ТО",
+    "oneauto-recall-check-vin":"Проверить отзывы",
+    "oneauto-recall-report-vin":"Отчёт по отзывам",
+    "oneauto-vin-decode-basic-us":"VIN decode US",
+    "oneauto-vin-decode-plus-us":"VIN decode Plus",
+    "cepik-pojazdy":"Форма выше",
+    "basic-vin-decode":"Расшифровать VIN",
+    "advanced-vin-decode":"Расширенный decode",
+    "europe-vin-decode":"EU VIN decode",
+    "market-value":"Оценить стоимость",
+    "sales-history":"История продаж",
+    "auction":"Аукционы",
+    "stolen-check":"Проверить угон",
+    "title-check":"Проверить title",
+    "vehicle-recalls":"Проверить отзывы",
+    "vehicle-repairs":"Ремонты",
+    "repair-estimates":"Оценка ремонта",
+    "vehicle-maintenance":"Регламент ТО",
+    "dimensions":"Размеры и база",
+    "windshield":"Стекло",
+    "vin-suggestion":"VIN подсказки",
+    "owner-manual":"Мануал",
+  };
+
+  if(labels[source.key])return labels[source.key];
+  return source.fetchableByVehicleVin?'Получить отчёт':'Отдельная форма';
 }
 
 const CEPIK_WOJEWODZTWA:Array<{code:string;name:string}>=[
@@ -191,23 +219,6 @@ const CEPIK_WOJEWODZTWA:Array<{code:string;name:string}>=[
   {code:"32",name:"ZACHODNIOPOMORSKIE"},
   {code:"XX",name:"NIEOKREŚLONE"},
 ];
-
-function extractCepikDictionary(raw:unknown):Array<{code:string;name:string}>{
-  const data=isRecord(raw)?raw.data:null;
-  const attributes=isRecord(data)&&isRecord(data.attributes)?data.attributes:null;
-  const dictionaryRecords=attributes ? attributes["dostepne-rekordy-slownika"] : null;
-  const records=Array.isArray(dictionaryRecords)?dictionaryRecords:[];
-  return records.map(item=>{
-    if(!isRecord(item))return null;
-    const code=String(item["klucz-slownika"]??"").trim();
-    const name=String(item["wartosc-slownika"]??"").trim();
-    return code&&name?{code,name}:null;
-  }).filter((item):item is {code:string;name:string}=>item!==null);
-}
-
-function isRecord(value:unknown):value is Record<string,unknown>{
-  return typeof value==="object"&&value!==null&&!Array.isArray(value);
-}
 
 async function fetchOneSource(vehicleId:string,key:string):Promise<SourceFetchSummary>{
   try{
