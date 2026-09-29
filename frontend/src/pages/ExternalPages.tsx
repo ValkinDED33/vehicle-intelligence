@@ -161,43 +161,56 @@ function ProviderAccordion({title,meta,open,onToggle,children}:{title:string;met
 
 function SourceCard({source,result,busy,vehicleHasVin,onClick}:{source:ReportSource;result:SourceFetchSummary|undefined;busy:string|null;vehicleHasVin:boolean;onClick:()=>void}){
   const disabled=busy!==null||(!source.fetchableByVehicleVin&&source.key!=='cepik-pojazdy')||(!vehicleHasVin&&source.fetchableByVehicleVin);
+  const copy=copyForSource(source);
   return <div className="panel source-card">
    <div className={'icon-disc '+(result?.status==='success'?'green':'')}><PlugZap size={17}/></div>
-   <div className="source-copy"><b>{source.apiName}</b><small>{source.key} · {source.fetchableByVehicleVin?'VIN':'нужен '+source.input}</small>{!source.fetchableByVehicleVin&&source.note&&<small>{source.note}</small>}</div>
-   <button className="ghost-btn" onClick={onClick} disabled={disabled}>{busy===source.key?'...':buttonLabelForSource(source)}</button>
+   <div className="source-copy"><b>{copy.title}</b><small>{copy.description}</small></div>
+   <button className="ghost-btn" onClick={onClick} disabled={disabled}>{busy===source.key?'...':copy.button}</button>
   </div>;
 }
 
-function buttonLabelForSource(source:ReportSource):string{
-  const labels:Record<string,string>={
-    "oneauto-oe-build-sheet-europe-vin":"Получить комплектацию",
-    "oneauto-oe-build-sheet-vin":"Получить build sheet",
-    "oneauto-oe-service-schedule-vin":"Получить регламент ТО",
-    "oneauto-recall-check-vin":"Проверить отзывы",
-    "oneauto-recall-report-vin":"Отчёт по отзывам",
-    "oneauto-vin-decode-basic-us":"VIN decode US",
-    "oneauto-vin-decode-plus-us":"VIN decode Plus",
-    "cepik-pojazdy":"Форма выше",
-    "basic-vin-decode":"Расшифровать VIN",
-    "advanced-vin-decode":"Расширенный decode",
-    "europe-vin-decode":"EU VIN decode",
-    "market-value":"Оценить стоимость",
-    "sales-history":"История продаж",
-    "auction":"Аукционы",
-    "stolen-check":"Проверить угон",
-    "title-check":"Проверить title",
-    "vehicle-recalls":"Проверить отзывы",
-    "vehicle-repairs":"Ремонты",
-    "repair-estimates":"Оценка ремонта",
-    "vehicle-maintenance":"Регламент ТО",
-    "dimensions":"Размеры и база",
-    "windshield":"Стекло",
-    "vin-suggestion":"VIN подсказки",
-    "owner-manual":"Мануал",
+function copyForSource(source:ReportSource):{title:string;description:string;button:string}{
+  const copies:Record<string,{title:string;description:string;button:string}>={
+    "oneauto-oe-build-sheet-europe-vin":{title:"Комплектация EU",description:"Заводская комплектация и опции по VIN",button:"Получить"},
+    "oneauto-oe-build-sheet-vin":{title:"Заводской лист",description:"Build sheet: комплектация, пакеты, опции",button:"Получить"},
+    "oneauto-oe-service-schedule-vin":{title:"Регламент ТО",description:"Заводской график обслуживания по VIN",button:"Получить"},
+    "oneauto-recall-check-vin":{title:"Проверка отзывов",description:"Есть ли отзывные кампании по VIN",button:"Проверить"},
+    "oneauto-recall-report-vin":{title:"Отчёт по отзывам",description:"Подробности отзывных кампаний",button:"Получить"},
+    "oneauto-vin-decode-basic-us":{title:"VIN база US",description:"Базовая расшифровка для рынка США",button:"Проверить"},
+    "oneauto-vin-decode-plus-us":{title:"VIN расширенный US",description:"Расширенная расшифровка для рынка США",button:"Проверить"},
+    "cepik-pojazdy":{title:"CEPiK поиск",description:"Польский реестр по региону и датам",button:"Форма выше"},
+    "basic-vin-decode":{title:"VIN базовый",description:"Марка, модель, год и базовые параметры",button:"Получить"},
+    "advanced-vin-decode":{title:"VIN расширенный",description:"Больше технических полей по VIN",button:"Получить"},
+    "europe-vin-decode":{title:"VIN Европа",description:"Европейская расшифровка VIN",button:"Получить"},
+    "market-value":{title:"Рыночная цена",description:"Оценка стоимости по VIN/YMM",button:"Оценить"},
+    "sales-history":{title:"История продаж",description:"Найденные прошлые продажи",button:"Получить"},
+    "auction":{title:"Аукционы",description:"Аукционные записи по VIN",button:"Проверить"},
+    "stolen-check":{title:"Проверка угона",description:"Базы угнанных авто",button:"Проверить"},
+    "title-check":{title:"Title check",description:"Статус title/брендированные записи",button:"Проверить"},
+    "vehicle-recalls":{title:"Отзывные кампании",description:"Recall/кампании производителя",button:"Проверить"},
+    "vehicle-repairs":{title:"Ремонты",description:"Типовые ремонты по модели/VIN",button:"Получить"},
+    "repair-estimates":{title:"Стоимость ремонта",description:"Оценки работ и деталей",button:"Оценить"},
+    "vehicle-maintenance":{title:"ТО и обслуживание",description:"Регламент и интервалы обслуживания",button:"Получить"},
+    "dimensions":{title:"Размеры авто",description:"Колёсная база, колея и габариты",button:"Получить"},
+    "windshield":{title:"Лобовое стекло",description:"Подбор windshield по VIN",button:"Подобрать"},
+    "vin-suggestion":{title:"VIN подсказки",description:"Похожие/возможные VIN",button:"Получить"},
+    "owner-manual":{title:"Мануал владельца",description:"Инструкция владельца по VIN/YMM",button:"Найти"},
+    "motorcycle-decode":{title:"Мото VIN",description:"Отключено для автомобильного гаража",button:"Недоступно"},
+    "electric-vehicle-specifications":{title:"EV характеристики",description:"Нужны год, марка, модель и trim",button:"Отдельная форма"},
+    "vehicle-warranty":{title:"Гарантия",description:"Нужны год, марка и модель",button:"Отдельная форма"},
+    "ymmt-specifications":{title:"YMMT спецификации",description:"Нужны год, марка, модель и trim",button:"Отдельная форма"},
+    "uk-registration-decode":{title:"UK номер",description:"Нужен британский номер регистрации",button:"Отдельная форма"},
+    "license-plate-ocr":{title:"OCR номера",description:"Нужно изображение номера",button:"Отдельная форма"},
+    "vin-ocr":{title:"OCR VIN",description:"Нужно фото VIN",button:"Отдельная форма"},
+    "oem-parts":{title:"OEM детали",description:"Нужны YMMT/каталог детали",button:"Отдельная форма"},
   };
 
-  if(labels[source.key])return labels[source.key];
-  return source.fetchableByVehicleVin?'Получить отчёт':'Отдельная форма';
+  if(copies[source.key])return copies[source.key];
+  return {
+    title:source.apiName,
+    description:source.note??(source.fetchableByVehicleVin?"Отчёт по VIN":`Нужен ввод: ${source.input}`),
+    button:source.fetchableByVehicleVin?"Получить":"Отдельная форма",
+  };
 }
 
 const CEPIK_WOJEWODZTWA:Array<{code:string;name:string}>=[
