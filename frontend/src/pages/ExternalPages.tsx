@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChartNoAxesCombined, ChevronDown, Download, Loader2, LogOut, PlugZap } from "lucide-react";
-import { API_BASE, externalReportsApi, fmtDate, type ExternalReport, type ReportSource, type SourceFetchSummary } from "../api";
+import { ChartNoAxesCombined, Check, ChevronDown, Download, Loader2, LogOut, PlugZap } from "lucide-react";
+import { API_BASE, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type VehicleProfile } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, EventCard, NoVehicle, Spinner } from "../components/CommonComponents";
 import type { PageProps } from "../types/dashboard";
@@ -246,6 +246,7 @@ function ReportsPage(props:PageProps){
   const {vehicle}=props;
   const [reports,setReports]=useState<ExternalReport[]|null>(null);
   const [error,setError]=useState<string|null>(null);
+  const [selectedId,setSelectedId]=useState<string|null>(null);
   useEffect(()=>{
     if(!vehicle){setReports(null);return}
     let cancelled=false;
@@ -257,14 +258,181 @@ function ReportsPage(props:PageProps){
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   if(reports===null)return <Spinner/>;
   if(error)return <div className="auth-error">{error}</div>;
+  const selected=reports.find(r=>r.id===selectedId)??reports[0]??null;
   return reports.length
-   ?<div className="panel list-panel">
+   ?<>
+    <div className="panel list-panel">
       <h2>СОХРАНЁННЫЕ ОТЧЁТЫ ({reports.length})</h2>
-      <table className="data-table"><thead><tr><th>Тип</th><th>Провайдер</th><th>VIN</th><th>Статус</th><th>Получен</th></tr></thead><tbody>
-       {reports.map(r=><tr key={r.id}><td><b>{r.reportType}</b></td><td>{r.provider}</td><td className="mono">{r.vin??'—'}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{r.status}</span></td><td>{fmtDate(r.fetchedAt,true)}</td></tr>)}
+      <table className="data-table"><thead><tr><th>Тип</th><th>Провайдер</th><th>VIN</th><th>Статус</th><th>Получен</th><th></th></tr></thead><tbody>
+       {reports.map(r=><tr key={r.id}><td><b>{humanReportType(r.reportType)}</b><small className="sub">{r.reportType}</small></td><td>{r.provider}</td><td className="mono">{r.vin??'—'}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{r.status}</span></td><td>{fmtDate(r.fetchedAt,true)}</td><td><button className="ghost-btn" onClick={()=>setSelectedId(r.id)}>{selected?.id===r.id?'Открыт':'Открыть'}</button></td></tr>)}
       </tbody></table>
     </div>
+    {selected&&<ReportViewer report={selected} vehicleId={vehicle.id} afterMutate={props.afterMutate}/>}
+   </>
    :<EmptyState icon={ChartNoAxesCombined} title="Отчётов пока нет" text="Загрузите отчёты в разделе «Интеграции» — сырые ответы Vehicle Databases сохранятся здесь навсегда."/>;
+}
+
+function ReportViewer({report,vehicleId,afterMutate}:{report:ExternalReport;vehicleId:string;afterMutate:()=>Promise<void>}){
+  const [saving,setSaving]=useState(false);
+  const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
+  const facts=flattenReportFacts(report.rawPayload).slice(0,80);
+  const oneAutoBuildSheet=isOneAutoBuildSheet(report);
+  const draft=oneAutoBuildSheet?profileDraftFromOneAutoBuildSheet(report.rawPayload):null;
+  const saveDraft=async()=>{
+    if(!draft||Object.keys(draft).length<=1)return;
+    setSaving(true);setMessage(null);
+    try{
+      await profileApi.create(vehicleId,draft);
+      setMessage({kind:'ok',text:'Данные из отчёта перенесены в профиль. Старые ручные поля, которых нет в отчёте, сохранены.'});
+      await afterMutate();
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSaving(false)}
+  };
+  return <div className="panel report-viewer">
+   <div className="decode-head">
+    <div>
+     <h2>{humanReportType(report.reportType)}</h2>
+     <p>{report.provider} · {fmtDate(report.fetchedAt,true)} · {facts.length} полей показано</p>
+    </div>
+    <span className="decode-vin">{report.vin??'без VIN'}</span>
+   </div>
+   {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
+   {oneAutoBuildSheet?<OneAutoBuildSheetView payload={report.rawPayload}/>
+    :facts.length?<div className="decode-grid">
+    {facts.map(f=><div key={f.path} className="decode-item"><span>{f.path}</span><b>{f.value}</b></div>)}
+   </div>:<div className="state-note">В отчёте нет простых полей для показа.</div>}
+   {draft&&<div className="page-actions report-actions">
+    <button className="primary" onClick={()=>void saveDraft()} disabled={saving||Object.keys(draft).length<=1}>{saving?<Loader2 size={15} className="spin"/>:<Check size={15}/>} ПЕРЕНЕСТИ В ПРОФИЛЬ</button>
+    <span className="hint-note">Переносит только понятные поля: цвет, двигатель, коробку и привод. Комплектацию/двери лучше подтверждать вручную, если провайдер их не вернул.</span>
+   </div>}
+   <details className="raw-report"><summary>RAW JSON</summary><pre>{JSON.stringify(report.rawPayload,null,2)}</pre></details>
+  </div>;
+}
+
+function OneAutoBuildSheetView({payload}:{payload:unknown}){
+  const result=isRecord(payload)&&isRecord(payload.result)?payload.result:null;
+  const options=Array.isArray(result?.options)?result.options.filter(isRecord):[];
+  const summary=[
+    ["Цвет",stringValue(result?.oem_colour_desc)],
+    ["Салон",stringValue(result?.oem_interior_trim_desc)],
+    ["Двигатель",stringValue(result?.oem_engine_desc)],
+    ["Коробка",stringValue(result?.oem_transmission_type_desc)],
+    ["Привод",stringValue(result?.oem_drivetrain_desc)],
+    ["Колёса",stringValue(result?.oem_wheel_desc)],
+    ["Дата производства",stringValue(result?.manufactured_date)],
+    ["Дата поставки",stringValue(result?.delivered_date)],
+  ].filter(([,value])=>value);
+
+  return <>
+   {summary.length>0&&<section className="decode-group">
+    <h3>Сводка build sheet</h3>
+    <div className="decode-grid">{summary.map(([label,value])=><div key={label} className="decode-item"><span>{label}</span><b>{value}</b></div>)}</div>
+   </section>}
+   {options.length>0&&<section className="report-options">
+    <h3>Заводские опции ({options.length})</h3>
+    <table className="data-table"><thead><tr><th>Код</th><th>Опция</th><th>Комментарий</th></tr></thead><tbody>
+     {options.map((option,index)=><tr key={`${stringValue(option.factory_code)??index}-${index}`}>
+      <td className="mono">{stringValue(option.factory_code)??'—'}</td>
+      <td><b>{stringValue(option.factory_desc)??'—'}</b></td>
+      <td>{stringValue(option.additional_desc)??'—'}</td>
+     </tr>)}
+    </tbody></table>
+   </section>}
+   {!summary.length&&!options.length&&<div className="state-note">OneAuto build sheet сохранён, но ожидаемых полей result/options нет. Открой RAW JSON ниже.</div>}
+  </>;
+}
+
+function humanReportType(type:string):string{
+  const names:Record<string,string>={
+    "oneauto-oe-build-sheet-europe-vin":"Комплектация EU",
+    "oneauto-oe-build-sheet-vin":"Заводской лист",
+    "oneauto-oe-service-schedule-vin":"Регламент ТО",
+    "oneauto-recall-check-vin":"Проверка отзывов",
+    "oneauto-recall-report-vin":"Отчёт по отзывам",
+    "oneauto-vin-decode-basic-us":"VIN база US",
+    "oneauto-vin-decode-plus-us":"VIN расширенный US",
+    "cepik-pojazdy":"CEPiK поиск",
+    "cepik-pojazdy-detail":"CEPiK детали",
+  };
+  return names[type]??type;
+}
+
+function isOneAutoBuildSheet(report:ExternalReport):boolean{
+  return report.provider==="oneauto"&&(
+    report.reportType==="oneauto-oe-build-sheet-europe-vin"||
+    report.reportType==="oneauto-oe-build-sheet-vin"
+  );
+}
+
+function profileDraftFromOneAutoBuildSheet(payload:unknown):Partial<VehicleProfile>|null{
+  const result=isRecord(payload)&&isRecord(payload.result)?payload.result:null;
+  if(!result)return null;
+  const engine=stringValue(result.oem_engine_desc);
+  const transmission=stringValue(result.oem_transmission_type_desc);
+  const drive=stringValue(result.oem_drivetrain_desc);
+  const color=stringValue(result.oem_colour_desc);
+  const draft:Partial<VehicleProfile>={source:"manual-oneauto"};
+  if(engine)draft.engineFamily=truncate(engine,120);
+  if(transmission){
+    draft.transmissionType=normalizeTransmission(transmission);
+    draft.transmissionCode=truncate(firstCode(transmission),64);
+  }
+  if(drive)draft.driveType=normalizeDrive(drive);
+  if(color)draft.exteriorColor=truncate(color,120);
+  return Object.keys(draft).length>1?draft:null;
+}
+
+function normalizeTransmission(value:string):VehicleProfile["transmissionType"]{
+  const lower=value.toLowerCase();
+  if(lower.includes("manual"))return "manual";
+  if(lower.includes("dct")||lower.includes("dual clutch")||lower.includes("dsg"))return "dct";
+  if(lower.includes("cvt"))return "cvt";
+  if(lower.includes("single-speed"))return "single-speed";
+  if(lower.includes("automatic")||lower.includes("auto"))return "automatic";
+  return "other";
+}
+
+function normalizeDrive(value:string):VehicleProfile["driveType"]{
+  const lower=value.toLowerCase();
+  if(lower.includes("all-wheel")||lower.includes("awd"))return "awd";
+  if(lower.includes("four-wheel")||lower.includes("4wd")||lower.includes("4x4"))return "4wd";
+  if(lower.includes("front-wheel")||lower.includes("fwd"))return "fwd";
+  if(lower.includes("rear-wheel")||lower.includes("rwd"))return "rwd";
+  return "other";
+}
+
+function firstCode(value:string):string{
+  return value.match(/^[A-Z0-9]{2,8}\b/)?.[0]??value;
+}
+
+function truncate(value:string,max:number):string{
+  return value.length>max?value.slice(0,max):value;
+}
+
+function isRecord(value:unknown):value is Record<string,unknown>{
+  return typeof value==="object"&&value!==null&&!Array.isArray(value);
+}
+
+function stringValue(value:unknown):string|null{
+  if(value===null||value===undefined)return null;
+  const stringified=String(value).trim();
+  return stringified?stringified:null;
+}
+
+function flattenReportFacts(value:unknown,path=""):Array<{path:string;value:string}>{
+  if(value===null||value===undefined||value==="")return [];
+  if(typeof value==="string"||typeof value==="number"||typeof value==="boolean"){
+    return [{path:path||"value",value:String(value)}];
+  }
+  if(Array.isArray(value)){
+    return value.flatMap((item,index)=>flattenReportFacts(item,path?`${path}.${index}`:`${index}`));
+  }
+  if(typeof value==="object"){
+    return Object.entries(value as Record<string,unknown>).flatMap(([key,item])=>{
+      const nextPath=path?`${path}.${key}`:key;
+      return flattenReportFacts(item,nextPath);
+    });
+  }
+  return [{path:path||"value",value:String(value)}];
 }
 
 function SettingsPage(props:PageProps){
