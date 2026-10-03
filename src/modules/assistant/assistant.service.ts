@@ -5,6 +5,7 @@ import { GarageService } from "../garage/services/garage.service";
 import { MaintenanceService } from "../maintenance/services/maintenance.service";
 import { MileageService } from "../mileage/services/mileage.service";
 import { VehicleProfileService } from "../vehicle-profile/services/vehicle-profile.service";
+import { VinService } from "../vin/services/vin.service";
 
 interface AssistantChatInput {
   ownerId: string;
@@ -26,6 +27,7 @@ export class AssistantService {
     private readonly vehicleProfileService: VehicleProfileService,
     private readonly mileageService: MileageService,
     private readonly maintenanceService: MaintenanceService,
+    private readonly vinService: VinService,
   ) {}
 
   async chat(input: AssistantChatInput): Promise<AssistantChatResponse> {
@@ -54,11 +56,19 @@ export class AssistantService {
   ): Promise<string> {
     const vehicle = await this.garageService.getVehicle(ownerId, vehicleId);
 
-    const [profile, latestMileage, maintenance] = await Promise.all([
+    const [profile, latestMileage, maintenance, latestVinDecode] = await Promise.all([
       this.vehicleProfileService.getCurrentProfile(ownerId, vehicleId),
       this.mileageService.getLatestReading(ownerId, vehicleId),
       this.maintenanceService.getStatus(ownerId, vehicleId),
+      this.vinService.getLatestDecode(ownerId, vehicleId),
     ]);
+
+    const resolvedMake = latestVinDecode?.make ?? vehicle.make;
+    const resolvedModel = latestVinDecode?.model ?? vehicle.model;
+    const resolvedYear =
+      latestVinDecode?.modelYear != null
+        ? String(latestVinDecode.modelYear)
+        : vehicle.modelYear;
 
     const maintenanceLines = maintenance
       .filter((item) => item.urgency !== "normal")
@@ -70,9 +80,9 @@ export class AssistantService {
 
     return [
       `Vehicle: ${[
-        vehicle.make,
-        vehicle.model,
-        vehicle.modelYear,
+        resolvedMake,
+        resolvedModel,
+        resolvedYear,
         vehicle.vin ? `VIN ${vehicle.vin}` : null,
       ]
         .filter(Boolean)

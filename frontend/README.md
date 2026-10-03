@@ -11,7 +11,7 @@ npm run dev
 
 Open the local URL printed by Vite (usually http://localhost:5173). Build with `npm run build`.
 
-The dashboard, garage, mileage, expenses, energy, service, history and reminders sections are wired to the **live vehicle-intelligence API** (auth, JWT in `localStorage`, per-vehicle data). The AI dialog remains a UI placeholder and does not call a model.
+The dashboard, garage, mileage, expenses, energy, service, history, reminders, external reports and AI assistant sections are wired to the **live vehicle-intelligence API** (auth, JWT in `localStorage`, per-vehicle data). The AI dialog calls the backend `/assistant/chat` endpoint and uses the configured AI gateway provider.
 
 ## API base URL
 

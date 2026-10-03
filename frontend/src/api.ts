@@ -554,10 +554,66 @@ export const serviceRecordsApi = {
     ),
 };
 
+// ---------- documents ----------
+
+export interface VehicleDocument {
+  id: string;
+  vehicleId: string;
+  type: string;
+  title: string;
+  description: string | null;
+  documentNumber: string | null;
+  issuerName: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  storageProvider: string | null;
+  storageBucket: string | null;
+  storageKey: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  source: string;
+  processingStatus: string;
+  processingError: string | null;
+  extractedText: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDocumentInput {
+  type: string;
+  title: string;
+  description?: string;
+  documentNumber?: string;
+  issuerName?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+  source?: "manual" | "upload" | "telegram" | "email" | "integration" | "ocr" | "ai";
+}
+
+export const documentsApi = {
+  list: (vehicleId: string) =>
+    request<VehicleDocument[]>(`/vehicles/${vehicleId}/documents`),
+  create: (vehicleId: string, input: CreateDocumentInput) =>
+    request<{ document: VehicleDocument; fields: unknown[] }>(
+      `/vehicles/${vehicleId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    ),
+  remove: (vehicleId: string, documentId: string) =>
+    request<{ id: string; deleted: true; objectDeleted: boolean }>(
+      `/vehicles/${vehicleId}/documents/${documentId}`,
+      { method: "DELETE" },
+    ),
+};
+
 // ---------- maintenance ----------
 
 export interface MaintenanceRule {
   id: string;
+  vehicleId?: string;
   key: string;
   title: string;
   completionEventType: string;
@@ -568,6 +624,9 @@ export interface MaintenanceRule {
   warningKmBefore?: number | null;
   warningDaysBefore?: number | null;
   warningEngineHoursBefore?: number | null;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MaintenanceStatus {
@@ -589,6 +648,15 @@ export interface MaintenanceStatus {
 export const maintenanceApi = {
   rules: (vehicleId: string) =>
     request<MaintenanceRule[]>(`/vehicles/${vehicleId}/maintenance/rules`),
+  createRule: (vehicleId: string, input: Partial<MaintenanceRule>) =>
+    request<MaintenanceRule>(`/vehicles/${vehicleId}/maintenance/rules`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  deleteRule: (vehicleId: string, ruleId: string) =>
+    request<MaintenanceRule>(`/vehicles/${vehicleId}/maintenance/rules/${ruleId}`, {
+      method: "DELETE",
+    }),
   status: (vehicleId: string) =>
     request<MaintenanceStatus[]>(`/vehicles/${vehicleId}/maintenance/status`),
 };

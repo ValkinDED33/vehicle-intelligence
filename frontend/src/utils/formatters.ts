@@ -14,6 +14,8 @@ import {
   type MaintenanceStatus,
   type MileageReading,
   type Vehicle,
+  type VehicleProfile,
+  type VinDecode,
 } from "../api";
 import { EVENT_META } from "../constants/dashboard";
 
@@ -41,6 +43,28 @@ export function vehicleTitle(v: Vehicle): string {
 
 export function vehicleLine(v: Vehicle, latest: MileageReading | null): string {
   const bits = [v.modelYear, v.licensePlate].filter(Boolean) as string[];
+  if (latest) bits.push(`${fmtNumber(latest.odometerKm)} км`);
+  return bits.length ? bits.join(" · ") : "Данные не заполнены";
+}
+
+export function resolvedVehicleTitle(
+  v: Vehicle,
+  vinDecode: VinDecode | null,
+): string {
+  const decodedParts = [vinDecode?.make, vinDecode?.model].filter(Boolean);
+  if (decodedParts.length) return decodedParts.join(" ");
+  return vehicleTitle(v);
+}
+
+export function resolvedVehicleLine(
+  v: Vehicle,
+  latest: MileageReading | null,
+  vinDecode: VinDecode | null,
+  profile: VehicleProfile | null,
+): string {
+  const year = vinDecode?.modelYear ? String(vinDecode.modelYear) : v.modelYear;
+  const trimOrPlate = profile?.trimLevel ?? v.licensePlate;
+  const bits = [year, trimOrPlate].filter(Boolean) as string[];
   if (latest) bits.push(`${fmtNumber(latest.odometerKm)} км`);
   return bits.length ? bits.join(" · ") : "Данные не заполнены";
 }
@@ -84,4 +108,3 @@ export function intervalLines(s: MaintenanceStatus): string[] {
   if (s.rule.intervalEngineHours) lines.push(`${s.rule.intervalEngineHours} м/ч`);
   return lines.length ? lines : ["Регламент не задан"];
 }
-

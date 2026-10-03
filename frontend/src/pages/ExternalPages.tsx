@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChartNoAxesCombined, Check, ChevronDown, Download, Loader2, LogOut, PlugZap } from "lucide-react";
-import { API_BASE, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type VehicleProfile } from "../api";
+import { API_BASE, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type Vehicle, type VehicleProfile } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, EventCard, NoVehicle, Spinner } from "../components/CommonComponents";
 import type { PageProps } from "../types/dashboard";
@@ -41,7 +41,7 @@ function IntegrationsPage(props:PageProps){
   const vinSources=sources.filter(s=>s.fetchableByVehicleVin&&!s.key.startsWith('oneauto-'));
   const oneAutoSources=sources.filter(s=>s.key.startsWith('oneauto-'));
   const vehicleDatabaseSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&s.input==='vin'&&s.fetchableByVehicleVin);
-  const otherSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&(!s.fetchableByVehicleVin||s.input!=='vin'));
+  const otherSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&s.fetchableByVehicleVin&&s.input!=='vin');
   const wojewodztwoOptions=CEPIK_WOJEWODZTWA;
   const toggleProvider=(key:string)=>setOpenProviders(prev=>({...prev,[key]:!prev[key]}));
   const fetchAll=async()=>{
@@ -129,12 +129,11 @@ function IntegrationsPage(props:PageProps){
      {vehicleDatabaseSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
     </div>
    </ProviderAccordion>
-   <ProviderAccordion title="Отдельные потоки" meta={`${otherSources.length} источников`} open={openProviders.other} onToggle={()=>toggleProvider('other')}>
+   {otherSources.length>0&&<ProviderAccordion title="Отдельные потоки" meta={`${otherSources.length} источников`} open={openProviders.other} onToggle={()=>toggleProvider('other')}>
     <div className="sources-grid">
      {otherSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
-     {!otherSources.length&&<div className="state-note">Отдельных потоков нет.</div>}
     </div>
-   </ProviderAccordion>
+   </ProviderAccordion>}
    {results&&results.length>1&&<div className="panel list-panel">
     <h2>РЕЗУЛЬТАТЫ ЗАГРУЗКИ</h2>
     <table className="data-table"><thead><tr><th>Источник</th><th>Статус</th><th>Детали</th></tr></thead><tbody>
@@ -160,8 +159,9 @@ function ProviderAccordion({title,meta,open,onToggle,children}:{title:string;met
 }
 
 function SourceCard({source,result,busy,vehicleHasVin,onClick}:{source:ReportSource;result:SourceFetchSummary|undefined;busy:string|null;vehicleHasVin:boolean;onClick:()=>void}){
-  const disabled=busy!==null||(!source.fetchableByVehicleVin&&source.key!=='cepik-pojazdy')||(!vehicleHasVin&&source.fetchableByVehicleVin);
   const copy=copyForSource(source);
+  const separateFlow=!source.fetchableByVehicleVin&&source.key!=='cepik-pojazdy';
+  const disabled=busy!==null||separateFlow||(!vehicleHasVin&&source.fetchableByVehicleVin);
   return <div className="panel source-card">
    <div className={'icon-disc '+(result?.status==='success'?'green':'')}><PlugZap size={17}/></div>
    <div className="source-copy"><b>{copy.title}</b><small>{copy.description}</small></div>
@@ -196,20 +196,20 @@ function copyForSource(source:ReportSource):{title:string;description:string;but
     "vin-suggestion":{title:"VIN подсказки",description:"Похожие/возможные VIN",button:"Получить"},
     "owner-manual":{title:"Мануал владельца",description:"Инструкция владельца по VIN/YMM",button:"Найти"},
     "motorcycle-decode":{title:"Мото VIN",description:"Отключено для автомобильного гаража",button:"Недоступно"},
-    "electric-vehicle-specifications":{title:"EV характеристики",description:"Нужны год, марка, модель и trim",button:"Отдельная форма"},
-    "vehicle-warranty":{title:"Гарантия",description:"Нужны год, марка и модель",button:"Отдельная форма"},
-    "ymmt-specifications":{title:"YMMT спецификации",description:"Нужны год, марка, модель и trim",button:"Отдельная форма"},
-    "uk-registration-decode":{title:"UK номер",description:"Нужен британский номер регистрации",button:"Отдельная форма"},
-    "license-plate-ocr":{title:"OCR номера",description:"Нужно изображение номера",button:"Отдельная форма"},
-    "vin-ocr":{title:"OCR VIN",description:"Нужно фото VIN",button:"Отдельная форма"},
-    "oem-parts":{title:"OEM детали",description:"Нужны YMMT/каталог детали",button:"Отдельная форма"},
+    "electric-vehicle-specifications":{title:"EV характеристики",description:"Нужен отдельный YMMT поток: год, марка, модель и trim",button:"Получить"},
+    "vehicle-warranty":{title:"Гарантия",description:"Нужен отдельный YMM поток: год, марка и модель",button:"Получить"},
+    "ymmt-specifications":{title:"YMMT спецификации",description:"Нужен отдельный YMMT поток: год, марка, модель и trim",button:"Получить"},
+    "uk-registration-decode":{title:"UK номер",description:"Нужен отдельный поток по британскому номеру",button:"Получить"},
+    "license-plate-ocr":{title:"OCR номера",description:"Нужен upload изображения номера",button:"Получить"},
+    "vin-ocr":{title:"OCR VIN",description:"Нужен upload фото VIN",button:"Получить"},
+    "oem-parts":{title:"OEM детали",description:"Нужен отдельный поток YMMT/каталога детали",button:"Получить"},
   };
 
   if(copies[source.key])return copies[source.key];
   return {
     title:source.apiName,
     description:source.note??(source.fetchableByVehicleVin?"Отчёт по VIN":`Нужен ввод: ${source.input}`),
-    button:source.fetchableByVehicleVin?"Получить":"Отдельная форма",
+    button:"Получить",
   };
 }
 
@@ -247,6 +247,10 @@ function ReportsPage(props:PageProps){
   const [reports,setReports]=useState<ExternalReport[]|null>(null);
   const [error,setError]=useState<string|null>(null);
   const [selectedId,setSelectedId]=useState<string|null>(null);
+  const [query,setQuery]=useState("");
+  const [provider,setProvider]=useState("all");
+  const [status,setStatus]=useState("all");
+  const [type,setType]=useState("all");
   useEffect(()=>{
     if(!vehicle){setReports(null);return}
     let cancelled=false;
@@ -258,35 +262,71 @@ function ReportsPage(props:PageProps){
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   if(reports===null)return <Spinner/>;
   if(error)return <div className="auth-error">{error}</div>;
-  const selected=reports.find(r=>r.id===selectedId)??reports[0]??null;
+  const providers=uniqueSorted(reports.map(r=>r.provider));
+  const statuses=uniqueSorted(reports.map(r=>r.status));
+  const types=uniqueSorted(reports.map(r=>r.reportType));
+  const filteredReports=reports.filter(report=>{
+    const text=[report.reportType,humanReportType(report.reportType),report.provider,report.status,report.vin].filter(Boolean).join(" ").toLowerCase();
+    return (provider==="all"||report.provider===provider)&&
+      (status==="all"||report.status===status)&&
+      (type==="all"||report.reportType===type)&&
+      (!query.trim()||text.includes(query.trim().toLowerCase()));
+  });
+  const selected=filteredReports.find(r=>r.id===selectedId)??filteredReports[0]??reports.find(r=>r.id===selectedId)??null;
+  const resetFilters=()=>{setQuery("");setProvider("all");setStatus("all");setType("all")};
   return reports.length
    ?<>
     <div className="panel list-panel">
-      <h2>СОХРАНЁННЫЕ ОТЧЁТЫ ({reports.length})</h2>
+      <div className="reports-head">
+       <h2>СОХРАНЁННЫЕ ОТЧЁТЫ ({filteredReports.length}/{reports.length})</h2>
+       <button className="ghost-btn" onClick={resetFilters} disabled={!query&&provider==="all"&&status==="all"&&type==="all"}>Сбросить</button>
+      </div>
+      <div className="reports-filter">
+       <label><span>Поиск</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="VIN, провайдер, тип отчёта"/></label>
+       <label><span>Провайдер</span><select value={provider} onChange={e=>setProvider(e.target.value)}><option value="all">Все</option>{providers.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
+       <label><span>Статус</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Все</option>{statuses.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
+       <label><span>Тип</span><select value={type} onChange={e=>setType(e.target.value)}><option value="all">Все</option>{types.map(item=><option key={item} value={item}>{humanReportType(item)}</option>)}</select></label>
+      </div>
       <table className="data-table"><thead><tr><th>Тип</th><th>Провайдер</th><th>VIN</th><th>Статус</th><th>Получен</th><th></th></tr></thead><tbody>
-       {reports.map(r=><tr key={r.id}><td><b>{humanReportType(r.reportType)}</b><small className="sub">{r.reportType}</small></td><td>{r.provider}</td><td className="mono">{r.vin??'—'}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{r.status}</span></td><td>{fmtDate(r.fetchedAt,true)}</td><td><button className="ghost-btn" onClick={()=>setSelectedId(r.id)}>{selected?.id===r.id?'Открыт':'Открыть'}</button></td></tr>)}
+       {filteredReports.map(r=><tr key={r.id}><td><b>{humanReportType(r.reportType)}</b><small className="sub">{r.reportType}</small></td><td>{r.provider}</td><td className="mono">{r.vin??'—'}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{r.status}</span></td><td>{fmtDate(r.fetchedAt,true)}</td><td><button className="ghost-btn" onClick={()=>setSelectedId(r.id)}>{selected?.id===r.id?'Открыт':'Открыть'}</button></td></tr>)}
       </tbody></table>
+      {!filteredReports.length&&<div className="state-note">По этим фильтрам отчётов нет.</div>}
     </div>
-    {selected&&<ReportViewer report={selected} vehicleId={vehicle.id} afterMutate={props.afterMutate}/>}
+    {selected&&<ReportViewer report={selected} vehicle={vehicle} currentProfile={props.data.profile} afterMutate={props.afterMutate}/>}
    </>
    :<EmptyState icon={ChartNoAxesCombined} title="Отчётов пока нет" text="Загрузите отчёты в разделе «Интеграции» — сырые ответы Vehicle Databases сохранятся здесь навсегда."/>;
 }
 
-function ReportViewer({report,vehicleId,afterMutate}:{report:ExternalReport;vehicleId:string;afterMutate:()=>Promise<void>}){
+function uniqueSorted(values:string[]):string[]{
+  return Array.from(new Set(values.filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+}
+
+function ReportViewer({report,vehicle,currentProfile,afterMutate}:{report:ExternalReport;vehicle:Vehicle;currentProfile:VehicleProfile|null;afterMutate:()=>Promise<void>}){
   const [saving,setSaving]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
   const facts=flattenReportFacts(report.rawPayload).slice(0,80);
   const oneAutoBuildSheet=isOneAutoBuildSheet(report);
   const draft=oneAutoBuildSheet?profileDraftFromOneAutoBuildSheet(report.rawPayload):null;
+  const transferFields=draft?profileTransferFields(draft):[];
+  const warnings=buildReportWarnings(report,vehicle,currentProfile,draft);
+  const [selectedFields,setSelectedFields]=useState<Array<keyof VehicleProfile>>([]);
+  useEffect(()=>{
+    setSelectedFields(warnings.some(w=>w.level==="danger")?[]:transferFields.map(field=>field.key));
+  },[report.id]);
   const saveDraft=async()=>{
-    if(!draft||Object.keys(draft).length<=1)return;
+    if(!draft||selectedFields.length===0)return;
+    const selectedDraft:Partial<VehicleProfile>={source:draft.source??"manual-oneauto"};
+    selectedFields.forEach(key=>{
+      selectedDraft[key]=draft[key] as never;
+    });
     setSaving(true);setMessage(null);
     try{
-      await profileApi.create(vehicleId,draft);
+      await profileApi.create(vehicle.id,selectedDraft);
       setMessage({kind:'ok',text:'Данные из отчёта перенесены в профиль. Старые ручные поля, которых нет в отчёте, сохранены.'});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSaving(false)}
   };
+  const toggleField=(key:keyof VehicleProfile)=>setSelectedFields(prev=>prev.includes(key)?prev.filter(item=>item!==key):[...prev,key]);
   return <div className="panel report-viewer">
    <div className="decode-head">
     <div>
@@ -296,14 +336,38 @@ function ReportViewer({report,vehicleId,afterMutate}:{report:ExternalReport;vehi
     <span className="decode-vin">{report.vin??'без VIN'}</span>
    </div>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
+   {warnings.length>0&&<div className="report-warnings">
+    {warnings.map(w=><div key={w.text} className={'report-warning '+w.level}>{w.text}</div>)}
+   </div>}
    {oneAutoBuildSheet?<OneAutoBuildSheetView payload={report.rawPayload}/>
     :facts.length?<div className="decode-grid">
     {facts.map(f=><div key={f.path} className="decode-item"><span>{f.path}</span><b>{f.value}</b></div>)}
    </div>:<div className="state-note">В отчёте нет простых полей для показа.</div>}
-   {draft&&<div className="page-actions report-actions">
-    <button className="primary" onClick={()=>void saveDraft()} disabled={saving||Object.keys(draft).length<=1}>{saving?<Loader2 size={15} className="spin"/>:<Check size={15}/>} ПЕРЕНЕСТИ В ПРОФИЛЬ</button>
-    <span className="hint-note">Переносит только понятные поля: цвет, двигатель, коробку и привод. Комплектацию/двери лучше подтверждать вручную, если провайдер их не вернул.</span>
-   </div>}
+   {draft&&transferFields.length>0&&<section className="transfer-panel">
+    <div className="transfer-head">
+     <div>
+      <h3>Перенос в профиль</h3>
+      <p>Выбери только те поля, которые реально совпадают с машиной.</p>
+     </div>
+     <span className="tag purple">{selectedFields.length} выбрано</span>
+    </div>
+    <div className="transfer-table">
+     {transferFields.map(field=>{
+      const current=currentProfile?.[field.key];
+      const changed=stringValue(current)!==stringValue(field.value);
+      return <label key={field.key} className={'transfer-row '+(changed?'changed':'same')}>
+       <input type="checkbox" checked={selectedFields.includes(field.key)} onChange={()=>toggleField(field.key)}/>
+       <span className="transfer-label">{field.label}</span>
+       <span><small>Сейчас</small><b>{displayProfileValue(field.key,current)}</b></span>
+       <span><small>Из отчёта</small><b>{displayProfileValue(field.key,field.value)}</b></span>
+      </label>;
+     })}
+    </div>
+    <div className="page-actions report-actions">
+     <button className="primary" onClick={()=>void saveDraft()} disabled={saving||selectedFields.length===0}>{saving?<Loader2 size={15} className="spin"/>:<Check size={15}/>} ПРИМЕНИТЬ ВЫБРАННОЕ</button>
+     <span className="hint-note">Комплектацию, двери, топливо и кузов OneAuto тут не подтверждает — их оставляем ручным профилем.</span>
+    </div>
+   </section>}
    <details className="raw-report"><summary>RAW JSON</summary><pre>{JSON.stringify(report.rawPayload,null,2)}</pre></details>
   </div>;
 }
@@ -379,6 +443,80 @@ function profileDraftFromOneAutoBuildSheet(payload:unknown):Partial<VehicleProfi
   if(drive)draft.driveType=normalizeDrive(drive);
   if(color)draft.exteriorColor=truncate(color,120);
   return Object.keys(draft).length>1?draft:null;
+}
+
+function buildReportWarnings(report:ExternalReport,vehicle:Vehicle,currentProfile:VehicleProfile|null,draft:Partial<VehicleProfile>|null):Array<{level:"warn"|"danger";text:string}>{
+  const warnings:Array<{level:"warn"|"danger";text:string}>=[];
+  const reportVin=report.vin?.trim().toUpperCase();
+  const vehicleVin=vehicle.vin?.trim().toUpperCase();
+  if(reportVin&&vehicleVin&&reportVin!==vehicleVin){
+    warnings.push({level:"danger",text:`VIN отчёта ${reportVin} не совпадает с текущим VIN ${vehicleVin}. Перенос заблокирован по умолчанию.`});
+  }
+  if(looksLikeOneAutoDemoPayload(report.rawPayload)){
+    warnings.push({level:"danger",text:"Отчёт похож на sandbox/demo OneAuto: есть тестовые коды или демонстрационные поля. Галочки сняты, применяй только после ручной проверки RAW JSON."});
+  }
+  if(draft&&currentProfile){
+    const conflicts=profileTransferFields(draft).filter(field=>{
+      const current=currentProfile[field.key];
+      return stringValue(current)&&stringValue(field.value)&&stringValue(current)!==stringValue(field.value);
+    });
+    if(conflicts.length>0){
+      warnings.push({level:"warn",text:`Есть расхождения с текущим профилем: ${conflicts.map(c=>c.label).join(", ")}. Проверь перед применением.`});
+    }
+  }
+  return warnings;
+}
+
+function looksLikeOneAutoDemoPayload(payload:unknown):boolean{
+  const result=isRecord(payload)&&isRecord(payload.result)?payload.result:null;
+  if(!result)return false;
+  const options=Array.isArray(result.options)?result.options.filter(isRecord):[];
+  const hasDemoCodes=options.some(option=>["123456","234567"].includes(stringValue(option.factory_code)??""));
+  const hasPlaceholderError=stringValue(payload&&isRecord(payload)?payload.error:null)?.toLowerCase().includes("if there is an error");
+  const hasMythicalColor=stringValue(result.oem_colour_desc)?.toLowerCase().includes("mythical")??false;
+  return hasDemoCodes||Boolean(hasPlaceholderError)||hasMythicalColor;
+}
+
+function profileTransferFields(draft:Partial<VehicleProfile>):Array<{key:keyof VehicleProfile;label:string;value:unknown}>{
+  const fields:Array<{key:keyof VehicleProfile;label:string;value:unknown}>=[
+    {key:"exteriorColor",label:"Цвет",value:draft.exteriorColor},
+    {key:"engineFamily",label:"Двигатель",value:draft.engineFamily},
+    {key:"transmissionType",label:"Тип коробки",value:draft.transmissionType},
+    {key:"transmissionCode",label:"Код коробки",value:draft.transmissionCode},
+    {key:"driveType",label:"Привод",value:draft.driveType},
+  ];
+  return fields.filter(field=>field.value!==undefined&&field.value!==null&&String(field.value).trim()!=="");
+}
+
+function displayProfileValue(key:keyof VehicleProfile,value:unknown):string{
+  const text=stringValue(value);
+  if(!text)return "—";
+  if(key==="transmissionType")return formatTransferTransmission(text);
+  if(key==="driveType")return formatTransferDrive(text);
+  return text;
+}
+
+function formatTransferTransmission(value:string):string{
+  const names:Record<string,string>={
+    manual:"механика",
+    automatic:"автомат",
+    dct:"робот/DCT",
+    cvt:"вариатор",
+    "single-speed":"одноступенчатая",
+    other:"другое",
+  };
+  return names[value]??value;
+}
+
+function formatTransferDrive(value:string):string{
+  const names:Record<string,string>={
+    fwd:"передний",
+    rwd:"задний",
+    awd:"полный AWD",
+    "4wd":"полный 4WD",
+    other:"другое",
+  };
+  return names[value]??value;
 }
 
 function normalizeTransmission(value:string):VehicleProfile["transmissionType"]{

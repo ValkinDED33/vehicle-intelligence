@@ -144,7 +144,14 @@ export class CepikReportsService {
     };
   }
 
-  async listDictionaries(limit = "100", page = "1"): Promise<Record<string, unknown>> {
+  async listDictionaries(
+    ownerId: string,
+    vehicleId: string,
+    limit = "100",
+    page = "1",
+  ): Promise<Record<string, unknown>> {
+    await this.garageService.getVehicle(ownerId, vehicleId);
+
     this.assertPositiveInteger(limit, "CEPiK limit", 1, 500);
     this.assertPositiveInteger(page, "CEPiK page", 1);
 
@@ -153,7 +160,13 @@ export class CepikReportsService {
     );
   }
 
-  async getDictionary(name: string): Promise<Record<string, unknown>> {
+  async getDictionary(
+    ownerId: string,
+    vehicleId: string,
+    name: string,
+  ): Promise<Record<string, unknown>> {
+    await this.garageService.getVehicle(ownerId, vehicleId);
+
     const dictionaryName = name.trim();
 
     if (!/^[a-z0-9-]+$/i.test(dictionaryName)) {

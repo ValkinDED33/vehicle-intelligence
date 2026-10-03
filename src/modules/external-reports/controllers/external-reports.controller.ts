@@ -98,15 +98,30 @@ export class ExternalReportsController {
 
   @Get("cepik/dictionaries")
   listCepikDictionaries(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
     @Query("limit") limit?: string,
     @Query("page") page?: string,
   ) {
-    return this.cepikReportsService.listDictionaries(limit, page);
+    return this.cepikReportsService.listDictionaries(
+      request.userId,
+      vehicleId,
+      limit,
+      page,
+    );
   }
 
   @Get("cepik/dictionaries/:name")
-  getCepikDictionary(@Param("name") name: string) {
-    return this.cepikReportsService.getDictionary(name);
+  getCepikDictionary(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+    @Param("name") name: string,
+  ) {
+    return this.cepikReportsService.getDictionary(
+      request.userId,
+      vehicleId,
+      name,
+    );
   }
 
   @Post("oneauto/sources/:source")

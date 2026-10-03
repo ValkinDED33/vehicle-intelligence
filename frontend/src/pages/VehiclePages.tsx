@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertTriangle, Check, CircleHelp, ClipboardList, Gauge, Loader2, Plus, RefreshCw, Search, Wrench } from "lucide-react";
-import { fmtDate, fmtMoney, fmtNumber, garageApi, mileageApi, profileApi, vinApi } from "../api";
+import { AlertTriangle, Check, CircleHelp, ClipboardList, FileText, Gauge, Loader2, Plus, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
+import { documentsApi, fmtDate, fmtMoney, fmtNumber, garageApi, maintenanceApi, mileageApi, profileApi, vinApi, type VehicleDocument } from "../api";
 import { AddVehicleForm } from "../components/AddVehicleForm";
 import { EmptyState, Field, NoVehicle, Spinner } from "../components/CommonComponents";
 import { URGENCY_META } from "../constants/dashboard";
@@ -410,19 +410,76 @@ function MileagePage(props: PageProps) {
 }
 
 function ServicePage(props: PageProps) {
-  const {vehicle,data}=props;
+  const {vehicle,data,afterMutate}=props;
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
+  const [rule,setRule]=useState({
+    key:"engine_oil",
+    title:"Замена масла",
+    intervalKm:"10000",
+    intervalMonths:"12",
+    warningKmBefore:"1000",
+    warningDaysBefore:"30",
+  });
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
+  const createRule=async(e:FormEvent)=>{
+    e.preventDefault();
+    setBusy(true);setMessage(null);
+    try{
+      await maintenanceApi.createRule(vehicle.id,{
+        key:slugifyRuleKey(rule.key||rule.title),
+        title:rule.title.trim(),
+        source:"manual",
+        intervalKm:numberOrUndefined(rule.intervalKm),
+        intervalMonths:numberOrUndefined(rule.intervalMonths),
+        warningKmBefore:numberOrUndefined(rule.warningKmBefore),
+        warningDaysBefore:numberOrUndefined(rule.warningDaysBefore),
+        completionEventType:`maintenance.${slugifyRuleKey(rule.key||rule.title)}.completed`,
+      });
+      setMessage({kind:'ok',text:'Регламент добавлен. Статусы ТО пересчитаны.'});
+      await afterMutate();
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
+  };
+  const deleteRule=async(ruleId:string)=>{
+    setBusy(true);setMessage(null);
+    try{
+      await maintenanceApi.deleteRule(vehicle.id,ruleId);
+      setMessage({kind:'ok',text:'Правило регламента отключено.'});
+      await afterMutate();
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
+  };
   return <>
+   {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
+   <form className="panel form-card" onSubmit={createRule}>
+    <h2>ДОБАВИТЬ РЕГЛАМЕНТ</h2>
+    <div className="form-grid">
+     <Field label="Ключ"><input value={rule.key} onChange={e=>setRule({...rule,key:e.target.value})} placeholder="engine_oil"/></Field>
+     <Field label="Работа"><input value={rule.title} onChange={e=>setRule({...rule,title:e.target.value})} placeholder="Замена масла" required/></Field>
+     <Field label="Интервал, км"><input value={rule.intervalKm} onChange={e=>setRule({...rule,intervalKm:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="10000"/></Field>
+     <Field label="Интервал, мес"><input value={rule.intervalMonths} onChange={e=>setRule({...rule,intervalMonths:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="12"/></Field>
+     <Field label="Предупредить за, км"><input value={rule.warningKmBefore} onChange={e=>setRule({...rule,warningKmBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="1000"/></Field>
+     <Field label="Предупредить за, дней"><input value={rule.warningDaysBefore} onChange={e=>setRule({...rule,warningDaysBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="30"/></Field>
+    </div>
+    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} ДОБАВИТЬ РЕГЛАМЕНТ</button>
+   </form>
    <div className="panel list-panel">
     <h2>СТАТУС ОБСЛУЖИВАНИЯ</h2>
     {data.loading&&!data.maintenance.length?<Spinner/>
      :data.maintenance.length
       ?<div className="status-list">{data.maintenance.map(s=><div key={s.rule.id} className="status-row">
         <span className={'tag '+URGENCY_META[s.urgency].color}>{URGENCY_META[s.urgency].tag}</span>
-        <div className="status-copy"><b>{s.rule.title}</b><small>{reminderDetail(s)}{s.lastCompletedAt?` · прошлое ТО ${fmtDate(s.lastCompletedAt)}`:' · ещё не выполнялось'}</small></div>
+       <div className="status-copy"><b>{s.rule.title}</b><small>{reminderDetail(s)}{s.lastCompletedAt?` · прошлое ТО ${fmtDate(s.lastCompletedAt)}`:' · ещё не выполнялось'}</small></div>
         <div className="status-nums">{s.rule.intervalKm?`интервал ${fmtNumber(s.rule.intervalKm)} км`:''}{s.rule.intervalMonths?` · ${s.rule.intervalMonths} мес`:''}</div>
        </div>)}</div>
-      :<div className="state-note"><Wrench size={15}/> Правила ТО не настроены. Добавьте регламент через API (POST /maintenance/rules) — статусы появятся здесь автоматически.</div>}
+      :<div className="state-note"><Wrench size={15}/> Правила ТО не настроены. Добавьте первый регламент выше.</div>}
+   </div>
+   <div className="panel list-panel">
+    <h2>ПРАВИЛА РЕГЛАМЕНТА</h2>
+    {data.maintenance.length
+     ?<table className="data-table"><thead><tr><th>Работа</th><th>Ключ</th><th>Интервал</th><th>Предупреждение</th><th></th></tr></thead><tbody>
+      {data.maintenance.map(s=><tr key={s.rule.id}><td><b>{s.rule.title}</b><small className="sub">{s.rule.source??'manual'}</small></td><td className="mono">{s.rule.key}</td><td>{[s.rule.intervalKm?`${fmtNumber(s.rule.intervalKm)} км`:null,s.rule.intervalMonths?`${s.rule.intervalMonths} мес`:null].filter(Boolean).join(' / ')||'—'}</td><td>{[s.rule.warningKmBefore?`${fmtNumber(s.rule.warningKmBefore)} км`:null,s.rule.warningDaysBefore?`${s.rule.warningDaysBefore} дн.`:null].filter(Boolean).join(' / ')||'—'}</td><td><button className="ghost-btn danger" onClick={()=>void deleteRule(s.rule.id)} disabled={busy}><Trash2 size={14}/> Удалить</button></td></tr>)}
+     </tbody></table>
+     :<div className="state-note">Пока нет правил.</div>}
    </div>
    <div className="panel list-panel">
     <h2>СЕРВИСНЫЕ ЗАПИСИ</h2>
@@ -435,13 +492,119 @@ function ServicePage(props: PageProps) {
   </>;
 }
 
+const DOCUMENT_TYPES=[
+  {value:"insurance",label:"Страховка"},
+  {value:"registration",label:"Регистрация"},
+  {value:"inspection",label:"Техосмотр"},
+  {value:"service-invoice",label:"Сервисный счёт"},
+  {value:"purchase",label:"Покупка"},
+  {value:"warranty",label:"Гарантия"},
+  {value:"tax",label:"Налог"},
+  {value:"fine",label:"Штраф"},
+  {value:"receipt",label:"Чек"},
+  {value:"manual",label:"Мануал"},
+  {value:"other",label:"Другое"},
+];
+
+function DocumentsPage(props: PageProps) {
+  const {vehicle}=props;
+  const [documents,setDocuments]=useState<VehicleDocument[]|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
+  const [form,setForm]=useState({
+    type:"insurance",
+    title:"",
+    documentNumber:"",
+    issuerName:"",
+    issuedAt:"",
+    expiresAt:"",
+    description:"",
+  });
+  const vehicleId=vehicle?.id??null;
+  const loadDocuments=async()=>{
+    if(!vehicleId)return;
+    setDocuments(await documentsApi.list(vehicleId));
+  };
+  useEffect(()=>{setDocuments(null);if(vehicleId)void loadDocuments().catch(err=>setMessage({kind:'err',text:errText(err)}))},[vehicleId]);
+  if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
+  const createDocument=async(e:FormEvent)=>{
+    e.preventDefault();
+    setBusy(true);setMessage(null);
+    try{
+      await documentsApi.create(vehicle.id,{
+        type:form.type,
+        title:form.title.trim(),
+        documentNumber:emptyToUndefined(form.documentNumber),
+        issuerName:emptyToUndefined(form.issuerName),
+        issuedAt:emptyToUndefined(form.issuedAt),
+        expiresAt:emptyToUndefined(form.expiresAt),
+        description:emptyToUndefined(form.description),
+        source:"manual",
+      });
+      setForm({...form,title:"",documentNumber:"",issuerName:"",issuedAt:"",expiresAt:"",description:""});
+      setMessage({kind:'ok',text:'Документ добавлен в историю автомобиля.'});
+      await loadDocuments();
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
+  };
+  const deleteDocument=async(documentId:string)=>{
+    setBusy(true);setMessage(null);
+    try{
+      await documentsApi.remove(vehicle.id,documentId);
+      setMessage({kind:'ok',text:'Документ удалён.'});
+      await loadDocuments();
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
+  };
+  return <>
+   {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
+   <form className="panel form-card" onSubmit={createDocument}>
+    <h2>ДОБАВИТЬ ДОКУМЕНТ</h2>
+    <div className="form-grid">
+     <Field label="Тип"><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{DOCUMENT_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}</select></Field>
+     <Field label="Название"><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} maxLength={180} placeholder="Полис OC / счёт за ТО" required/></Field>
+     <Field label="Номер"><input value={form.documentNumber} onChange={e=>setForm({...form,documentNumber:e.target.value})} maxLength={160} placeholder="номер документа"/></Field>
+     <Field label="Кем выдан"><input value={form.issuerName} onChange={e=>setForm({...form,issuerName:e.target.value})} maxLength={180} placeholder="страховая / сервис"/></Field>
+     <Field label="Дата выдачи"><input type="date" value={form.issuedAt} onChange={e=>setForm({...form,issuedAt:e.target.value})}/></Field>
+     <Field label="Действует до"><input type="date" value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></Field>
+     <Field label="Описание"><input value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="короткая заметка"/></Field>
+    </div>
+    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} ДОБАВИТЬ ДОКУМЕНТ</button>
+   </form>
+   <div className="panel list-panel">
+    <h2>ДОКУМЕНТЫ</h2>
+    {documents===null?<Spinner/>
+     :documents.length
+      ?<table className="data-table"><thead><tr><th>Тип</th><th>Документ</th><th>Номер</th><th>Срок</th><th>Статус</th><th></th></tr></thead><tbody>
+       {documents.map(doc=><tr key={doc.id}><td>{formatDocumentType(doc.type)}</td><td><b>{doc.title}</b>{doc.issuerName&&<small className="sub">{doc.issuerName}</small>}</td><td>{doc.documentNumber??'—'}</td><td>{doc.expiresAt?fmtDate(doc.expiresAt):'—'}</td><td><span className={'tag '+documentStatusColor(doc)}>{doc.processingStatus}</span></td><td><button className="ghost-btn danger" onClick={()=>void deleteDocument(doc.id)} disabled={busy}><Trash2 size={14}/> Удалить</button></td></tr>)}
+      </tbody></table>
+      :<EmptyState icon={FileText} title="Документов пока нет" text="Добавьте полис, техосмотр, счёт за сервис или другой документ вручную. Загрузка файлов подключается через тот же backend-модуль отдельно."/>}
+   </div>
+  </>;
+}
+
 function VehicleRouter(props: PageProps & { page: string }) {
   const { page } = props;
   if (page === "Гараж") return <GaragePage {...props} />;
   if (page === "Профиль авто") return <ProfilePage {...props} />;
   if (page === "Пробег") return <MileagePage {...props} />;
   if (page === "Сервис и ТО") return <ServicePage {...props} />;
+  if (page === "Документы") return <DocumentsPage {...props} />;
   return null;
 }
 
-export { GaragePage, ProfilePage, MileagePage, ServicePage, VehicleRouter as VehiclePages };
+function formatDocumentType(value:string):string{
+  return DOCUMENT_TYPES.find(type=>type.value===value)?.label??value;
+}
+
+function documentStatusColor(doc:VehicleDocument):string{
+  if(doc.processingStatus==="completed")return "green";
+  if(doc.processingStatus==="failed")return "red";
+  if(doc.processingStatus==="processing"||doc.processingStatus==="pending")return "purple";
+  return "";
+}
+
+function slugifyRuleKey(value:string):string{
+  const slug=value.trim().toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+  return slug||"maintenance_rule";
+}
+
+export { GaragePage, ProfilePage, MileagePage, ServicePage, DocumentsPage, VehicleRouter as VehiclePages };

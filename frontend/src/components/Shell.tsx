@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Bell,
   ChevronDown,
-  FileText,
   Menu,
   MessageSquare,
   Orbit,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 import { assistantApi, garageApi, type Vehicle } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, PageHeader } from "../components/CommonComponents";
+import { PageHeader } from "../components/CommonComponents";
 import { SECTIONS, sections } from "../constants/dashboard";
 import { useVehicleData } from "../hooks/useVehicleData";
 import { DashboardPage } from "../pages/DashboardPage";
@@ -25,7 +24,7 @@ import { TrackingPages } from "../pages/TrackingPages";
 import { VehiclePages } from "../pages/VehiclePages";
 import { setSoundEnabled, sfx, soundEnabled } from "../sound";
 import type { PageProps } from "../types/dashboard";
-import { errText, vehicleLine, vehicleTitle } from "../utils/formatters";
+import { errText, resolvedVehicleLine, resolvedVehicleTitle } from "../utils/formatters";
 
 function InnerPage(props: PageProps & { page: string }) {
   const { page } = props;
@@ -44,13 +43,6 @@ function InnerPage(props: PageProps & { page: string }) {
         <button className="primary" onClick={props.openAi}>
           Открыть AI Ассистента <ArrowRight size={16} />
         </button>
-      )}
-      {page === "Документы" && (
-        <EmptyState
-          icon={FileText}
-          title="Документы"
-          text="Модуль документов уже есть в API. Интерфейс загрузки полисов и счетов появится следующим этапом."
-        />
       )}
     </section>
   );
@@ -107,6 +99,8 @@ export function Shell(){
   const alerts=data.maintenance.filter(s=>s.urgency!=='normal').length;
   const userName=user?.displayName||user?.email||'Гость';
   const userInitial=userName[0]?.toUpperCase()??'?';
+  const currentVehicleTitle=vehicle?resolvedVehicleTitle(vehicle,data.vinDecode):'Выберите авто';
+  const currentVehicleLine=vehicle?resolvedVehicleLine(vehicle,data.latest,data.vinDecode,data.profile):'Гараж пуст';
 
   const pageProps={vehicle,vehicles,data,refresh,navigate,selectVehicle,loadVehicles,afterMutate,openAi,vehiclesLoading,vehiclesError,userName,logout};
 
@@ -133,8 +127,8 @@ export function Shell(){
     <button className="vehicle-picker" onClick={()=>navigate('Гараж')}>
      <img className="vehicle-thumb" src="/car.webp" alt=""/>
      <span className="vehicle-copy">
-      <b>{vehicle?vehicleTitle(vehicle):'Выберите авто'}</b>
-      <small>{vehicle?vehicleLine(vehicle,data.latest):'Гараж пуст'}</small>
+      <b>{currentVehicleTitle}</b>
+      <small>{currentVehicleLine}</small>
       <em>● {vehicle?'Онлайн':'Добавьте автомобиль'}</em>
      </span><ChevronDown size={15}/>
     </button>
@@ -142,7 +136,7 @@ export function Shell(){
     <nav className="lower-nav">{sections.slice(11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{name}</span></button>)}</nav>
     <button className="assistant-tile" onClick={openAi}>
      <span className="bot-avatar"><img src="/robot.webp" alt=""/></span>
-     <span className="assistant-copy"><b>AI Ассистент</b><em>● Онлайн</em><svg className="waveform" viewBox="0 0 110 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 10,11 14,4 18,18 22,7 26,15 30,11 40,11 44,2 48,20 52,9 56,13 60,11 70,11 74,5 78,17 82,8 86,14 90,11 110,11"/></svg><small>Готов помочь 24/7</small></span>
+     <span className="assistant-copy"><b>AI Ассистент</b><em>● Онлайн</em><svg className="waveform" viewBox="0 0 110 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 10,11 14,4 18,18 22,7 26,15 30,11 40,11 44,2 48,20 52,9 56,13 60,11 70,11 74,5 78,17 82,8 86,14 90,11 110,11"/></svg><small>{vehicle?currentVehicleTitle:'Выберите авто'}</small></span>
     </button>
    </aside>
    <main className="main">
@@ -162,6 +156,6 @@ export function Shell(){
     {page==='Главная'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
    </main>
    {mobile&&<div className="scrim" onClick={()=>setMobile(false)}/>}
-   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Спросите меня об автомобиле — я отвечу с учётом текущего профиля, пробега и напоминаний.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${vehicleTitle(vehicle)}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишите вопрос..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Отправить" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
+   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Спросите меня об автомобиле — я отвечу с учётом текущего профиля, пробега и напоминаний.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${currentVehicleTitle}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишите вопрос..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Отправить" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
   </div>;
 }
