@@ -92,7 +92,7 @@ export function Shell(){
   const vehicle=useMemo(()=>vehicles.find(v=>v.id===vehicleId)??null,[vehicles,vehicleId]);
   const {data,refresh}=useVehicleData(vehicleId);
 
-  const selectVehicle=(id:string)=>{setVehicleId(id);localStorage.setItem(VEHICLE_KEY,id)};
+  const selectVehicle=(id:string)=>{setVehicleId(id);setAiMessages([]);localStorage.setItem(VEHICLE_KEY,id)};
   const navigate=(name:string,sound:'tick'|'chime'='tick')=>{setPage(name);setMobile(false);setSearch(false);sfx(sound)};
   const openAi=()=>{setAi(true);sfx('open')};
   const closeAi=()=>{setAi(false);sfx('close')};
@@ -118,7 +118,7 @@ export function Shell(){
     setAiBusy(true);
     setAiMessages(prev=>[...prev,{role:'user',text}]);
     try{
-      const res=await assistantApi.chat({message:text,vehicleId:vehicle?.id});
+      const res=await assistantApi.chat({message:text,vehicleId:vehicle?.id,history:aiMessages.slice(-10)});
       setAiMessages(prev=>[...prev,{role:'assistant',text:res.answer}]);
     }catch(err){
       setAiMessages(prev=>[...prev,{role:'assistant',text:errText(err)}]);
@@ -162,6 +162,6 @@ export function Shell(){
     {page==='Главная'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
    </main>
    {mobile&&<div className="scrim" onClick={()=>setMobile(false)}/>}
-   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Спросите меня об автомобиле — я отвечу с учётом текущего профиля, пробега и напоминаний.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${vehicleTitle(vehicle)}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишите вопрос..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Отправить" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
+   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Опишите симптом: когда возникает, на каком топливе, есть ли ошибки. Я уточню детали и предложу порядок проверок с учётом истории сервиса.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${vehicleTitle(vehicle)}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишите вопрос..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Отправить" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
   </div>;
 }
