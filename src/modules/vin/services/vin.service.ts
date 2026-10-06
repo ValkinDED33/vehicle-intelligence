@@ -52,6 +52,18 @@ export class VinService {
     });
   }
 
+  async decodeStandaloneVin(
+    vin: string,
+  ): Promise<VinDecodeResult> {
+    const normalizedVin = vin.trim().toUpperCase();
+
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(normalizedVin)) {
+      throw new BadRequestException("Некорректный VIN");
+    }
+
+    return this.vinProvider.decode(normalizedVin);
+  }
+
   async getLatestDecode(
     ownerId: string,
     vehicleId: string,

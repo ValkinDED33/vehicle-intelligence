@@ -23,6 +23,7 @@ import { ServiceRecordsModule } from "./modules/service-records/service-records.
 import { VehicleHistoryModule } from "./modules/vehicle-history/vehicle-history.module";
 import { VehicleProfileModule } from "./modules/vehicle-profile/vehicle-profile.module";
 import { VinModule } from "./modules/vin/vin.module";
+import { TelegramModule } from "./modules/telegram/telegram.module";
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { VinModule } from "./modules/vin/vin.module";
     DocumentsModule,
     ExternalReportsModule,
     AssistantModule,
+    TelegramModule,
   ],
   providers: [
     {
