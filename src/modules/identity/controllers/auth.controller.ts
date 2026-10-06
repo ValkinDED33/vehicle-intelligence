@@ -1,7 +1,7 @@
 import { Body, Controller, Post } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 
-import { LoginDto, RegisterDto } from "../dto/auth.dto";
+import { LoginDto, RegisterDto, TelegramAuthDto } from "../dto/auth.dto";
 import { AuthService } from "../services/auth.service";
 
 @Controller("auth")
@@ -17,5 +17,10 @@ export class AuthController {
   @Post("login")
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post("telegram")
+  telegram(@Body() dto: TelegramAuthDto) {
+    return this.authService.loginWithTelegram(dto);
   }
 }

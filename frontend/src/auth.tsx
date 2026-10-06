@@ -23,6 +23,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithTelegram: (initData: string) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -59,6 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applySession],
   );
 
+  const loginWithTelegram = useCallback(
+    async (initData: string) => {
+      const response = await authApi.telegram(initData);
+      applySession(response.accessToken, response.user);
+    },
+    [applySession],
+  );
+
   const register = useCallback(
     async (input: { email: string; password: string; displayName?: string }) => {
       const response = await authApi.register(input);
@@ -73,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, ready, login, register, logout }),
-    [user, ready, login, register, logout],
+    () => ({ user, ready, login, loginWithTelegram, register, logout }),
+    [user, ready, login, loginWithTelegram, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -87,13 +96,30 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthScreen() {
-  const { login, register } = useAuth();
+  const { login, loginWithTelegram, register } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [telegramBusy, setTelegramBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const telegramInitData =
+    typeof window !== "undefined"
+      ? window.Telegram?.WebApp?.initData?.trim() || ""
+      : "";
+
+  const telegramBotUsername = (
+    import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined
+  )?.trim();
+  const telegramBotUrl = telegramBotUsername
+    ? `https://t.me/${telegramBotUsername.replace(/^@/, "")}`
+    : null;
+
+  useEffect(() => {
+    window.Telegram?.WebApp?.ready?.();
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -124,6 +150,35 @@ export function AuthScreen() {
   const switchMode = (next: "login" | "register") => {
     setMode(next);
     setError(null);
+  };
+
+  const submitTelegram = async () => {
+    if (telegramBusy) return;
+
+    if (!telegramInitData) {
+      if (telegramBotUrl) {
+        window.location.href = telegramBotUrl;
+        return;
+      }
+
+      setError("Откройте сайт через кнопку IA-CARS в Telegram-боте.");
+      return;
+    }
+
+    setTelegramBusy(true);
+    setError(null);
+
+    try {
+      await loginWithTelegram(telegramInitData);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Не удалось войти через Telegram. Попробуйте ещё раз.",
+      );
+    } finally {
+      setTelegramBusy(false);
+    }
   };
 
   return (
@@ -158,6 +213,23 @@ export function AuthScreen() {
           >
             Регистрация
           </button>
+        </div>
+
+        <button
+          className="telegram-login"
+          type="button"
+          onClick={submitTelegram}
+          disabled={telegramBusy}
+        >
+          {telegramBusy
+            ? "Проверяем Telegram..."
+            : telegramInitData
+              ? "ВОЙТИ ЧЕРЕЗ TELEGRAM"
+              : "ОТКРЫТЬ ЧЕРЕЗ TELEGRAM"}
+        </button>
+
+        <div className="auth-divider">
+          <span>или</span>
         </div>
 
         {mode === "register" && (

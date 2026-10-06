@@ -156,6 +156,11 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  telegram: (initData: string) =>
+    request<AuthResponse>("/auth/telegram", {
+      method: "POST",
+      body: JSON.stringify({ initData }),
+    }),
 };
 
 // ---------- garage ----------

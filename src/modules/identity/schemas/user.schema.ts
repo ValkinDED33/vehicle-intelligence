@@ -7,6 +7,12 @@ export const users = pgTable("users", {
 
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
 
+  telegramId: varchar("telegram_id", { length: 32 }).unique(),
+
+  telegramUsername: varchar("telegram_username", { length: 64 }),
+
+  telegramPhotoUrl: varchar("telegram_photo_url", { length: 2048 }),
+
   displayName: varchar("display_name", { length: 120 }),
 
   country: varchar("country", { length: 2 }).notNull().default("PL"),

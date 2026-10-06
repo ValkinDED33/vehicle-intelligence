@@ -308,6 +308,11 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .auth-tabs{display:flex;gap:8px}
 .auth-tabs button{flex:1;padding:10px;border:1px solid var(--line);border-radius:11px;font-size:12px;font-weight:600;color:var(--mut);transition:all .18s}
 .auth-tabs button.active{color:#fff;border-color:#7c5cff;background:linear-gradient(90deg,rgba(124,58,237,.42),rgba(37,99,235,.28));box-shadow:0 0 18px rgba(124,92,255,.35)}
+.telegram-login{width:100%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(55,198,255,.55);border-radius:11px;background:linear-gradient(100deg,rgba(0,136,204,.95),rgba(47,109,220,.88));box-shadow:0 0 18px rgba(55,198,255,.32),inset 0 1px 0 rgba(255,255,255,.18);padding:12px 14px;font-size:11px;font-weight:800;letter-spacing:.8px;color:#fff;transition:box-shadow .2s,transform .2s}
+.telegram-login:hover{box-shadow:0 0 28px rgba(55,198,255,.55);transform:translateY(-1px)}
+.telegram-login:disabled{opacity:.65;cursor:default;transform:none}
+.auth-divider{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.auth-divider:before,.auth-divider:after{content:'';height:1px;flex:1;background:var(--line)}
 .auth-field{display:grid;gap:6px;font-size:11px;color:var(--mut)}
 .auth-field input,.field input,.field select{background:#061428;border:1px solid #315071;color:#fff;border-radius:9px;padding:11px;outline:none;transition:border-color .18s,box-shadow .18s;width:100%}
 .auth-field input:focus,.field input:focus,.field select:focus{border-color:#4c8dff;box-shadow:0 0 12px rgba(76,141,255,.35)}

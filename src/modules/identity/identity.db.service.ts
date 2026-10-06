@@ -20,12 +20,25 @@ export class IdentityDbService {
     return user ?? null;
   }
 
+  async findByTelegramId(telegramId: string): Promise<User | null> {
+    const [user] = await this.databaseService.connection
+      .select()
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+
+    return user ?? null;
+  }
+
   async createUser(data: {
     email: string;
     passwordHash: string;
     displayName?: string;
     country?: string;
     language?: string;
+    telegramId?: string;
+    telegramUsername?: string | null;
+    telegramPhotoUrl?: string | null;
   }): Promise<User> {
     const newUser: NewUser = {
       email: data.email.trim().toLowerCase(),
@@ -33,6 +46,9 @@ export class IdentityDbService {
       displayName: data.displayName?.trim() || null,
       country: data.country ?? "PL",
       language: data.language ?? "ru",
+      telegramId: data.telegramId ?? null,
+      telegramUsername: data.telegramUsername ?? null,
+      telegramPhotoUrl: data.telegramPhotoUrl ?? null,
     };
 
     const [createdUser] = await this.databaseService.connection
@@ -45,5 +61,31 @@ export class IdentityDbService {
     }
 
     return createdUser;
+  }
+
+  async updateTelegramProfile(
+    userId: string,
+    data: {
+      displayName?: string | null;
+      telegramUsername?: string | null;
+      telegramPhotoUrl?: string | null;
+    },
+  ): Promise<User> {
+    const [updatedUser] = await this.databaseService.connection
+      .update(users)
+      .set({
+        displayName: data.displayName?.trim() || null,
+        telegramUsername: data.telegramUsername ?? null,
+        telegramPhotoUrl: data.telegramPhotoUrl ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new Error("Failed to update Telegram user");
+    }
+
+    return updatedUser;
   }
 }

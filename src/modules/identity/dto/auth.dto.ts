@@ -44,3 +44,10 @@ export class LoginDto {
   @MaxLength(128)
   password!: string;
 }
+
+export class TelegramAuthDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4096)
+  initData!: string;
+}
