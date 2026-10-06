@@ -466,6 +466,13 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .settings-grid span{display:block;font-size:9.5px;letter-spacing:1px;color:var(--dim);margin-bottom:5px;text-transform:uppercase}
 .settings-grid b{font-size:12.5px;font-weight:600;word-break:break-all}
 .about-text{font-size:12.5px;color:var(--mut);line-height:1.7;margin:0}
+.telegram-panel{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;margin-bottom:14px}
+.telegram-panel-copy{display:flex;align-items:center;gap:13px;min-width:0}
+.telegram-panel-copy h2{margin:0 0 5px}
+.telegram-panel-copy p{margin:0;color:#dce8f7;font-size:12px;line-height:1.5}
+.telegram-panel-copy small{display:block;color:var(--dim);font-size:10.5px;margin-top:4px;line-height:1.5}
+.telegram-panel-action{white-space:nowrap;text-decoration:none}
+@media(max-width:650px){.telegram-panel{align-items:stretch;display:grid}.telegram-panel-action{width:100%}}
 .report-viewer{padding:18px;margin-top:14px}
 .report-warnings{display:grid;gap:8px;margin:10px 0 14px}
 .report-warning{border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.45;border:1px solid}

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChartNoAxesCombined, Check, ChevronDown, Download, Loader2, LogOut, PlugZap } from "lucide-react";
+import { ChartNoAxesCombined, Check, ChevronDown, Download, Loader2, LogOut, MessageCircle, PlugZap } from "lucide-react";
 import { API_BASE, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type Vehicle, type VehicleProfile } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, EventCard, NoVehicle, Spinner } from "../components/CommonComponents";
@@ -98,6 +98,7 @@ function IntegrationsPage(props:PageProps){
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
   return <>
+   <TelegramIntegrationCard />
    <div className="page-actions">
     <button className="primary" onClick={()=>void fetchAll()} disabled={busy!==null||vinSources.length===0||!vehicle.vin}>{busy==='all'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {busy==='all'?'ЗАБИРАЕМ ОТЧЁТЫ...':'СКАЧАТЬ VIN-ОТЧЁТЫ'}</button>
     <span className="hint-note">Vehicle Databases работает по VIN. CEPiK ниже — отдельная польская альтернатива по региону и периоду регистрации.</span>
@@ -146,6 +147,30 @@ function IntegrationsPage(props:PageProps){
     {!data.events.some(e=>e.type.startsWith('external.'))&&<div className="state-note">Пока нет событий из внешних источников.</div>}
    </div>
   </>;
+}
+
+function TelegramIntegrationCard(){
+  const botUrl=getTelegramBotUrl();
+  const inTelegram=Boolean(window.Telegram?.WebApp?.initData);
+
+  return <section className="panel telegram-panel">
+   <div className="telegram-panel-copy">
+    <span className="icon-disc"><MessageCircle size={18}/></span>
+    <div>
+     <h2>TELEGRAM</h2>
+     <p>{inTelegram?'Mini App открыт через Telegram.':'Бот доступен как второй интерфейс CARA.'}</p>
+     <small>/garage · /addcar · /mileage · /expense · /fuel · /charge · /service · /document · /ask</small>
+    </div>
+   </div>
+   {botUrl
+    ?<a className="primary telegram-panel-action" href={botUrl} target="_blank" rel="noreferrer">ОТКРЫТЬ БОТА</a>
+    :<span className="hint-note">Добавьте VITE_TELEGRAM_BOT_USERNAME, чтобы показать кнопку бота.</span>}
+  </section>;
+}
+
+function getTelegramBotUrl():string|null{
+  const username=(import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string|undefined)?.trim();
+  return username?`https://t.me/${username.replace(/^@/,"")}`:null;
 }
 
 function ProviderAccordion({title,meta,open,onToggle,children}:{title:string;meta:string;open:boolean;onToggle:()=>void;children:ReactNode}){
@@ -576,6 +601,7 @@ function flattenReportFacts(value:unknown,path=""):Array<{path:string;value:stri
 function SettingsPage(props:PageProps){
   const {userName,logout}=props;
   const {user}=useAuth();
+  const botUrl=getTelegramBotUrl();
   return <>
    <div className="panel list-panel">
     <h2>ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ</h2>
@@ -589,6 +615,15 @@ function SettingsPage(props:PageProps){
     <div className="page-actions">
      <button className="ghost-btn danger" onClick={logout}><LogOut size={15}/> Выйти из аккаунта</button>
     </div>
+   </div>
+   <div className="panel list-panel">
+    <h2>TELEGRAM ДОСТУП</h2>
+    <div className="settings-grid">
+     <div><span>Статус</span><b>Включён</b></div>
+     <div><span>Авторизация</span><b>Telegram Mini App + JWT</b></div>
+     <div><span>Команды</span><b>/ask · /garage · /mileage · /expense</b></div>
+    </div>
+    {botUrl&&<div className="page-actions"><a className="ghost-btn" href={botUrl} target="_blank" rel="noreferrer"><MessageCircle size={15}/> Открыть Telegram-бота</a></div>}
    </div>
    <div className="panel list-panel">
     <h2>О ПЛАТФОРМЕ</h2>
