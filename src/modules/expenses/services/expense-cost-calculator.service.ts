@@ -61,7 +61,7 @@ export class ExpenseCostCalculatorService {
 
     if (totalCost === null) {
       throw new BadRequestException(
-        "Необходимо указать итоговую стоимость или стоимость до скидки",
+        "Потрібно вказати підсумкову вартість або вартість до знижки",
       );
     }
 
@@ -71,7 +71,7 @@ export class ExpenseCostCalculatorService {
       discountAmount > subtotalCost
     ) {
       throw new BadRequestException(
-        "Скидка не может превышать стоимость до скидки",
+        "Знижка не може перевищувати вартість до знижки",
       );
     }
 

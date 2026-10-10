@@ -44,10 +44,10 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
   return (
     <form className="form-card" onSubmit={submit}>
       <h3>
-        <CarFront size={16} /> Новый автомобиль
+        <CarFront size={16} /> Новий автомобіль
       </h3>
       <div className="form-grid">
-        <Field label="VIN (17 символов)">
+        <Field label="VIN (17 символів)">
           <input
             value={vin}
             onChange={(e) => setVin(e.target.value)}
@@ -55,12 +55,12 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
             placeholder="WVWZZZ1KZAW000000"
           />
         </Field>
-        <Field label="Название">
+        <Field label="Назва">
           <input
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             maxLength={80}
-            placeholder="Мой Qashqai"
+            placeholder="Мій Qashqai"
           />
         </Field>
         <Field label="Марка">
@@ -71,7 +71,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
             placeholder="Nissan"
           />
         </Field>
-        <Field label="Год выпуска">
+        <Field label="Рік випуску">
           <input
             value={modelYear}
             onChange={(e) =>
@@ -80,7 +80,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
             placeholder="2017"
           />
         </Field>
-        <Field label="Госномер">
+        <Field label="Держномер">
           <input
             value={plate}
             onChange={(e) => setPlate(e.target.value)}
@@ -88,7 +88,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
             placeholder="XX 1234X"
           />
         </Field>
-        <Field label="Страна">
+        <Field label="Країна">
           <input
             value={country}
             onChange={(e) =>
@@ -101,9 +101,8 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
       </div>
       {error && <div className="auth-error">{error}</div>}
       <button className="primary" type="submit" disabled={busy}>
-        {busy ? "Добавляем..." : "ДОБАВИТЬ В ГАРАЖ"}
+        {busy ? "Додаємо..." : "ДОДАТИ В ГАРАЖ"}
       </button>
     </form>
   );
 }
-

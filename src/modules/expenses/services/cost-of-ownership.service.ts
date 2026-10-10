@@ -31,7 +31,7 @@ export class CostOfOwnershipService {
     month: number,
   ): Promise<MonthlyCostOfOwnershipSummary> {
     if (month < 1 || month > 12) {
-      throw new BadRequestException("Месяц должен быть от 1 до 12");
+      throw new BadRequestException("Місяць має бути від 1 до 12");
     }
 
     const from = new Date(Date.UTC(year, month - 1, 1));

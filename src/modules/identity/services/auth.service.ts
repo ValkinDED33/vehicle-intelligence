@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -9,7 +10,12 @@ import * as bcrypt from "bcrypt";
 import { createHmac, timingSafeEqual } from "crypto";
 
 import { IdentityDbService } from "../identity.db.service";
-import { LoginDto, RegisterDto, TelegramAuthDto } from "../dto/auth.dto";
+import {
+  LoginDto,
+  RegisterDto,
+  TelegramAuthDto,
+  UpdateProfileDto,
+} from "../dto/auth.dto";
 import type { User } from "../schemas/user.schema";
 
 interface TelegramWebAppUser {
@@ -46,7 +52,7 @@ export class AuthService {
     const existingUser = await this.identityDbService.findByEmail(email);
 
     if (existingUser) {
-      throw new ConflictException("Не удалось завершить регистрацию");
+      throw new ConflictException("Не вдалося завершити реєстрацію");
     }
 
     const passwordHash = await bcrypt.hash(
@@ -66,7 +72,7 @@ export class AuthService {
       return this.buildAuthResponse(user);
     } catch (error: unknown) {
       if (this.isUniqueConstraintViolation(error)) {
-        throw new ConflictException("Не удалось завершить регистрацию");
+        throw new ConflictException("Не вдалося завершити реєстрацію");
       }
 
       throw error;
@@ -79,7 +85,7 @@ export class AuthService {
     const user = await this.identityDbService.findByEmail(email);
 
     if (!user) {
-      throw new UnauthorizedException("Неверный email или пароль");
+      throw new UnauthorizedException("Неправильний email або пароль");
     }
 
     const passwordMatches = await bcrypt.compare(
@@ -88,7 +94,7 @@ export class AuthService {
     );
 
     if (!passwordMatches) {
-      throw new UnauthorizedException("Неверный email или пароль");
+      throw new UnauthorizedException("Неправильний email або пароль");
     }
 
     return this.buildAuthResponse(user);
@@ -100,7 +106,7 @@ export class AuthService {
     const rawUser = params.get("user");
 
     if (!hash || !rawUser || !this.isValidTelegramInitData(params, hash)) {
-      throw new UnauthorizedException("Не удалось подтвердить вход через Telegram");
+      throw new UnauthorizedException("Не вдалося підтвердити вхід через Telegram");
     }
 
     const telegramUser = this.parseTelegramUser(rawUser);
@@ -150,6 +156,22 @@ export class AuthService {
       telegramUsername: username,
       telegramPhotoUrl: photoUrl,
     });
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const existingUser = await this.identityDbService.findById(userId);
+
+    if (!existingUser) {
+      throw new NotFoundException("Користувача не знайдено");
+    }
+
+    const user = await this.identityDbService.updateProfile(userId, {
+      displayName: dto.displayName,
+      country: dto.country,
+      language: dto.language,
+    });
+
+    return this.buildAuthResponse(user);
   }
 
   private buildAuthResponse(user: User) {
@@ -227,7 +249,7 @@ export class AuthService {
 
       return parsed as TelegramWebAppUser;
     } catch {
-      throw new UnauthorizedException("Некорректные данные Telegram");
+      throw new UnauthorizedException("Некоректні дані Telegram");
     }
   }
 
@@ -240,12 +262,12 @@ export class AuthService {
 
   private normalizeLanguage(
     languageCode: string | undefined,
-  ): "ru" | "uk" | "pl" | "en" {
+  ): "uk" | "pl" | "en" {
     const language = languageCode?.slice(0, 2).toLowerCase();
     if (language === "uk" || language === "pl" || language === "en") {
       return language;
     }
 
-    return "ru";
+    return "uk";
   }
 }

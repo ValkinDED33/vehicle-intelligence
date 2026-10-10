@@ -20,11 +20,11 @@ export interface CreateServiceRecordItemInput {
 
 export interface CreateServiceRecordInput {
   /**
-   * Пока expenseId принимаем только как ссылку
-   * на уже существующий Expense.
+   * Поки expenseId приймаємо тільки як посилання
+   * на вже наявний Expense.
    *
-   * Автоматическое создание Expense вместе
-   * с ServiceRecord добавим отдельно через
+   * Автоматичне створення Expense разом
+   * із ServiceRecord додамо окремо через
    * orchestration / Unit of Work.
    */
   expenseId?: string;

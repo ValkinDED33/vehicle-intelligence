@@ -85,26 +85,26 @@ export const vehicleProfiles = pgTable(
     }),
 
     /**
-     * Полная ёмкость топливного бака.
-     * Применяется только если у автомобиля
-     * есть жидкое/газовое топливо.
+     * Повна ємність паливного бака.
+     * Застосовується тільки якщо в автомобіля
+     * є рідке/газове пальне.
      */
     fuelTankCapacityLiters: doublePrecision("fuel_tank_capacity_liters"),
 
     /**
-     * Ёмкость бака AdBlue, если система есть.
+     * Ємність бака AdBlue, якщо система є.
      */
     adBlueTankCapacityLiters: doublePrecision("adblue_tank_capacity_liters"),
 
     /**
-     * Полная физическая ёмкость тяговой батареи.
+     * Повна фізична ємність тягової батареї.
      */
     batteryGrossCapacityKwh: doublePrecision("battery_gross_capacity_kwh"),
 
     /**
-     * Доступная пользователю ёмкость батареи.
-     * Именно её чаще логичнее использовать
-     * для эксплуатационных расчётов.
+     * Доступна користувачу ємність батареї.
+     * Саме її зазвичай логічніше використовувати
+     * для експлуатаційних розрахунків.
      */
     batteryUsableCapacityKwh: doublePrecision("battery_usable_capacity_kwh"),
 

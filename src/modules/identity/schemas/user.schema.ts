@@ -17,7 +17,7 @@ export const users = pgTable("users", {
 
   country: varchar("country", { length: 2 }).notNull().default("PL"),
 
-  language: varchar("language", { length: 5 }).notNull().default("ru"),
+  language: varchar("language", { length: 5 }).notNull().default("uk"),
 
   createdAt: timestamp("created_at", {
     withTimezone: true,

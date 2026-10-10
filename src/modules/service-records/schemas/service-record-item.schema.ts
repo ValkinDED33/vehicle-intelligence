@@ -22,12 +22,12 @@ export const serviceRecordItems = pgTable(
       }),
 
     /**
-     * work       — выполненная работа
-     * part       — запчасть
-     * fluid      — масло / антифриз / тормозная жидкость
-     * consumable — расходник
-     * diagnostic — диагностическая операция
-     * other      — другое
+     * work       — виконана робота
+     * part       — запчастина
+     * fluid      — масло / антифриз / гальмівна рідина
+     * consumable — витратний матеріал
+     * diagnostic — діагностична операція
+     * other      — інше
      */
     itemType: varchar("item_type", {
       length: 32,
@@ -40,8 +40,8 @@ export const serviceRecordItems = pgTable(
     description: text("description"),
 
     /**
-     * Производитель детали / жидкости.
-     * Например MANN, Bosch, Motul, OEM.
+     * Виробник деталі / рідини.
+     * Наприклад MANN, Bosch, Motul, OEM.
      */
     brand: varchar("brand", {
       length: 120,
@@ -55,12 +55,12 @@ export const serviceRecordItems = pgTable(
     }),
 
     /**
-     * Количество.
+     * Кількість.
      *
-     * Например:
-     * 1 фильтр
-     * 4 свечи
-     * 5.2 литра масла
+     * Наприклад:
+     * 1 фільтр
+     * 4 свічки
+     * 5.2 літра масла
      */
     quantity: numeric("quantity", {
       precision: 12,
@@ -68,14 +68,14 @@ export const serviceRecordItems = pgTable(
     }),
 
     /**
-     * piece / liter / ml / kg / hour / set и т.д.
+     * piece / liter / ml / kg / hour / set тощо.
      */
     unit: varchar("unit", {
       length: 32,
     }),
 
     /**
-     * Цена одной единицы.
+     * Ціна однієї одиниці.
      */
     unitCost: numeric("unit_cost", {
       precision: 12,
@@ -83,7 +83,7 @@ export const serviceRecordItems = pgTable(
     }),
 
     /**
-     * Стоимость этой позиции.
+     * Вартість цієї позиції.
      */
     totalCost: numeric("total_cost", {
       precision: 12,
@@ -95,8 +95,8 @@ export const serviceRecordItems = pgTable(
     }),
 
     /**
-     * Гарантия именно на эту позицию,
-     * если она известна.
+     * Гарантія саме на цю позицію,
+     * якщо вона відома.
      */
     warrantyMonths: integer("warranty_months"),
 

@@ -70,6 +70,10 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .header-actions>button{position:relative;color:#d5dff2;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;transition:background .18s}
 .header-actions>button:hover{background:rgba(64,120,220,.14)}
 .header-actions sup{position:absolute;right:2px;top:1px;background:linear-gradient(140deg,#8b46ff,#5b21b6);border-radius:999px;padding:1px 5px;font-size:9px;box-shadow:0 0 10px rgba(139,70,255,.7)}
+.language-chip{position:relative;display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(120,180,255,.26);border-radius:11px;background:rgba(8,24,48,.52);transition:background .18s,border-color .18s}
+.language-chip:hover{background:rgba(64,120,220,.14);border-color:var(--line-strong)}
+.language-chip span{font-size:18px;line-height:1}
+.language-chip select{position:absolute;inset:0;opacity:0;cursor:pointer}
 .user-chip{display:flex;align-items:center;gap:10px}
 .user-chip>svg{color:var(--dim)}
 .avatar{display:grid;place-items:center;background:linear-gradient(160deg,#3b5578,#22344e);border:2px solid #7ea6d8;border-radius:50%;width:36px;height:36px;font-size:13px;font-weight:600;box-shadow:0 0 12px rgba(90,150,230,.35)}
@@ -465,12 +469,14 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .settings-grid div{border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(6,18,38,.5)}
 .settings-grid span{display:block;font-size:9.5px;letter-spacing:1px;color:var(--dim);margin-bottom:5px;text-transform:uppercase}
 .settings-grid b{font-size:12.5px;font-weight:600;word-break:break-all}
+.settings-language{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:14px 0 2px}
+.settings-language .field{width:min(260px,100%)}
 .about-text{font-size:12.5px;color:var(--mut);line-height:1.7;margin:0}
 .telegram-panel{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;margin-bottom:14px}
 .telegram-panel-copy{display:flex;align-items:center;gap:13px;min-width:0}
 .telegram-panel-copy h2{margin:0 0 5px}
 .telegram-panel-copy p{margin:0;color:#dce8f7;font-size:12px;line-height:1.5}
-.telegram-panel-copy small{display:block;color:var(--dim);font-size:10.5px;margin-top:4px;line-height:1.5}
+.telegram-panel-copy small{display:block;color:var(--dim);font-size:10.5px;margin-top:4px;line-height:1.5;overflow-wrap:anywhere}
 .telegram-panel-action{white-space:nowrap;text-decoration:none}
 @media(max-width:650px){.telegram-panel{align-items:stretch;display:grid}.telegram-panel-action{width:100%}}
 .report-viewer{padding:18px;margin-top:14px}

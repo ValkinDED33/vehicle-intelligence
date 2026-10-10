@@ -28,7 +28,7 @@ export class EnergySummaryService {
     month: number,
   ): Promise<MonthlyEnergySummary> {
     if (month < 1 || month > 12) {
-      throw new BadRequestException("Месяц должен быть от 1 до 12");
+      throw new BadRequestException("Місяць має бути від 1 до 12");
     }
 
     const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
@@ -164,50 +164,50 @@ export class EnergySummaryService {
     money: MonthlyEnergyMoneySummary[];
   }): string {
     if (input.entriesCount === 0) {
-      return "За выбранный месяц заправок или зарядок не зафиксировано.";
+      return "За вибраний місяць заправок або заряджань не зафіксовано.";
     }
 
     const parts: string[] = [];
 
     if (input.odometerDistanceKm !== null) {
       parts.push(
-        `За период по сохранённым показаниям пробега автомобиль прошёл примерно ${input.odometerDistanceKm} км.`,
+        `За період за збереженими показаннями пробігу автомобіль проїхав приблизно ${input.odometerDistanceKm} км.`,
       );
     }
 
     if (input.fuelLiters > 0) {
-      parts.push(`Заправлено ${input.fuelLiters} л топлива.`);
+      parts.push(`Заправлено ${input.fuelLiters} л пального.`);
     }
 
     if (input.energyKwh > 0) {
-      parts.push(`Получено ${input.energyKwh} кВт⋅ч энергии.`);
+      parts.push(`Отримано ${input.energyKwh} кВт⋅год енергії.`);
     }
 
     if (input.averageFuelConsumption !== null) {
       parts.push(
-        `Ориентировочный расход по данным месяца — ${input.averageFuelConsumption} л/100 км.`,
+        `Орієнтовна витрата за даними місяця — ${input.averageFuelConsumption} л/100 км.`,
       );
     }
 
     if (input.averageEnergyConsumption !== null) {
       parts.push(
-        `Ориентировочный расход энергии — ${input.averageEnergyConsumption} кВт⋅ч/100 км.`,
+        `Орієнтовна витрата енергії — ${input.averageEnergyConsumption} кВт⋅год/100 км.`,
       );
     }
 
     for (const money of input.money) {
-      parts.push(`Потрачено ${money.totalCost.toFixed(2)} ${money.currency}.`);
+      parts.push(`Витрачено ${money.totalCost.toFixed(2)} ${money.currency}.`);
 
       if (money.discountAmount > 0) {
         parts.push(
-          `За счёт скидок сэкономлено ${money.discountAmount.toFixed(2)} ${money.currency}.`,
+          `Завдяки знижкам зекономлено ${money.discountAmount.toFixed(2)} ${money.currency}.`,
         );
       }
     }
 
     if (input.odometerDistanceKm === null) {
       parts.push(
-        "Для точного расчёта стоимости и расхода на 100 км пока недостаточно показаний пробега за этот период.",
+        "Для точного розрахунку вартості й витрати на 100 км поки недостатньо показань пробігу за цей період.",
       );
     }
 

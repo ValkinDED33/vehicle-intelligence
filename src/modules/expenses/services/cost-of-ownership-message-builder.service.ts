@@ -9,50 +9,50 @@ export class CostOfOwnershipMessageBuilderService {
     currencies: CostOfOwnershipCurrencySummary[],
   ): string {
     if (currencies.length === 0) {
-      return "За выбранный месяц расходов не зафиксировано.";
+      return "За вибраний місяць витрат не зафіксовано.";
     }
 
     const parts: string[] = [];
 
     if (distanceKm !== null) {
       parts.push(
-        `По сохранённым показаниям пробега автомобиль прошёл примерно ${distanceKm} км.`,
+        `За збереженими показаннями пробігу автомобіль проїхав приблизно ${distanceKm} км.`,
       );
     }
 
     for (const summary of currencies) {
       parts.push(
-        `Общие расходы составили ${summary.totalCost.toFixed(2)} ${summary.currency}.`,
+        `Загальні витрати склали ${summary.totalCost.toFixed(2)} ${summary.currency}.`,
       );
 
       if (summary.energyCost > 0) {
         parts.push(
-          `Из них на топливо и зарядку ушло ${summary.energyCost.toFixed(2)} ${summary.currency}.`,
+          `З них на пальне й заряджання пішло ${summary.energyCost.toFixed(2)} ${summary.currency}.`,
         );
       }
 
       if (summary.expenseCost > 0) {
         parts.push(
-          `Остальные расходы составили ${summary.expenseCost.toFixed(2)} ${summary.currency}.`,
+          `Інші витрати склали ${summary.expenseCost.toFixed(2)} ${summary.currency}.`,
         );
       }
 
       if (summary.totalDiscountSavings > 0) {
         parts.push(
-          `Скидками сэкономлено ${summary.totalDiscountSavings.toFixed(2)} ${summary.currency}.`,
+          `Знижками зекономлено ${summary.totalDiscountSavings.toFixed(2)} ${summary.currency}.`,
         );
       }
 
       if (summary.costPer100Km !== null) {
         parts.push(
-          `Полная стоимость эксплуатации по зафиксированным расходам — примерно ${summary.costPer100Km.toFixed(2)} ${summary.currency} на 100 км.`,
+          `Повна вартість експлуатації за зафіксованими витратами — приблизно ${summary.costPer100Km.toFixed(2)} ${summary.currency} на 100 км.`,
         );
       }
     }
 
     if (distanceKm === null) {
       parts.push(
-        "Для расчёта стоимости километра пока недостаточно показаний пробега за этот месяц.",
+        "Для розрахунку вартості кілометра поки недостатньо показань пробігу за цей місяць.",
       );
     }
 

@@ -30,7 +30,7 @@ export class RegisterDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(["ru", "uk", "pl", "en"])
+  @IsIn(["uk", "pl", "en"])
   language?: string;
 }
 
@@ -50,4 +50,21 @@ export class TelegramAuthDto {
   @MinLength(1)
   @MaxLength(4096)
   initData!: string;
+}
+
+export class UpdateProfileDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  displayName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["uk", "pl", "en"])
+  language?: string;
 }

@@ -69,7 +69,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
-    throw new ApiError(0, "Сервер недоступен. Проверьте соединение.");
+    throw new ApiError(0, "Сервер недоступний. Перевірте з’єднання.");
   }
 
   if (response.status === 401 && token) {
@@ -100,17 +100,17 @@ function extractMessage(body: unknown, status: number): string {
     const message = (body as { message: unknown }).message;
     if (typeof message === "string") {
       if (/quota exhausted/i.test(message)) {
-        return "Лимит запросов Vehicle Databases исчерпан. Проверьте квоту или дождитесь её обновления.";
+        return "Ліміт запитів Vehicle Databases вичерпано. Перевірте квоту або дочекайтеся її оновлення.";
       }
       if (/api key is not configured/i.test(message)) {
-        return "VIN-провайдер не настроен: добавьте VIN_PROVIDER_API_KEY на Render.";
+        return "VIN-провайдер не налаштований: додайте VIN_PROVIDER_API_KEY на Render.";
       }
       return message;
     }
     if (Array.isArray(message)) return message.join("; ");
   }
-  if (status === 503) return "Внешний провайдер временно недоступен или исчерпана квота.";
-  return `Ошибка запроса (${status})`;
+  if (status === 503) return "Зовнішній провайдер тимчасово недоступний або квоту вичерпано.";
+  return `Помилка запиту (${status})`;
 }
 
 function qs(params: Record<string, string | number | boolean | undefined>): string {
@@ -137,12 +137,14 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+export type UserLanguage = "uk" | "pl" | "en";
+
 export interface RegisterInput {
   email: string;
   password: string;
   displayName?: string;
   country?: string;
-  language?: "ru" | "uk" | "pl" | "en";
+  language?: UserLanguage;
 }
 
 export const authApi = {
@@ -160,6 +162,15 @@ export const authApi = {
     request<AuthResponse>("/auth/telegram", {
       method: "POST",
       body: JSON.stringify({ initData }),
+    }),
+  updateProfile: (input: {
+    displayName?: string;
+    country?: string;
+    language?: UserLanguage;
+  }) =>
+    request<AuthResponse>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(input),
     }),
 };
 
@@ -803,7 +814,7 @@ export function num(value: string | number | null | undefined): number | null {
 
 export function fmtNumber(value: number | null | undefined, digits = 0): string {
   if (value === null || value === undefined) return "—";
-  return value.toLocaleString("ru-RU", {
+  return value.toLocaleString("uk-UA", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -812,25 +823,25 @@ export function fmtNumber(value: number | null | undefined, digits = 0): string 
 export function fmtMoney(value: string | number | null | undefined, currency?: string | null): string {
   const parsed = num(value);
   if (parsed === null) return "—";
-  const formatted = parsed.toLocaleString("ru-RU", {
+  const formatted = parsed.toLocaleString("uk-UA", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
   return currency ? `${formatted} ${currency}` : formatted;
 }
 
-const MONTHS_RU = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+const MONTHS_UK = [
+  "січня", "лютого", "березня", "квітня", "травня", "червня",
+  "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
 ];
 
 export function fmtDate(iso: string | null | undefined, withTime = false): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  const day = `${date.getDate()} ${MONTHS_RU[date.getMonth()]} ${date.getFullYear()}`;
+  const day = `${date.getDate()} ${MONTHS_UK[date.getMonth()]} ${date.getFullYear()}`;
   if (!withTime) return day;
-  const time = date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
   return `${day}, ${time}`;
 }
 
@@ -838,5 +849,5 @@ export function fmtShortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  return `${date.getDate()} ${MONTHS_RU[date.getMonth()].slice(0, 3)}`;
+  return `${date.getDate()} ${MONTHS_UK[date.getMonth()].slice(0, 3)}`;
 }

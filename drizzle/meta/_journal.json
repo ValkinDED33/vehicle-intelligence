@@ -113,6 +113,13 @@
       "when": 1791280800000,
       "tag": "0015_telegram_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791284400000,
+      "tag": "0016_default_uk_language",
+      "breakpoints": true
     }
   ]
 }

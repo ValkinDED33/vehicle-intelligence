@@ -15,7 +15,7 @@ export function Spinner({ label }: { label?: string }) {
   return (
     <div className="state-note">
       <Loader2 size={16} className="spin" />
-      {label ?? "Загружаем данные..."}
+      {label ?? "Завантажуємо дані..."}
     </div>
   );
 }
@@ -76,20 +76,20 @@ export function PageHeader({
           className="refresh-btn"
           onClick={onRefresh}
           disabled={refreshing}
-          aria-label="Обновить"
+          aria-label="Оновити"
         >
           {refreshing ? (
             <Loader2 size={16} className="spin" />
           ) : (
             <RefreshCw size={16} />
           )}{" "}
-          Обновить
+          Оновити
         </button>
       </div>
       <p>
         {vehicle
           ? `${vehicleTitle(vehicle)}${vehicle.modelYear ? ` · ${vehicle.modelYear}` : ""}${vehicle.vin ? ` · VIN ${vehicle.vin}` : ""}`
-          : "Автомобиль не выбран"}
+          : "Автомобіль не вибрано"}
       </p>
     </>
   );
@@ -99,8 +99,8 @@ export function NoVehicle({ onGoGarage }: { onGoGarage: () => void }) {
   return (
     <EmptyState
       icon={CarFront}
-      title="Сначала добавьте автомобиль"
-      text="Все разделы работают вокруг конкретного автомобиля. Добавьте его в гараж — и данные подтянутся."
+      title="Спочатку додайте автомобіль"
+      text="Усі розділи працюють навколо конкретного автомобіля. Додайте його в гараж, і дані підтягнуться."
       action={
         <button className="primary" onClick={onGoGarage}>
           ПЕРЕЙТИ В ГАРАЖ <ArrowRight size={16} />
@@ -113,10 +113,10 @@ export function NoVehicle({ onGoGarage }: { onGoGarage: () => void }) {
 export function NoVehiclePanel({ onGoGarage }: { onGoGarage: () => void }) {
   return (
     <div className="panel empty-garage">
-      <h2>ГАРАЖ ПУСТ</h2>
+      <h2>ГАРАЖ ПОРОЖНІЙ</h2>
       <p>
-        Добавьте первый автомобиль, чтобы CARA могла рассчитывать регламенты ТО,
-        вести учёт пробега, заправок и расходов.
+        Додайте перший автомобіль, щоб CARA могла розраховувати регламенти ТО,
+        вести облік пробігу, заправок і витрат.
       </p>
       <button className="primary" onClick={onGoGarage}>
         ПЕРЕЙТИ В ГАРАЖ <ArrowRight size={16} />
@@ -158,7 +158,7 @@ export function EventCard({ event }: { event: HistoryEvent }) {
   const color = meta?.color ?? "blue";
   const detail =
     event.mileageKm !== null
-      ? `${event.mileageKm.toLocaleString("ru-RU")} км · ${MODULE_LABELS[event.sourceModule] ?? event.sourceModule}`
+      ? `${event.mileageKm.toLocaleString("uk-UA")} км · ${MODULE_LABELS[event.sourceModule] ?? event.sourceModule}`
       : (MODULE_LABELS[event.sourceModule] ?? event.sourceModule);
 
   return (

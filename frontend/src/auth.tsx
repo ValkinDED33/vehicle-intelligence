@@ -17,6 +17,7 @@ import {
   loadStoredUser,
   saveSession,
   type AuthUser,
+  type UserLanguage,
 } from "./api";
 
 interface AuthContextValue {
@@ -29,6 +30,7 @@ interface AuthContextValue {
     password: string;
     displayName?: string;
   }) => Promise<void>;
+  updateLanguage: (language: UserLanguage) => Promise<void>;
   logout: () => void;
 }
 
@@ -76,14 +78,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applySession],
   );
 
+  const updateLanguage = useCallback(
+    async (language: UserLanguage) => {
+      const response = await authApi.updateProfile({ language });
+      applySession(response.accessToken, response.user);
+    },
+    [applySession],
+  );
+
   const logout = useCallback(() => {
     clearSession();
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, ready, login, loginWithTelegram, register, logout }),
-    [user, ready, login, loginWithTelegram, register, logout],
+    () => ({
+      user,
+      ready,
+      login,
+      loginWithTelegram,
+      register,
+      updateLanguage,
+      logout,
+    }),
+    [user, ready, login, loginWithTelegram, register, updateLanguage, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -140,7 +158,7 @@ export function AuthScreen() {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Не удалось связаться с сервером. Попробуйте ещё раз.",
+          : "Не вдалося з’єднатися із сервером. Спробуйте ще раз.",
       );
     } finally {
       setBusy(false);
@@ -161,7 +179,7 @@ export function AuthScreen() {
         return;
       }
 
-      setError("Откройте сайт через кнопку IA-CARS в Telegram-боте.");
+      setError("Відкрийте сайт через кнопку IA-CARS у Telegram-боті.");
       return;
     }
 
@@ -174,7 +192,7 @@ export function AuthScreen() {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Не удалось войти через Telegram. Попробуйте ещё раз.",
+          : "Не вдалося увійти через Telegram. Спробуйте ще раз.",
       );
     } finally {
       setTelegramBusy(false);
@@ -191,11 +209,11 @@ export function AuthScreen() {
             <small>AI CAR ASSISTANT</small>
           </div>
         </div>
-        <h1>{mode === "login" ? "С возвращением!" : "Создайте аккаунт"}</h1>
+        <h1>{mode === "login" ? "З поверненням!" : "Створіть обліковий запис"}</h1>
         <p>
           {mode === "login"
-            ? "Войдите, чтобы подключить вашего автомобиля к CARA."
-            : "Регистрация занимает меньше минуты."}
+            ? "Увійдіть, щоб під’єднати ваш автомобіль до CARA."
+            : "Реєстрація займає менше хвилини."}
         </p>
 
         <div className="auth-tabs">
@@ -204,14 +222,14 @@ export function AuthScreen() {
             className={mode === "login" ? "active" : ""}
             onClick={() => switchMode("login")}
           >
-            Вход
+            Вхід
           </button>
           <button
             type="button"
             className={mode === "register" ? "active" : ""}
             onClick={() => switchMode("register")}
           >
-            Регистрация
+            Реєстрація
           </button>
         </div>
 
@@ -222,23 +240,23 @@ export function AuthScreen() {
           disabled={telegramBusy}
         >
           {telegramBusy
-            ? "Проверяем Telegram..."
+            ? "Перевіряємо Telegram..."
             : telegramInitData
-              ? "ВОЙТИ ЧЕРЕЗ TELEGRAM"
-              : "ОТКРЫТЬ ЧЕРЕЗ TELEGRAM"}
+              ? "УВІЙТИ ЧЕРЕЗ TELEGRAM"
+              : "ВІДКРИТИ ЧЕРЕЗ TELEGRAM"}
         </button>
 
         <div className="auth-divider">
-          <span>или</span>
+          <span>або</span>
         </div>
 
         {mode === "register" && (
           <label className="auth-field">
-            <span>Имя</span>
+            <span>Ім’я</span>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Как к вам обращаться"
+              placeholder="Як до вас звертатися"
               maxLength={80}
             />
           </label>
@@ -262,7 +280,7 @@ export function AuthScreen() {
             minLength={mode === "register" ? 10 : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={mode === "register" ? "Минимум 10 символов" : "Ваш пароль"}
+            placeholder={mode === "register" ? "Мінімум 10 символів" : "Ваш пароль"}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
         </label>
@@ -271,12 +289,12 @@ export function AuthScreen() {
 
         <button className="primary auth-submit" type="submit" disabled={busy}>
           {busy
-            ? "Подключаемся..."
+            ? "Під’єднуємося..."
             : mode === "login"
-              ? "ВОЙТИ В ГАРАЖ"
-              : "ЗАРЕГИСТРИРОВАТЬСЯ"}
+              ? "УВІЙТИ В ГАРАЖ"
+              : "ЗАРЕЄСТРУВАТИСЯ"}
         </button>
-        <small className="auth-note">Данные защищены JWT · Vehicle Intelligence API</small>
+        <small className="auth-note">Дані захищено JWT · Vehicle Intelligence API</small>
       </form>
     </div>
   );

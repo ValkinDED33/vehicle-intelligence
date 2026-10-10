@@ -25,7 +25,7 @@ export class GarageService {
     );
 
     if (!vehicle) {
-      throw new NotFoundException("Автомобиль не найден");
+      throw new NotFoundException("Автомобіль не знайдено");
     }
 
     return vehicle;
@@ -56,7 +56,7 @@ export class GarageService {
   ): Promise<Vehicle> {
     if (Object.keys(data).length === 0) {
       throw new BadRequestException(
-        "Необходимо передать хотя бы одно поле для обновления",
+        "Потрібно передати хоча б одне поле для оновлення",
       );
     }
 
@@ -67,7 +67,7 @@ export class GarageService {
     );
 
     if (!vehicle) {
-      throw new NotFoundException("Автомобиль не найден");
+      throw new NotFoundException("Автомобіль не знайдено");
     }
 
     return vehicle;
@@ -80,7 +80,7 @@ export class GarageService {
     );
 
     if (!vehicle) {
-      throw new NotFoundException("Автомобиль не найден");
+      throw new NotFoundException("Автомобіль не знайдено");
     }
 
     return vehicle;
@@ -93,7 +93,7 @@ export class GarageService {
     );
 
     if (!vehicle) {
-      throw new NotFoundException("Автомобиль не найден");
+      throw new NotFoundException("Автомобіль не знайдено");
     }
 
     return vehicle;

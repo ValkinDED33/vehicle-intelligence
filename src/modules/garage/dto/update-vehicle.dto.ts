@@ -11,7 +11,7 @@ export class UpdateVehicleDto {
   @IsString()
   @Length(17, 17)
   @Matches(/^[A-HJ-NPR-Z0-9]{17}$/i, {
-    message: "VIN должен содержать 17 допустимых символов",
+    message: "VIN має містити 17 допустимих символів",
   })
   vin?: string;
 
@@ -28,7 +28,7 @@ export class UpdateVehicleDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}$/, {
-    message: "modelYear должен быть четырёхзначным годом",
+    message: "modelYear має бути чотиризначним роком",
   })
   modelYear?: string;
 
@@ -41,7 +41,7 @@ export class UpdateVehicleDto {
   @IsString()
   @Length(2, 2)
   @Matches(/^[A-Za-z]{2}$/, {
-    message: "country должен быть двухбуквенным кодом страны",
+    message: "country має бути дволітерним кодом країни",
   })
   country?: string;
 }

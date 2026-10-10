@@ -10,7 +10,7 @@ export class EnergyEntryValidatorService {
       (input.volumeLiters === undefined || input.volumeLiters <= 0)
     ) {
       throw new BadRequestException(
-        "Для заправки необходимо указать количество топлива",
+        "Для заправки потрібно вказати кількість пального",
       );
     }
 
@@ -19,13 +19,13 @@ export class EnergyEntryValidatorService {
       (input.energyKwh === undefined || input.energyKwh <= 0)
     ) {
       throw new BadRequestException(
-        "Для зарядки необходимо указать количество энергии",
+        "Для заряджання потрібно вказати кількість енергії",
       );
     }
 
     if (input.kind === "charge" && input.isFullTank) {
       throw new BadRequestException(
-        "Признак полного бака применим только к заправке топливом",
+        "Ознака повного бака застосовується тільки до заправки пальним",
       );
     }
 
@@ -33,27 +33,27 @@ export class EnergyEntryValidatorService {
       input.discountPercent !== undefined &&
       (input.discountPercent < 0 || input.discountPercent > 100)
     ) {
-      throw new BadRequestException("Процент скидки должен быть от 0 до 100");
+      throw new BadRequestException("Відсоток знижки має бути від 0 до 100");
     }
 
     if (input.discountAmount !== undefined && input.discountAmount < 0) {
-      throw new BadRequestException("Сумма скидки не может быть отрицательной");
+      throw new BadRequestException("Сума знижки не може бути від’ємною");
     }
 
     if (input.subtotalCost !== undefined && input.subtotalCost < 0) {
       throw new BadRequestException(
-        "Стоимость до скидки не может быть отрицательной",
+        "Вартість до знижки не може бути від’ємною",
       );
     }
 
     if (input.totalCost !== undefined && input.totalCost < 0) {
       throw new BadRequestException(
-        "Итоговая стоимость не может быть отрицательной",
+        "Підсумкова вартість не може бути від’ємною",
       );
     }
 
     if (input.odometerKm !== undefined && input.odometerKm < 0) {
-      throw new BadRequestException("Пробег не может быть отрицательным");
+      throw new BadRequestException("Пробіг не може бути від’ємним");
     }
   }
 }

@@ -63,34 +63,34 @@ export const vehicleDocuments = pgTable(
     }),
 
     /**
-     * Провайдер внешнего object storage.
+     * Провайдер зовнішнього object storage.
      *
-     * Например:
+     * Наприклад:
      * r2
      * s3
      * supabase
      * azure-blob
      *
-     * Никакого локального файлового storage.
+     * Жодного локального файлового storage.
      */
     storageProvider: varchar("storage_provider", {
       length: 32,
     }),
 
     /**
-     * Bucket / container во внешнем object storage.
+     * Bucket / container у зовнішньому object storage.
      */
     storageBucket: varchar("storage_bucket", {
       length: 160,
     }),
 
     /**
-     * Ключ объекта во внешнем object storage.
+     * Ключ об’єкта у зовнішньому object storage.
      *
-     * Пример:
+     * Приклад:
      * vehicles/<vehicleId>/documents/<uuid>.pdf
      *
-     * Это НЕ локальный путь.
+     * Це НЕ локальний шлях.
      */
     storageKey: text("storage_key"),
 
@@ -110,8 +110,8 @@ export const vehicleDocuments = pgTable(
     }),
 
     /**
-     * Версия объекта, если storage provider
-     * поддерживает versioning.
+     * Версія об’єкта, якщо storage provider
+     * підтримує versioning.
      */
     storageVersionId: varchar("storage_version_id", {
       length: 255,
@@ -126,15 +126,15 @@ export const vehicleDocuments = pgTable(
     }),
 
     /**
-     * Размер файла в байтах.
+     * Розмір файлу в байтах.
      */
     fileSizeBytes: integer("file_size_bytes"),
 
     /**
      * SHA-256 или другой checksum.
      *
-     * Нужен для deduplication,
-     * integrity-check и безопасного импорта.
+     * Потрібен для deduplication,
+     * integrity-check і безпечного імпорту.
      */
     checksum: varchar("checksum", {
       length: 128,
@@ -176,10 +176,10 @@ export const vehicleDocuments = pgTable(
     processingError: text("processing_error"),
 
     /**
-     * OCR/AI может сохранить сюда извлечённый текст.
+     * OCR/AI може зберегти сюди витягнутий текст.
      *
-     * Это производные данные,
-     * а не источник истины.
+     * Це похідні дані,
+     * а не джерело істини.
      */
     extractedText: text("extracted_text"),
 

@@ -23,8 +23,8 @@ export const energyEntries = pgTable(
       }),
 
     /**
-     * fuel   — бензин / дизель / LPG / CNG и т.п.
-     * charge — зарядка EV / PHEV.
+     * fuel   — бензин / дизель / LPG / CNG тощо.
+     * charge — заряджання EV / PHEV.
      */
     kind: varchar("kind", {
       length: 16,
@@ -32,15 +32,15 @@ export const energyEntries = pgTable(
 
     /**
      * petrol / diesel / lpg / cng /
-     * electricity / hydrogen и т.п.
+     * electricity / hydrogen тощо.
      */
     energyType: varchar("energy_type", {
       length: 32,
     }).notNull(),
 
     /**
-     * Количество топлива в литрах.
-     * Для EV остаётся null.
+     * Кількість пального в літрах.
+     * Для EV залишається null.
      */
     volumeLiters: numeric("volume_liters", {
       precision: 10,
@@ -48,8 +48,8 @@ export const energyEntries = pgTable(
     }),
 
     /**
-     * Полученная электроэнергия.
-     * Для ДВС остаётся null.
+     * Отримана електроенергія.
+     * Для ДВЗ залишається null.
      */
     energyKwh: numeric("energy_kwh", {
       precision: 10,
@@ -57,7 +57,7 @@ export const energyEntries = pgTable(
     }),
 
     /**
-     * Цена за литр / кВт⋅ч до скидки.
+     * Ціна за літр / кВт⋅год до знижки.
      */
     unitPrice: numeric("unit_price", {
       precision: 12,
@@ -65,7 +65,7 @@ export const energyEntries = pgTable(
     }),
 
     /**
-     * Стоимость до скидки.
+     * Вартість до знижки.
      */
     subtotalCost: numeric("subtotal_cost", {
       precision: 12,
@@ -73,8 +73,8 @@ export const energyEntries = pgTable(
     }),
 
     /**
-     * Скидка в процентах.
-     * Например 5.00 = 5%.
+     * Знижка у відсотках.
+     * Наприклад 5.00 = 5%.
      */
     discountPercent: numeric("discount_percent", {
       precision: 5,
@@ -82,7 +82,7 @@ export const energyEntries = pgTable(
     }),
 
     /**
-     * Абсолютная сумма скидки.
+     * Абсолютна сума знижки.
      */
     discountAmount: numeric("discount_amount", {
       precision: 12,
@@ -90,15 +90,15 @@ export const energyEntries = pgTable(
     }),
 
     /**
-     * Название скидки:
-     * loyalty / coupon / fleet / promotion и т.п.
+     * Назва знижки:
+     * loyalty / coupon / fleet / promotion тощо.
      */
     discountLabel: varchar("discount_label", {
       length: 120,
     }),
 
     /**
-     * Итоговая реально уплаченная сумма.
+     * Підсумкова реально сплачена сума.
      */
     totalCost: numeric("total_cost", {
       precision: 12,
@@ -107,30 +107,30 @@ export const energyEntries = pgTable(
 
     /**
      * ISO 4217:
-     * PLN / EUR / USD / UAH и т.п.
+     * PLN / EUR / USD / UAH тощо.
      */
     currency: varchar("currency", {
       length: 3,
     }),
 
     /**
-     * Пробег на момент операции.
+     * Пробіг на момент операції.
      */
     odometerKm: integer("odometer_km"),
 
     /**
-     * true означает, что после этой заправки
-     * пользователь подтвердил полный бак.
+     * true означає, що після цієї заправки
+     * користувач підтвердив повний бак.
      *
-     * Используется для точного full-to-full
-     * расчёта расхода топлива.
+     * Використовується для точного full-to-full
+     * розрахунку витрати пального.
      *
-     * Для EV обычно false.
+     * Для EV зазвичай false.
      */
     isFullTank: boolean("is_full_tank").notNull().default(false),
 
     /**
-     * АЗС / зарядная станция / оператор.
+     * АЗС / зарядна станція / оператор.
      */
     providerName: varchar("provider_name", {
       length: 160,

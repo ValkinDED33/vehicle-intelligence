@@ -23,9 +23,9 @@ export const documentFields = pgTable(
       }),
 
     /**
-     * Нормализованный ключ поля.
+     * Нормалізований ключ поля.
      *
-     * Примеры:
+     * Приклади:
      * vin
      * policy_number
      * registration_number
@@ -41,7 +41,7 @@ export const documentFields = pgTable(
     }).notNull(),
 
     /**
-     * Человекочитаемое название.
+     * Людиночитна назва.
      */
     fieldLabel: varchar("field_label", {
       length: 180,
@@ -58,12 +58,12 @@ export const documentFields = pgTable(
       .default("string"),
 
     /**
-     * Нормализованное строковое значение.
+     * Нормалізоване строкове значення.
      */
     valueText: text("value_text"),
 
     /**
-     * Для числовых значений.
+     * Для числових значень.
      */
     valueNumber: numeric("value_number", {
       precision: 18,
@@ -71,14 +71,14 @@ export const documentFields = pgTable(
     }),
 
     /**
-     * Для сложных структурированных данных.
+     * Для складних структурованих даних.
      *
-     * Например список позиций invoice.
+     * Наприклад список позицій invoice.
      */
     valueJson: jsonb("value_json"),
 
     /**
-     * Уверенность OCR/AI: 0..1.
+     * Впевненість OCR/AI: 0..1.
      */
     confidence: numeric("confidence", {
       precision: 5,

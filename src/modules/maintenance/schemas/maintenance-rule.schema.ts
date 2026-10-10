@@ -22,9 +22,9 @@ export const maintenanceRules = pgTable(
       }),
 
     /**
-     * Стабильный ключ узла/работы.
+     * Стабільний ключ вузла/роботи.
      *
-     * Примеры:
+     * Приклади:
      * engine_oil
      * engine_oil_filter
      * air_filter
@@ -42,7 +42,7 @@ export const maintenanceRules = pgTable(
     }).notNull(),
 
     /**
-     * Тип источника регламента:
+     * Тип джерела регламенту:
      * manufacturer / vin / manual / service / system.
      */
     source: varchar("source", {
@@ -52,23 +52,23 @@ export const maintenanceRules = pgTable(
       .default("manual"),
 
     /**
-     * Интервал по пробегу.
-     * null означает, что критерий по километрам не применяется.
+     * Інтервал за пробігом.
+     * null означає, що критерій за кілометрами не застосовується.
      */
     intervalKm: integer("interval_km"),
 
     /**
-     * Интервал по времени в месяцах.
+     * Інтервал за часом у місяцях.
      */
     intervalMonths: integer("interval_months"),
 
     /**
-     * Интервал по моточасам.
+     * Інтервал за мотогодинами.
      */
     intervalEngineHours: integer("interval_engine_hours"),
 
     /**
-     * Раннее предупреждение до достижения основного интервала.
+     * Раннє попередження до досягнення основного інтервалу.
      */
     warningKmBefore: integer("warning_km_before"),
 
@@ -77,10 +77,10 @@ export const maintenanceRules = pgTable(
     warningEngineHoursBefore: integer("warning_engine_hours_before"),
 
     /**
-     * Событие Vehicle History, которое считается
-     * подтверждением выполнения обслуживания.
+     * Подія Vehicle History, яка вважається
+     * підтвердженням виконання обслуговування.
      *
-     * Например: maintenance.engine_oil.changed
+     * Наприклад: maintenance.engine_oil.changed
      */
     completionEventType: varchar("completion_event_type", {
       length: 160,

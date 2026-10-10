@@ -32,7 +32,7 @@ export class MileageService {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
     if (input.recordedAt && input.recordedAt.getTime() > Date.now() + 60_000) {
-      throw new BadRequestException("recordedAt не может быть в будущем");
+      throw new BadRequestException("recordedAt не може бути в майбутньому");
     }
 
     const reading = await this.mileageDbService.createReadingGuarded({

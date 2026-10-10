@@ -31,7 +31,7 @@ export class VinService {
     const vin = vehicle.vin?.trim().toUpperCase();
 
     if (!vin) {
-      throw new BadRequestException("У автомобиля не указан VIN");
+      throw new BadRequestException("В автомобіля не вказано VIN");
     }
 
     const result = await this.vinProvider.decode(vin);
@@ -58,7 +58,7 @@ export class VinService {
     const normalizedVin = vin.trim().toUpperCase();
 
     if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(normalizedVin)) {
-      throw new BadRequestException("Некорректный VIN");
+      throw new BadRequestException("Некоректний VIN");
     }
 
     return this.vinProvider.decode(normalizedVin);

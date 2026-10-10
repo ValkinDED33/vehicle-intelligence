@@ -33,14 +33,14 @@ export class AssistantService {
   async chat(input: AssistantChatInput): Promise<AssistantChatResponse> {
     const context = input.vehicleId
       ? await this.buildVehicleContext(input.ownerId, input.vehicleId)
-      : "Автомобиль не выбран.";
+      : "Автомобіль не вибрано.";
 
     const response = await this.aiGatewayService.complete({
       systemPrompt:
-        "Ты CARA, автомобильный AI-ассистент. Отвечай по-русски, кратко и практично. " +
-        "Опирайся на предоставленные факты об автомобиле. Если данных нет, честно скажи, что нужно добавить или проверить. " +
-        "Не выдумывай сервисную историю, пробег, комплектацию или регламенты.",
-      userPrompt: `Контекст:\n${context}\n\nВопрос пользователя:\n${input.message.trim()}`,
+        "Ти CARA, автомобільний AI-асистент. Відповідай українською, коротко й практично. " +
+        "Спирайся на надані факти про автомобіль. Якщо даних немає, чесно скажи, що потрібно додати або перевірити. " +
+        "Не вигадуй сервісну історію, пробіг, комплектацію або регламенти.",
+      userPrompt: `Контекст:\n${context}\n\nЗапитання користувача:\n${input.message.trim()}`,
     });
 
     return {

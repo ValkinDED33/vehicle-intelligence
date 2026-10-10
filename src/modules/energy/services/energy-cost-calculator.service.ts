@@ -72,7 +72,7 @@ export class EnergyCostCalculatorService {
       discountAmount > subtotalCost
     ) {
       throw new BadRequestException(
-        "Скидка не может быть больше стоимости до скидки",
+        "Знижка не може бути більшою за вартість до знижки",
       );
     }
 

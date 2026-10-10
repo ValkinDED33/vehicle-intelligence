@@ -67,7 +67,7 @@ export class MileageDbService {
 
         if (data.odometerKm < maxKm) {
           throw new BadRequestException(
-            `Новый пробег (${data.odometerKm} км) меньше максимального сохранённого (${maxKm} км)`,
+            `Новий пробіг (${data.odometerKm} км) менший за максимальний збережений (${maxKm} км)`,
           );
         }
       }
@@ -85,7 +85,7 @@ export class MileageDbService {
 
         if (data.engineHours < maxHours) {
           throw new BadRequestException(
-            `Новые моточасы (${data.engineHours}) меньше максимального сохранённого значения (${maxHours})`,
+            `Нові мотогодини (${data.engineHours}) менші за максимальне збережене значення (${maxHours})`,
           );
         }
       }

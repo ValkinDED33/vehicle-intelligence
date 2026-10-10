@@ -13,7 +13,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { assistantApi, garageApi, type Vehicle } from "../api";
+import { assistantApi, garageApi, type UserLanguage, type Vehicle } from "../api";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/CommonComponents";
 import { SECTIONS, sections } from "../constants/dashboard";
@@ -39,9 +39,9 @@ function InnerPage(props: PageProps & { page: string }) {
       <VehiclePages {...props} page={page} />
       <TrackingPages {...props} page={page} />
       <ExternalPages {...props} page={page} />
-      {page === "AI Ассистент" && (
+      {page === "AI Асистент" && (
         <button className="primary" onClick={props.openAi}>
-          Открыть AI Ассистента <ArrowRight size={16} />
+          Відкрити AI Асистента <ArrowRight size={16} />
         </button>
       )}
     </section>
@@ -58,12 +58,13 @@ type AiMessage = {
 };
 
 export function Shell(){
-  const {user,logout}=useAuth();
-  const [page,setPage]=useState('Главная'); const [mobile,setMobile]=useState(false); const [ai,setAi]=useState(false); const [query,setQuery]=useState(''); const [aiQuery,setAiQuery]=useState(''); const [aiBusy,setAiBusy]=useState(false); const [aiMessages,setAiMessages]=useState<AiMessage[]>([]); const [search,setSearch]=useState(false); const [soundOn,setSoundOn]=useState(soundEnabled());
+  const {user,logout,updateLanguage}=useAuth();
+  const [page,setPage]=useState('Головна'); const [mobile,setMobile]=useState(false); const [ai,setAi]=useState(false); const [query,setQuery]=useState(''); const [aiQuery,setAiQuery]=useState(''); const [aiBusy,setAiBusy]=useState(false); const [aiMessages,setAiMessages]=useState<AiMessage[]>([]); const [search,setSearch]=useState(false); const [soundOn,setSoundOn]=useState(soundEnabled());
   const [vehicles,setVehicles]=useState<Vehicle[]>([]);
   const [vehiclesLoading,setVehiclesLoading]=useState(true);
   const [vehiclesError,setVehiclesError]=useState<string|null>(null);
   const [vehicleId,setVehicleId]=useState<string|null>(()=>localStorage.getItem(VEHICLE_KEY));
+  const currentLanguage:UserLanguage=user?.language==="pl"||user?.language==="en"||user?.language==="uk"?user.language:"uk";
 
   const loadVehicles=useCallback(async()=>{
     setVehiclesLoading(true);setVehiclesError(null);
@@ -89,6 +90,7 @@ export function Shell(){
   const openAi=()=>{setAi(true);sfx('open')};
   const closeAi=()=>{setAi(false);sfx('close')};
   const toggleSound=()=>{const v=!soundOn;setSoundEnabled(v);setSoundOn(v);if(v)sfx('tick')};
+  const changeLanguage=async(language:UserLanguage)=>{await updateLanguage(language);sfx('tick')};
   const afterMutate=async()=>{await Promise.all([refresh(),loadVehicles()])};
 
   useEffect(()=>{
@@ -97,10 +99,10 @@ export function Shell(){
   },[ai]);
 
   const alerts=data.maintenance.filter(s=>s.urgency!=='normal').length;
-  const userName=user?.displayName||user?.email||'Гость';
+  const userName=user?.displayName||user?.email||'Гість';
   const userInitial=userName[0]?.toUpperCase()??'?';
-  const currentVehicleTitle=vehicle?resolvedVehicleTitle(vehicle,data.vinDecode):'Выберите авто';
-  const currentVehicleLine=vehicle?resolvedVehicleLine(vehicle,data.latest,data.vinDecode,data.profile):'Гараж пуст';
+  const currentVehicleTitle=vehicle?resolvedVehicleTitle(vehicle,data.vinDecode):'Оберіть авто';
+  const currentVehicleLine=vehicle?resolvedVehicleLine(vehicle,data.latest,data.vinDecode,data.profile):'Гараж порожній';
 
   const pageProps={vehicle,vehicles,data,refresh,navigate,selectVehicle,loadVehicles,afterMutate,openAi,vehiclesLoading,vehiclesError,userName,logout};
 
@@ -129,33 +131,47 @@ export function Shell(){
      <span className="vehicle-copy">
       <b>{currentVehicleTitle}</b>
       <small>{currentVehicleLine}</small>
-      <em>● {vehicle?'Онлайн':'Добавьте автомобиль'}</em>
+      <em>● {vehicle?'Онлайн':'Додайте автомобіль'}</em>
      </span><ChevronDown size={15}/>
     </button>
-    <nav>{sections.slice(0,11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{name}</span>{name==='AI Ассистент'&&<i>BETA</i>}</button>)}</nav>
+    <nav>{sections.slice(0,11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{name}</span>{name==='AI Асистент'&&<i>BETA</i>}</button>)}</nav>
     <nav className="lower-nav">{sections.slice(11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{name}</span></button>)}</nav>
     <button className="assistant-tile" onClick={openAi}>
      <span className="bot-avatar"><img src="/robot.webp" alt=""/></span>
-     <span className="assistant-copy"><b>AI Ассистент</b><em>● Онлайн</em><svg className="waveform" viewBox="0 0 110 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 10,11 14,4 18,18 22,7 26,15 30,11 40,11 44,2 48,20 52,9 56,13 60,11 70,11 74,5 78,17 82,8 86,14 90,11 110,11"/></svg><small>{vehicle?currentVehicleTitle:'Выберите авто'}</small></span>
+     <span className="assistant-copy"><b>AI Асистент</b><em>● Онлайн</em><svg className="waveform" viewBox="0 0 110 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 10,11 14,4 18,18 22,7 26,15 30,11 40,11 44,2 48,20 52,9 56,13 60,11 70,11 74,5 78,17 82,8 86,14 90,11 110,11"/></svg><small>{vehicle?currentVehicleTitle:'Оберіть авто'}</small></span>
     </button>
    </aside>
    <main className="main">
     <header>
      <button className="menu-button" onClick={()=>setMobile(true)}><Menu/></button>
-     <span className="pilot"><Orbit size={14}/> АВТОПИЛОТ: {vehicleId?'АКТИВЕН':'НЕ АКТИВЕН'}</span>
-     <button className="ai-mode" onClick={()=>{setAi(true);sfx('activate')}}><Sparkles size={15}/> АКТИВИРОВАТЬ AI РЕЖИМ <span className="orb"/></button>
+     <span className="pilot"><Orbit size={14}/> АВТОПІЛОТ: {vehicleId?'АКТИВНИЙ':'НЕ АКТИВНИЙ'}</span>
+     <button className="ai-mode" onClick={()=>{setAi(true);sfx('activate')}}><Sparkles size={15}/> АКТИВУВАТИ AI РЕЖИМ <span className="orb"/></button>
      <div className="header-actions">
-      <button aria-label="Поиск" onClick={()=>setSearch(!search)}><Search size={19}/></button>
-      <button aria-label="Напоминания" onClick={()=>navigate('Напоминания')}><Bell size={19}/>{alerts>0&&<sup>{alerts}</sup>}</button>
+      <button aria-label="Пошук" onClick={()=>setSearch(!search)}><Search size={19}/></button>
+      <button aria-label="Нагадування" onClick={()=>navigate('Нагадування')}><Bell size={19}/>{alerts>0&&<sup>{alerts}</sup>}</button>
       <button aria-label="AI чат" onClick={openAi}><MessageSquare size={19}/></button>
-      <button aria-label={soundOn?'Выключить звук':'Включить звук'} onClick={toggleSound}>{soundOn?<Volume2 size={19}/>:<VolumeX size={19}/>}</button>
-      <button className="user-chip" onClick={()=>navigate('Настройки')}><span className="avatar">{userInitial}</span><span className="user">{userName}<small>Владелец</small></span><ChevronDown size={14}/></button>
+      <button aria-label={soundOn?'Вимкнути звук':'Увімкнути звук'} onClick={toggleSound}>{soundOn?<Volume2 size={19}/>:<VolumeX size={19}/>}</button>
+      <label className="language-chip" aria-label="Мова інтерфейсу">
+       <span>{languageFlag(currentLanguage)}</span>
+       <select value={currentLanguage} onChange={e=>void changeLanguage(e.target.value as UserLanguage)}>
+        <option value="uk">🇺🇦</option>
+        <option value="pl">🇵🇱</option>
+        <option value="en">🇬🇧</option>
+       </select>
+      </label>
+      <button className="user-chip" onClick={()=>navigate('Налаштування')}><span className="avatar">{userInitial}</span><span className="user">{userName}<small>Власник</small></span><ChevronDown size={14}/></button>
      </div>
     </header>
-    {search&&<div className="search-panel"><Search size={18}/><input autoFocus placeholder="Найти раздел..." value={query} onChange={e=>setQuery(e.target.value)}/>{sections.filter(x=>x.name.toLowerCase().includes(query.toLowerCase())).slice(0,5).map(x=><button key={x.name} onClick={()=>navigate(x.name)}>{x.name}</button>)}</div>}
-    {page==='Главная'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
+    {search&&<div className="search-panel"><Search size={18}/><input autoFocus placeholder="Знайти розділ..." value={query} onChange={e=>setQuery(e.target.value)}/>{sections.filter(x=>x.name.toLowerCase().includes(query.toLowerCase())).slice(0,5).map(x=><button key={x.name} onClick={()=>navigate(x.name)}>{x.name}</button>)}</div>}
+    {page==='Головна'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
    </main>
    {mobile&&<div className="scrim" onClick={()=>setMobile(false)}/>}
-   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрыть" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Ассистент</h2><p>Спросите меня об автомобиле — я отвечу с учётом текущего профиля, пробега и напоминаний.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Привет, {userName}! Чем помочь{vehicle?` с ${currentVehicleTitle}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишите вопрос..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Отправить" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
+   {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Закрити" onClick={closeAi}><X/></button><img className="dialog-bot" src="/robot.webp" alt=""/><h2 id="ai-dialog-title">CARA AI Асистент</h2><p>Запитайте мене про автомобіль — я відповім з урахуванням поточного профілю, пробігу й нагадувань.</p><div className="ai-messages">{aiMessages.length===0?<div className="chat-placeholder">Вітаю, {userName}! Чим допомогти{vehicle?` з ${currentVehicleTitle}`:''}?</div>:aiMessages.map((m,i)=><div key={i} className={'ai-message '+m.role}>{m.text}</div>)}{aiBusy&&<div className="ai-message assistant">Думаю...</div>}</div><form onSubmit={sendAiMessage}><input autoFocus placeholder="Напишіть запитання..." value={aiQuery} onChange={e=>setAiQuery(e.target.value)} disabled={aiBusy}/><button aria-label="Надіслати" disabled={aiBusy||!aiQuery.trim()}><Send size={18}/></button></form></div></div>}
   </div>;
+}
+
+function languageFlag(language:UserLanguage):string{
+  if(language==="pl")return "🇵🇱";
+  if(language==="en")return "🇬🇧";
+  return "🇺🇦";
 }

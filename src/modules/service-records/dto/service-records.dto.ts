@@ -76,9 +76,9 @@ export class CreateServiceRecordItemDto {
 
 export class CreateServiceRecordDto {
   /**
-   * Пока только ссылка на уже существующий Expense.
-   * Автоматическое атомарное создание Expense
-   * добавим через общий Unit of Work.
+   * Поки тільки посилання на вже наявний Expense.
+   * Автоматичне атомарне створення Expense
+   * додамо через спільний Unit of Work.
    */
   @IsOptional()
   @IsUUID()

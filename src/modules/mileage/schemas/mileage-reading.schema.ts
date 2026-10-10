@@ -24,13 +24,13 @@ export const mileageReadings = pgTable(
     odometerKm: integer("odometer_km").notNull(),
 
     /**
-     * Моточасы, если конкретный автомобиль
-     * предоставляет такую информацию.
+     * Мотогодини, якщо конкретний автомобіль
+     * надає таку інформацію.
      */
     engineHours: doublePrecision("engine_hours"),
 
     /**
-     * Откуда получено показание:
+     * Звідки отримано показання:
      * manual / telegram / obd / document / service / system.
      */
     source: varchar("source", {
@@ -40,8 +40,8 @@ export const mileageReadings = pgTable(
       .default("manual"),
 
     /**
-     * Уверенность в данных: 0..1.
-     * Для ручного подтверждённого ввода обычно 1.
+     * Впевненість у даних: 0..1.
+     * Для ручного підтвердженого вводу зазвичай 1.
      */
     confidence: doublePrecision("confidence").notNull().default(1),
 

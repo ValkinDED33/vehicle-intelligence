@@ -28,16 +28,16 @@ export const expenses = pgTable(
      * wash / detailing / accessories / tires /
      * roadside / registration / other
      *
-     * fuel и charge сюда НЕ записываем.
+     * fuel і charge сюди НЕ записуємо.
      */
     category: varchar("category", {
       length: 32,
     }).notNull(),
 
     /**
-     * Более точная пользовательская классификация.
+     * Точніша користувацька класифікація.
      *
-     * Например:
+     * Наприклад:
      * oil-change
      * brake-pads
      * oc
@@ -55,7 +55,7 @@ export const expenses = pgTable(
     description: text("description"),
 
     /**
-     * Цена до скидки.
+     * Ціна до знижки.
      */
     subtotalCost: numeric("subtotal_cost", {
       precision: 12,
@@ -77,7 +77,7 @@ export const expenses = pgTable(
     }),
 
     /**
-     * Реально уплаченная сумма.
+     * Реально сплачена сума.
      */
     totalCost: numeric("total_cost", {
       precision: 12,
@@ -89,22 +89,22 @@ export const expenses = pgTable(
     }).notNull(),
 
     /**
-     * Пробег автомобиля в момент расхода,
-     * если он известен.
+     * Пробіг автомобіля на момент витрати,
+     * якщо він відомий.
      */
     odometerKm: integer("odometer_km"),
 
     /**
-     * Сервис, магазин, страховая,
-     * парковочный оператор и т.д.
+     * Сервіс, магазин, страхова,
+     * паркувальний оператор тощо.
      */
     providerName: varchar("provider_name", {
       length: 160,
     }),
 
     /**
-     * Номер чека / счёта / invoice,
-     * если пользователь его знает.
+     * Номер чека / рахунку / invoice,
+     * якщо користувач його знає.
      */
     documentNumber: varchar("document_number", {
       length: 120,

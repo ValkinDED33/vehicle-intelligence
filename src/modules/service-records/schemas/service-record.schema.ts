@@ -24,10 +24,10 @@ export const serviceRecords = pgTable(
       }),
 
     /**
-     * Связанный финансовый расход.
+     * Пов’язана фінансова витрата.
      *
-     * ServiceRecord хранит факт обслуживания,
-     * а Expense остаётся источником истины
+     * ServiceRecord зберігає факт обслуговування,
+     * а Expense залишається джерелом істини
      * для Cost of Ownership.
      */
     expenseId: uuid("expense_id").references(() => expenses.id, {
@@ -56,24 +56,24 @@ export const serviceRecords = pgTable(
     }),
 
     /**
-     * Сервис / мастер / дилер.
+     * Сервіс / майстер / дилер.
      */
     providerName: varchar("provider_name", {
       length: 180,
     }),
 
     /**
-     * Номер заказ-наряда / invoice / service order.
+     * Номер замовлення-наряду / invoice / service order.
      */
     documentNumber: varchar("document_number", {
       length: 120,
     }),
 
     /**
-     * Информационная стоимость из заказ-наряда.
+     * Інформаційна вартість із замовлення-наряду.
      *
-     * В Cost of Ownership напрямую НЕ суммируется.
-     * Для финансовой аналитики используется Expense.
+     * У Cost of Ownership напряму НЕ підсумовується.
+     * Для фінансової аналітики використовується Expense.
      */
     totalCost: numeric("total_cost", {
       precision: 12,

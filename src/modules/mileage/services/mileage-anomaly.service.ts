@@ -84,7 +84,7 @@ export function detectMileageAnomalies(
         avgKmPerDay: null,
         fromSource: prev.source,
         toSource: cur.source,
-        message: `Откат одометра: пробег уменьшился с ${prev.odometerKm} км до ${cur.odometerKm} км (−${dropKm} км)`,
+        message: `Відкат одометра: пробіг зменшився з ${prev.odometerKm} км до ${cur.odometerKm} км (−${dropKm} км)`,
       });
 
       continue;
@@ -110,7 +110,7 @@ export function detectMileageAnomalies(
         avgKmPerDay: Math.round(avgKmPerDay),
         fromSource: prev.source,
         toSource: cur.source,
-        message: `Подозрительный скачок пробега: +${deltaKm} км за ${round(daysBetween, 1)} дн. (~${Math.round(avgKmPerDay)} км/сутки)`,
+        message: `Підозрілий стрибок пробігу: +${deltaKm} км за ${round(daysBetween, 1)} дн. (~${Math.round(avgKmPerDay)} км/добу)`,
       });
     }
   }

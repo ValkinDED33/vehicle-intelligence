@@ -30,6 +30,16 @@ export class IdentityDbService {
     return user ?? null;
   }
 
+  async findById(userId: string): Promise<User | null> {
+    const [user] = await this.databaseService.connection
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    return user ?? null;
+  }
+
   async createUser(data: {
     email: string;
     passwordHash: string;
@@ -45,7 +55,7 @@ export class IdentityDbService {
       passwordHash: data.passwordHash,
       displayName: data.displayName?.trim() || null,
       country: data.country ?? "PL",
-      language: data.language ?? "ru",
+      language: data.language ?? "uk",
       telegramId: data.telegramId ?? null,
       telegramUsername: data.telegramUsername ?? null,
       telegramPhotoUrl: data.telegramPhotoUrl ?? null,
@@ -84,6 +94,34 @@ export class IdentityDbService {
 
     if (!updatedUser) {
       throw new Error("Failed to update Telegram user");
+    }
+
+    return updatedUser;
+  }
+
+  async updateProfile(
+    userId: string,
+    data: {
+      displayName?: string | null;
+      country?: string;
+      language?: string;
+    },
+  ): Promise<User> {
+    const [updatedUser] = await this.databaseService.connection
+      .update(users)
+      .set({
+        ...(data.displayName !== undefined
+          ? { displayName: data.displayName?.trim() || null }
+          : {}),
+        ...(data.country !== undefined ? { country: data.country } : {}),
+        ...(data.language !== undefined ? { language: data.language } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new Error("Failed to update user profile");
     }
 
     return updatedUser;

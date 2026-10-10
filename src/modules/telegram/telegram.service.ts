@@ -16,7 +16,7 @@ import { ServiceRecordsService } from "../service-records/services/service-recor
 import { VinService } from "../vin/services/vin.service";
 
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
-const ODOMETER_REGEX = /(?:пробег|одометр|mileage)\D*(\d[\d\s]{2,8})/i;
+const ODOMETER_REGEX = /(?:пробіг|одометр|mileage)\D*(\d[\d\s]{2,8})/i;
 
 @Injectable()
 export class TelegramService implements OnModuleInit {
@@ -60,55 +60,55 @@ export class TelegramService implements OnModuleInit {
     await this.bot.telegram.setMyCommands([
       {
         command: "start",
-        description: "Запустить IA-CARS",
+        description: "Запустити IA-CARS",
       },
       {
         command: "vin",
-        description: "Проверить автомобиль по VIN",
+        description: "Перевірити автомобіль за VIN",
       },
       {
         command: "garage",
-        description: "Показать гараж",
+        description: "Показати гараж",
       },
       {
         command: "addcar",
-        description: "Добавить авто по VIN",
+        description: "Додати авто за VIN",
       },
       {
         command: "mileage",
-        description: "Записать пробег",
+        description: "Записати пробіг",
       },
       {
         command: "expense",
-        description: "Записать расход",
+        description: "Записати витрату",
       },
       {
         command: "fuel",
-        description: "Записать заправку",
+        description: "Записати заправку",
       },
       {
         command: "charge",
-        description: "Записать зарядку",
+        description: "Записати заряджання",
       },
       {
         command: "service",
-        description: "Записать сервис",
+        description: "Записати сервіс",
       },
       {
         command: "document",
-        description: "Добавить документ",
+        description: "Додати документ",
       },
       {
         command: "ask",
-        description: "Задать вопрос CARA",
+        description: "Поставити запитання CARA",
       },
       {
         command: "website",
-        description: "Открыть IA-CARS",
+        description: "Відкрити IA-CARS",
       },
       {
         command: "help",
-        description: "Помощь",
+        description: "Допомога",
       },
     ]);
 
@@ -143,21 +143,21 @@ export class TelegramService implements OnModuleInit {
         [
           "🚗 IA-CARS · Vehicle Intelligence",
           "",
-          "Умная проверка автомобиля по VIN и единый цифровой профиль машины.",
+          "Розумна перевірка автомобіля за VIN і єдиний цифровий профіль авто.",
           "",
-          "Команды:",
-          "/garage — показать автомобили",
-          "/addcar VIN [имя] — добавить авто",
-          "/mileage 123456 — записать пробег",
-          "/expense 120 PLN мойка — записать расход",
+          "Команди:",
+          "/garage — показати автомобілі",
+          "/addcar VIN [назва] — додати авто",
+          "/mileage 123456 — записати пробіг",
+          "/expense 120 PLN мийка — записати витрату",
           "/fuel 45 l 280 PLN 123456 — заправка",
           "/charge 42 kWh 90 PLN — зарядка",
-          "/service замена масла 450 PLN — сервис",
+          "/service заміна масла 450 PLN — сервіс",
           "/document insurance OC 2027-10-06 — документ",
-          "/vin VIN — проверить VIN без добавления",
-          "/ask вопрос — спросить CARA по авто",
-          "/website — открыть IA-CARS",
-          "/help — помощь",
+          "/vin VIN — перевірити VIN без додавання",
+          "/ask запитання — спитати CARA про авто",
+          "/website — відкрити IA-CARS",
+          "/help — допомога",
         ].join("\n"),
         this.websiteButton,
       );
@@ -166,28 +166,28 @@ export class TelegramService implements OnModuleInit {
     this.bot.command("help", async (ctx) => {
       await ctx.reply(
         [
-          "CARA в Telegram умеет работать с теми же данными, что сайт:",
+          "CARA в Telegram працює з тими самими даними, що й сайт:",
           "",
           "/garage — список авто",
-          "/addcar WBA12345678901234 BMW — добавить авто",
-          "/mileage 123456 — записать пробег, если авто одно",
-          "/mileage 123456 2 — записать пробег для авто №2",
-          "/expense 120 PLN мойка 2 — расход для авто №2",
+          "/addcar WBA12345678901234 BMW — додати авто",
+          "/mileage 123456 — записати пробіг, якщо авто одне",
+          "/mileage 123456 2 — записати пробіг для авто №2",
+          "/expense 120 PLN мийка 2 — витрата для авто №2",
           "/fuel 45 l 280 PLN 123456 — заправка",
           "/charge 42 kWh 90 PLN — зарядка",
-          "/service замена масла 450 PLN — сервисная запись",
-          "/document insurance OC 2027-10-06 — документ с датой окончания",
-          "/ask что нужно обслужить? — вопрос ассистенту",
-          "/vin WBA12345678901234 — быстрая VIN-проверка",
+          "/service заміна масла 450 PLN — сервісний запис",
+          "/document insurance OC 2027-10-06 — документ із датою завершення",
+          "/ask що потрібно обслужити? — запитання асистенту",
+          "/vin WBA12345678901234 — швидка VIN-перевірка",
           "",
-          "Можно писать и обычным текстом: «пробег 123456», «что проверить перед поездкой?».",
+          "Можна писати й звичайним текстом: «пробіг 123456», «що перевірити перед поїздкою?».",
         ].join("\n"),
         this.websiteButton,
       );
     });
 
     this.bot.command("website", async (ctx) => {
-      await ctx.reply("🚗 Открыть IA-CARS:", this.websiteButton);
+      await ctx.reply("🚗 Відкрити IA-CARS:", this.websiteButton);
     });
 
     this.bot.command("garage", async (ctx) => {
@@ -208,7 +208,7 @@ export class TelegramService implements OnModuleInit {
 
       if (!vin || !VIN_REGEX.test(vin)) {
         await ctx.reply(
-          "Пришли VIN после команды.\n\nПример:\n/addcar WBA12345678901234 BMW 320d",
+          "Надішліть VIN після команди.\n\nПриклад:\n/addcar WBA12345678901234 BMW 320d",
         );
         return;
       }
@@ -234,11 +234,11 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Автомобиль добавлен в гараж.",
+          "✅ Автомобіль додано в гараж.",
           "",
           this.formatVehicle(updated, 1),
           "",
-          "Теперь можно писать: «пробег 123456» или задавать вопросы по машине.",
+          "Тепер можна писати: «пробіг 123456» або ставити запитання про авто.",
         ].join("\n"),
         this.websiteButton,
       );
@@ -319,7 +319,7 @@ export class TelegramService implements OnModuleInit {
       const question = ctx.message.text.replace(/^\/ask(?:@\w+)?/i, "").trim();
 
       if (!question) {
-        await ctx.reply("Напиши вопрос после команды.\n\nПример:\n/ask что проверить перед дальней поездкой?");
+        await ctx.reply("Напишіть запитання після команди.\n\nПриклад:\n/ask що перевірити перед далекою поїздкою?");
         return;
       }
 
@@ -334,14 +334,14 @@ export class TelegramService implements OnModuleInit {
 
       if (!vin) {
         await ctx.reply(
-          "Отправь VIN после команды.\n\nПример:\n/vin WBA12345678901234",
+          "Надішліть VIN після команди.\n\nПриклад:\n/vin WBA12345678901234",
         );
         return;
       }
 
       if (!VIN_REGEX.test(vin)) {
         await ctx.reply(
-          "❌ VIN должен содержать ровно 17 символов. Буквы I, O и Q не используются.",
+          "❌ VIN має містити рівно 17 символів. Літери I, O та Q не використовуються.",
         );
         return;
       }
@@ -349,10 +349,10 @@ export class TelegramService implements OnModuleInit {
       if (!this.vinLookupEnabled) {
         await ctx.reply(
           [
-            `✅ VIN распознан: ${vin}`,
+            `✅ VIN розпізнано: ${vin}`,
             "",
-            "Реальные запросы к VIN-провайдеру пока выключены.",
-            "Мы включим их после проверки Telegram-интеграции.",
+            "Реальні запити до VIN-провайдера поки вимкнено.",
+            "Увімкнемо їх після перевірки Telegram-інтеграції.",
           ].join("\n"),
           this.websiteButton,
         );
@@ -360,26 +360,26 @@ export class TelegramService implements OnModuleInit {
         return;
       }
 
-      await ctx.reply(`🔎 Проверяю VIN ${vin}…`);
+      await ctx.reply(`🔎 Перевіряю VIN ${vin}…`);
 
       try {
         const result = await this.vinService.decodeStandaloneVin(vin);
 
         const response = [
-          "✅ IA-CARS нашёл данные",
+          "✅ IA-CARS знайшов дані",
           "",
           `VIN: ${vin}`,
           result.make ? `Марка: ${result.make}` : null,
           result.model ? `Модель: ${result.model}` : null,
-          result.modelYear ? `Год: ${result.modelYear}` : null,
-          result.engineCode ? `Двигатель: ${result.engineCode}` : null,
-          result.displacementCc ? `Объём: ${result.displacementCc} см³` : null,
-          result.powerHp ? `Мощность: ${result.powerHp} л.с.` : null,
-          result.fuelType ? `Топливо: ${result.fuelType}` : null,
+          result.modelYear ? `Рік: ${result.modelYear}` : null,
+          result.engineCode ? `Двигун: ${result.engineCode}` : null,
+          result.displacementCc ? `Об’єм: ${result.displacementCc} см³` : null,
+          result.powerHp ? `Потужність: ${result.powerHp} к.с.` : null,
+          result.fuelType ? `Пальне: ${result.fuelType}` : null,
           result.transmissionType ? `КПП: ${result.transmissionType}` : null,
-          result.driveType ? `Привод: ${result.driveType}` : null,
+          result.driveType ? `Привід: ${result.driveType}` : null,
           "",
-          "Полный профиль автомобиля — в IA-CARS.",
+          "Повний профіль автомобіля — в IA-CARS.",
         ]
           .filter((line): line is string => line !== null)
           .join("\n");
@@ -393,7 +393,7 @@ export class TelegramService implements OnModuleInit {
         );
 
         await ctx.reply(
-          "❌ Не удалось получить данные по этому VIN. Попробуй позже или открой IA-CARS.",
+          "❌ Не вдалося отримати дані за цим VIN. Спробуйте пізніше або відкрийте IA-CARS.",
           this.websiteButton,
         );
       }
@@ -422,7 +422,7 @@ export class TelegramService implements OnModuleInit {
 
   private async getTelegramUser(ctx: Context): Promise<User | null> {
     if (!ctx.from) {
-      await ctx.reply("Не вижу Telegram-профиль. Попробуй открыть чат заново.");
+      await ctx.reply("Не бачу Telegram-профіль. Спробуйте відкрити чат заново.");
       return null;
     }
 
@@ -444,7 +444,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не понял пробег. Пример: /mileage 123456 или «пробег 123456».",
+        "Не зрозумів пробіг. Приклад: /mileage 123456 або «пробіг 123456».",
       );
       return;
     }
@@ -465,10 +465,10 @@ export class TelegramService implements OnModuleInit {
 
     await ctx.reply(
       [
-        "✅ Пробег записан.",
+        "✅ Пробіг записано.",
         "",
-        `${this.vehicleTitle(vehicle)}: ${reading.odometerKm.toLocaleString("ru-RU")} км`,
-        `Дата: ${reading.recordedAt.toLocaleDateString("ru-RU")}`,
+        `${this.vehicleTitle(vehicle)}: ${reading.odometerKm.toLocaleString("uk-UA")} км`,
+        `Дата: ${reading.recordedAt.toLocaleDateString("uk-UA")}`,
       ].join("\n"),
       this.websiteButton,
     );
@@ -483,7 +483,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не понял расход. Пример: /expense 120 PLN мойка или /expense 450 PLN страховка 2",
+        "Не зрозумів витрату. Приклад: /expense 120 PLN мийка або /expense 450 PLN страхування 2",
       );
       return;
     }
@@ -510,10 +510,10 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Расход записан.",
+          "✅ Витрату записано.",
           "",
           `${this.vehicleTitle(vehicle)}: ${result.expense.title}`,
-          `${result.calculations.totalCost.toLocaleString("ru-RU", {
+          `${result.calculations.totalCost.toLocaleString("uk-UA", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })} ${result.expense.currency}`,
@@ -521,7 +521,7 @@ export class TelegramService implements OnModuleInit {
         this.websiteButton,
       );
     } catch (error) {
-      await ctx.reply(this.humanError(error, "Не удалось записать расход."));
+      await ctx.reply(this.humanError(error, "Не вдалося записати витрату."));
     }
   }
 
@@ -536,8 +536,8 @@ export class TelegramService implements OnModuleInit {
     if (!parsed) {
       await ctx.reply(
         kind === "fuel"
-          ? "Не понял заправку. Пример: /fuel 45 l 280 PLN 123456"
-          : "Не понял зарядку. Пример: /charge 42 kWh 90 PLN 123456",
+          ? "Не зрозумів заправку. Приклад: /fuel 45 l 280 PLN 123456"
+          : "Не зрозумів заряджання. Приклад: /charge 42 kWh 90 PLN 123456",
       );
       return;
     }
@@ -564,7 +564,7 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          kind === "fuel" ? "✅ Заправка записана." : "✅ Зарядка записана.",
+          kind === "fuel" ? "✅ Заправку записано." : "✅ Заряджання записано.",
           "",
           `${this.vehicleTitle(vehicle)}: ${
             parsed.volumeLiters
@@ -572,12 +572,12 @@ export class TelegramService implements OnModuleInit {
               : `${parsed.energyKwh} кВт·ч`
           }`,
           result.calculations.totalCost !== null && result.entry.currency
-            ? `${result.calculations.totalCost.toLocaleString("ru-RU", {
+            ? `${result.calculations.totalCost.toLocaleString("uk-UA", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })} ${result.entry.currency}`
             : null,
-          parsed.odometerKm ? `Пробег: ${parsed.odometerKm} км` : null,
+          parsed.odometerKm ? `Пробіг: ${parsed.odometerKm} км` : null,
         ]
           .filter((line): line is string => line !== null)
           .join("\n"),
@@ -588,8 +588,8 @@ export class TelegramService implements OnModuleInit {
         this.humanError(
           error,
           kind === "fuel"
-            ? "Не удалось записать заправку."
-            : "Не удалось записать зарядку.",
+            ? "Не вдалося записати заправку."
+            : "Не вдалося записати заряджання.",
         ),
       );
     }
@@ -604,7 +604,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не понял сервис. Пример: /service замена масла 450 PLN 123456",
+        "Не зрозумів сервіс. Приклад: /service заміна масла 450 PLN 123456",
       );
       return;
     }
@@ -632,20 +632,20 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Сервисная запись добавлена.",
+          "✅ Сервісний запис додано.",
           "",
           `${this.vehicleTitle(vehicle)}: ${result.record.title}`,
           result.record.totalCost && result.record.currency
             ? `${result.record.totalCost} ${result.record.currency}`
             : null,
-          parsed.odometerKm ? `Пробег: ${parsed.odometerKm} км` : null,
+          parsed.odometerKm ? `Пробіг: ${parsed.odometerKm} км` : null,
         ]
           .filter((line): line is string => line !== null)
           .join("\n"),
         this.websiteButton,
       );
     } catch (error) {
-      await ctx.reply(this.humanError(error, "Не удалось добавить сервис."));
+      await ctx.reply(this.humanError(error, "Не вдалося додати сервіс."));
     }
   }
 
@@ -658,7 +658,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не понял документ. Пример: /document insurance OC 2027-10-06",
+        "Не зрозумів документ. Приклад: /document insurance OC 2027-10-06",
       );
       return;
     }
@@ -684,11 +684,11 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Документ добавлен.",
+          "✅ Документ додано.",
           "",
           `${this.vehicleTitle(vehicle)}: ${result.document.title}`,
           result.document.expiresAt
-            ? `Действует до: ${result.document.expiresAt.toLocaleDateString("ru-RU")}`
+            ? `Діє до: ${result.document.expiresAt.toLocaleDateString("uk-UA")}`
             : null,
         ]
           .filter((line): line is string => line !== null)
@@ -696,7 +696,7 @@ export class TelegramService implements OnModuleInit {
         this.websiteButton,
       );
     } catch (error) {
-      await ctx.reply(this.humanError(error, "Не удалось добавить документ."));
+      await ctx.reply(this.humanError(error, "Не вдалося додати документ."));
     }
   }
 
@@ -714,7 +714,7 @@ export class TelegramService implements OnModuleInit {
       return;
     }
 
-    await ctx.reply("Думаю по данным автомобиля...");
+    await ctx.reply("Думаю за даними автомобіля...");
 
     const response = await this.assistantService.chat({
       ownerId: user.id,
@@ -729,10 +729,10 @@ export class TelegramService implements OnModuleInit {
     if (!this.vinLookupEnabled) {
       await ctx.reply(
         [
-          `✅ VIN распознан: ${vin}`,
+          `✅ VIN розпізнано: ${vin}`,
           "",
-          "Реальные запросы к VIN-провайдеру пока выключены.",
-          "Добавить авто можно командой /addcar VIN.",
+          "Реальні запити до VIN-провайдера поки вимкнено.",
+          "Додати авто можна командою /addcar VIN.",
         ].join("\n"),
         this.websiteButton,
       );
@@ -740,27 +740,27 @@ export class TelegramService implements OnModuleInit {
       return;
     }
 
-    await ctx.reply(`🔎 Проверяю VIN ${vin}...`);
+    await ctx.reply(`🔎 Перевіряю VIN ${vin}...`);
 
     const result = await this.vinService.decodeStandaloneVin(vin);
 
     await ctx.reply(
       this.telegramSafeText(
         [
-          "✅ IA-CARS нашёл данные",
+          "✅ IA-CARS знайшов дані",
           "",
           `VIN: ${vin}`,
           result.make ? `Марка: ${result.make}` : null,
           result.model ? `Модель: ${result.model}` : null,
-          result.modelYear ? `Год: ${result.modelYear}` : null,
-          result.engineCode ? `Двигатель: ${result.engineCode}` : null,
-          result.displacementCc ? `Объём: ${result.displacementCc} см³` : null,
-          result.powerHp ? `Мощность: ${result.powerHp} л.с.` : null,
-          result.fuelType ? `Топливо: ${result.fuelType}` : null,
+          result.modelYear ? `Рік: ${result.modelYear}` : null,
+          result.engineCode ? `Двигун: ${result.engineCode}` : null,
+          result.displacementCc ? `Об’єм: ${result.displacementCc} см³` : null,
+          result.powerHp ? `Потужність: ${result.powerHp} к.с.` : null,
+          result.fuelType ? `Пальне: ${result.fuelType}` : null,
           result.transmissionType ? `КПП: ${result.transmissionType}` : null,
-          result.driveType ? `Привод: ${result.driveType}` : null,
+          result.driveType ? `Привід: ${result.driveType}` : null,
           "",
-          "Чтобы сохранить машину: /addcar " + vin,
+          "Щоб зберегти авто: /addcar " + vin,
         ]
           .filter((line): line is string => line !== null)
           .join("\n"),
@@ -775,7 +775,7 @@ export class TelegramService implements OnModuleInit {
     const match =
       text.match(/^(\d[\d\s]{2,8})(?:\s*(?:км|km))?(?:\s+#?(\d+))?$/i) ??
       text.match(
-        /(?:пробег|одометр|mileage)\D*(\d[\d\s]{2,8})(?:\s*(?:км|km))?(?:\s+#?(\d+))?/i,
+        /(?:пробіг|одометр|mileage)\D*(\d[\d\s]{2,8})(?:\s*(?:км|km))?(?:\s+#?(\d+))?/i,
       );
 
     if (!match) return null;
@@ -1030,11 +1030,11 @@ export class TelegramService implements OnModuleInit {
     | "other" {
     const text = title.toLowerCase();
 
-    if (/диагност|diagnostic/.test(text)) return "diagnostic";
-    if (/осмотр|inspection|техосмотр|то\b/.test(text)) return "inspection";
-    if (/замен|replace|масл|filter|фильтр/.test(text)) return "replacement";
+    if (/діагност|diagnostic/.test(text)) return "diagnostic";
+    if (/огляд|inspection|техогляд|то\b/.test(text)) return "inspection";
+    if (/замін|replace|масл|filter|фільтр/.test(text)) return "replacement";
     if (/ремонт|repair|fix/.test(text)) return "repair";
-    if (/upgrade|тюнинг|улучш/.test(text)) return "upgrade";
+    if (/upgrade|тюнінг|покращ/.test(text)) return "upgrade";
 
     return "maintenance";
   }
@@ -1052,9 +1052,9 @@ export class TelegramService implements OnModuleInit {
 
     if (activeVehicles.length === 0) {
       return [
-        "В гараже пока нет автомобилей.",
+        "У гаражі поки немає автомобілів.",
         "",
-        "Добавить можно так:",
+        "Додати можна так:",
         "/addcar WBA12345678901234 BMW 320d",
       ].join("\n");
     }
@@ -1066,7 +1066,7 @@ export class TelegramService implements OnModuleInit {
         this.formatVehicle(vehicle, index + 1),
       ),
       "",
-      "Если машин несколько, указывай номер: /mileage 123456 2 или #2 что проверить?",
+      "Якщо авто кілька, вказуйте номер: /mileage 123456 2 або #2 що перевірити?",
     ].join("\n");
   }
 
@@ -1075,28 +1075,28 @@ export class TelegramService implements OnModuleInit {
 
     if (activeVehicles.length === 0) {
       return [
-        "Сначала добавь автомобиль.",
+        "Спочатку додайте автомобіль.",
         "",
-        "Пример:",
+        "Приклад:",
         "/addcar WBA12345678901234 BMW 320d",
       ].join("\n");
     }
 
     return [
-      "Уточни автомобиль номером:",
+      "Уточніть автомобіль номером:",
       "",
       ...activeVehicles.map((vehicle, index) =>
         this.formatVehicle(vehicle, index + 1),
       ),
       "",
-      "Примеры:",
+      "Приклади:",
       "/mileage 123456 2",
-      "#2 что проверить перед поездкой?",
+      "#2 що перевірити перед поїздкою?",
     ].join("\n");
   }
 
   private formatVehicle(vehicle: Vehicle, index: number): string {
-    const vin = vehicle.vin ? `VIN ${vehicle.vin}` : "VIN не указан";
+    const vin = vehicle.vin ? `VIN ${vehicle.vin}` : "VIN не вказано";
     const plate = vehicle.licensePlate ? `, ${vehicle.licensePlate}` : "";
 
     return `${index}. ${this.vehicleTitle(vehicle)} — ${vin}${plate}`;
@@ -1106,7 +1106,7 @@ export class TelegramService implements OnModuleInit {
     return (
       [vehicle.nickname, vehicle.make, vehicle.model, vehicle.modelYear]
         .filter(Boolean)
-        .join(" ") || "Автомобиль"
+        .join(" ") || "Автомобіль"
     );
   }
 
@@ -1122,7 +1122,7 @@ export class TelegramService implements OnModuleInit {
 
   private get websiteButton() {
     return Markup.inlineKeyboard([
-      [Markup.button.webApp("🚗 Открыть IA-CARS", this.webAppUrl)],
+      [Markup.button.webApp("🚗 Відкрити IA-CARS", this.webAppUrl)],
     ]);
   }
 
