@@ -1,3 +1,4 @@
+import { t, getUiLocale, hasTranslation } from "./i18n";
 // Typed client for the vehicle-intelligence backend.
 // Shapes mirror the NestJS controllers/DTOs exactly — money fields on raw rows
 // arrive as STRINGS (Drizzle numeric), while summary/calculated fields are numbers.
@@ -69,7 +70,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
-    throw new ApiError(0, "Сервер недоступний. Перевірте з’єднання.");
+    throw new ApiError(0, t("Сервер недоступний. Перевірте з’єднання."));
   }
 
   if (response.status === 401 && token) {
@@ -100,17 +101,22 @@ function extractMessage(body: unknown, status: number): string {
     const message = (body as { message: unknown }).message;
     if (typeof message === "string") {
       if (/quota exhausted/i.test(message)) {
-        return "Ліміт запитів Vehicle Databases вичерпано. Перевірте квоту або дочекайтеся її оновлення.";
+        return t("Ліміт запитів Vehicle Databases вичерпано. Перевірте квоту або дочекайтеся її оновлення.");
       }
       if (/api key is not configured/i.test(message)) {
-        return "VIN-провайдер не налаштований: додайте VIN_PROVIDER_API_KEY на Render.";
+        return t("VIN-провайдер не налаштований: додайте VIN_PROVIDER_API_KEY на Render.");
       }
-      return message;
+      if (hasTranslation(message)) return t(message);
     }
-    if (Array.isArray(message)) return message.join("; ");
   }
-  if (status === 503) return "Зовнішній провайдер тимчасово недоступний або квоту вичерпано.";
-  return `Помилка запиту (${status})`;
+  if (status === 400) return t("Перевірте дані форми й спробуйте ще раз.");
+  if (status === 401) return t("Увійдіть ще раз або перевірте email і пароль.");
+  if (status === 403) return t("Доступ до цієї дії заборонено.");
+  if (status === 404) return t("Запис не знайдено. Оновіть дані.");
+  if (status === 409) return t("Дані конфліктують із наявним записом. Перевірте й спробуйте ще раз.");
+  if (status === 429) return t("Забагато запитів. Спробуйте ще раз за хвилину.");
+  if (status === 503) return t("Зовнішній провайдер тимчасово недоступний або квоту вичерпано.");
+  return t("Помилка запиту ({0})", { 0: status });
 }
 
 function qs(params: Record<string, string | number | boolean | undefined>): string {
@@ -130,6 +136,8 @@ export interface AuthUser {
   displayName: string | null;
   country: string | null;
   language: string | null;
+  telegramLinked?: boolean;
+  telegramUsername?: string | null;
 }
 
 export interface AuthResponse {
@@ -148,6 +156,8 @@ export interface RegisterInput {
 }
 
 export const authApi = {
+  me: () => request<AuthUser>("/auth/me"),
+  createTelegramLink: () => request<{ token: string; expiresAt: string }>("/auth/telegram/link", { method: "POST" }),
   register: (input: RegisterInput) =>
     request<AuthResponse>("/auth/register", {
       method: "POST",
@@ -797,7 +807,7 @@ export interface AssistantChatResponse {
 }
 
 export const assistantApi = {
-  chat: (input: { message: string; vehicleId?: string }) =>
+  chat: (input: { message: string; vehicleId?: string; language?: UserLanguage; history?: { role: "user" | "assistant"; content: string }[] }) =>
     request<AssistantChatResponse>("/assistant/chat", {
       method: "POST",
       body: JSON.stringify(input),
@@ -814,7 +824,7 @@ export function num(value: string | number | null | undefined): number | null {
 
 export function fmtNumber(value: number | null | undefined, digits = 0): string {
   if (value === null || value === undefined) return "—";
-  return value.toLocaleString("uk-UA", {
+  return value.toLocaleString(getUiLocale(), {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -823,31 +833,26 @@ export function fmtNumber(value: number | null | undefined, digits = 0): string 
 export function fmtMoney(value: string | number | null | undefined, currency?: string | null): string {
   const parsed = num(value);
   if (parsed === null) return "—";
-  const formatted = parsed.toLocaleString("uk-UA", {
+  const formatted = parsed.toLocaleString(getUiLocale(), {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
   return currency ? `${formatted} ${currency}` : formatted;
 }
 
-const MONTHS_UK = [
-  "січня", "лютого", "березня", "квітня", "травня", "червня",
-  "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
-];
-
 export function fmtDate(iso: string | null | undefined, withTime = false): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  const day = `${date.getDate()} ${MONTHS_UK[date.getMonth()]} ${date.getFullYear()}`;
-  if (!withTime) return day;
-  const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
-  return `${day}, ${time}`;
+  return new Intl.DateTimeFormat(getUiLocale(), {
+    day: "numeric", month: "long", year: "numeric",
+    ...(withTime ? { hour: "2-digit", minute: "2-digit" } as const : {}),
+  }).format(date);
 }
 
 export function fmtShortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  return `${date.getDate()} ${MONTHS_UK[date.getMonth()].slice(0, 3)}`;
+  return new Intl.DateTimeFormat(getUiLocale(), { day: "numeric", month: "short" }).format(date);
 }

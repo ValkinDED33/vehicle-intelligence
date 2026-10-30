@@ -1,3 +1,4 @@
+import { t, getUiLocale } from "../i18n";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -15,7 +16,7 @@ export function Spinner({ label }: { label?: string }) {
   return (
     <div className="state-note">
       <Loader2 size={16} className="spin" />
-      {label ?? "Завантажуємо дані..."}
+      {label ?? t("Завантажуємо дані...")}
     </div>
   );
 }
@@ -69,27 +70,25 @@ export function PageHeader({
 }) {
   return (
     <>
-      <span className="eyebrow">CARA / {page}</span>
+      <span className="eyebrow">CARA / {t(page)}</span>
       <div className="page-title-row">
-        <h1>{page}</h1>
+        <h1>{t(page)}</h1>
         <button
           className="refresh-btn"
           onClick={onRefresh}
           disabled={refreshing}
-          aria-label="Оновити"
+          aria-label={t("Оновити")}
         >
           {refreshing ? (
             <Loader2 size={16} className="spin" />
           ) : (
             <RefreshCw size={16} />
-          )}{" "}
-          Оновити
-        </button>
+          )}{" "} {t("Оновити")} </button>
       </div>
       <p>
         {vehicle
           ? `${vehicleTitle(vehicle)}${vehicle.modelYear ? ` · ${vehicle.modelYear}` : ""}${vehicle.vin ? ` · VIN ${vehicle.vin}` : ""}`
-          : "Автомобіль не вибрано"}
+          : t("Автомобіль не вибрано")}
       </p>
     </>
   );
@@ -99,11 +98,10 @@ export function NoVehicle({ onGoGarage }: { onGoGarage: () => void }) {
   return (
     <EmptyState
       icon={CarFront}
-      title="Спочатку додайте автомобіль"
-      text="Усі розділи працюють навколо конкретного автомобіля. Додайте його в гараж, і дані підтягнуться."
+      title={t("Спочатку додайте автомобіль")}
+      text={t("Усі розділи працюють навколо конкретного автомобіля. Додайте його в гараж, і дані підтягнуться.")}
       action={
-        <button className="primary" onClick={onGoGarage}>
-          ПЕРЕЙТИ В ГАРАЖ <ArrowRight size={16} />
+        <button className="primary" onClick={onGoGarage}> {t("ПЕРЕЙТИ В ГАРАЖ")} <ArrowRight size={16} />
         </button>
       }
     />
@@ -113,13 +111,9 @@ export function NoVehicle({ onGoGarage }: { onGoGarage: () => void }) {
 export function NoVehiclePanel({ onGoGarage }: { onGoGarage: () => void }) {
   return (
     <div className="panel empty-garage">
-      <h2>ГАРАЖ ПОРОЖНІЙ</h2>
-      <p>
-        Додайте перший автомобіль, щоб CARA могла розраховувати регламенти ТО,
-        вести облік пробігу, заправок і витрат.
-      </p>
-      <button className="primary" onClick={onGoGarage}>
-        ПЕРЕЙТИ В ГАРАЖ <ArrowRight size={16} />
+      <h2>{t("ГАРАЖ ПОРОЖНІЙ")}</h2>
+      <p> {t("Додайте перший автомобіль, щоб CARA могла розраховувати регламенти ТО, вести облік пробігу, заправок і витрат.")} </p>
+      <button className="primary" onClick={onGoGarage}> {t("ПЕРЕЙТИ В ГАРАЖ")} <ArrowRight size={16} />
       </button>
     </div>
   );
@@ -139,7 +133,7 @@ export function Reminder({
   color: string;
 }) {
   return (
-    <div className="reminder-item">
+    <div className="reminder">
       <span className={"icon-disc " + color}>
         <Icon size={16} />
       </span>
@@ -147,7 +141,7 @@ export function Reminder({
         <b>{title}</b>
         <small>{detail}</small>
       </div>
-      <span className={"tag " + color}>{tag}</span>
+      <span className={"tag " + color}>{t(tag)}</span>
     </div>
   );
 }
@@ -158,19 +152,19 @@ export function EventCard({ event }: { event: HistoryEvent }) {
   const color = meta?.color ?? "blue";
   const detail =
     event.mileageKm !== null
-      ? `${event.mileageKm.toLocaleString("uk-UA")} км · ${MODULE_LABELS[event.sourceModule] ?? event.sourceModule}`
-      : (MODULE_LABELS[event.sourceModule] ?? event.sourceModule);
+      ? t("{0} км · {1}", { 0: event.mileageKm.toLocaleString(getUiLocale()), 1: t(MODULE_LABELS[event.sourceModule] ?? event.sourceModule) })
+      : t(MODULE_LABELS[event.sourceModule] ?? event.sourceModule);
 
   return (
-    <div className="event-item">
+    <div className="event">
       <span className={"icon-disc " + color}>
         <Icon size={16} />
       </span>
       <div className="event-copy">
         <b>{humanizeType(event.type)}</b>
         <small>{detail}</small>
+        <small className="dim">{fmtDate(event.occurredAt)}</small>
       </div>
-      <span className="event-time">{fmtDate(event.occurredAt)}</span>
     </div>
   );
 }

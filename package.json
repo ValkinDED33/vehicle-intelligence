@@ -7,6 +7,8 @@
     "node": ">=24.15.0 <25"
   },
   "scripts": {
+    "test": "npm run build:api && node --test --test-isolation=none test/*.test.cjs",
+    "test:telegram:live": "npm run build:api && node scripts/check-telegram-ai.cjs",
     "build": "npm run build:api && npm run build:web",
     "build:api": "nest build",
     "start": "nest start",

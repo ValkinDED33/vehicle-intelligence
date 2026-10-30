@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { BadRequestException, HttpException, Injectable, Logger, OnModuleInit, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Markup, Telegraf, type Context } from "telegraf";
 import type { Update } from "telegraf/types";
@@ -14,14 +14,19 @@ import { type User } from "../identity/schemas/user.schema";
 import { MileageService } from "../mileage/services/mileage.service";
 import { ServiceRecordsService } from "../service-records/services/service-records.service";
 import { VinService } from "../vin/services/vin.service";
+import { TelegramSessionService } from "./telegram-session.service";
+import { botFieldValue, TelegramConversationService } from "./telegram-conversation.service";
+import { botLanguage, botText, interruptedEffectText, type BotLanguage, type ConversationCheckpoint, type ConversationState } from "./telegram-conversation.types";
 
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
-const ODOMETER_REGEX = /(?:пробіг|одометр|mileage)\D*(\d[\d\s]{2,8})/i;
 
 @Injectable()
 export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
   private bot?: Telegraf;
+  private readonly sessions = new WeakMap<Context, ConversationState>();
+  private readonly authenticatedUsers = new WeakMap<Context, User>();
+  private readonly checkpoints = new WeakMap<Context, ConversationCheckpoint>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -34,6 +39,8 @@ export class TelegramService implements OnModuleInit {
     private readonly mileageService: MileageService,
     private readonly serviceRecordsService: ServiceRecordsService,
     private readonly vinService: VinService,
+    private readonly sessionService: TelegramSessionService,
+    private readonly conversationService: TelegramConversationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -49,15 +56,18 @@ export class TelegramService implements OnModuleInit {
 
     this.registerHandlers();
 
-    this.bot.catch((error) => {
+    this.bot.catch(async (error, ctx) => {
       this.logger.error(
         `Telegram error: ${
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.name : "UnknownError"
         }`,
       );
+      if (ctx.chat?.type === "private") {
+        await ctx.reply(this.text(ctx, "Не вдалося обробити повідомлення. Спробуйте ще раз трохи пізніше.", "Nie udało się przetworzyć wiadomości. Spróbuj ponownie później.", "I couldn't process your message. Please try again shortly.")).catch(() => undefined);
+      }
     });
 
-    await this.bot.telegram.setMyCommands([
+    const commands = [
       {
         command: "start",
         description: "Запустити IA-CARS",
@@ -110,23 +120,41 @@ export class TelegramService implements OnModuleInit {
         command: "help",
         description: "Допомога",
       },
-    ]);
+      { command: "vehicle", description: "Вибрати автомобіль" },
+      { command: "confirm", description: "Підтвердити дію" },
+      { command: "cancel", description: "Скасувати дію" },
+      { command: "language", description: "Українська / Polski / English" },
+    ];
+    await this.bot.telegram.setMyCommands(commands);
+    const descriptions: Record<string, [string, string]> = {
+      start: ["Uruchom CARA", "Start CARA"], vin: ["Sprawdź VIN", "Check a VIN"],
+      garage: ["Pokaż garaż", "Show your garage"], addcar: ["Dodaj auto po VIN", "Add a car by VIN"],
+      mileage: ["Zapisz przebieg", "Record mileage"], expense: ["Zapisz wydatek", "Record an expense"],
+      fuel: ["Zapisz tankowanie", "Record a fuel entry"], charge: ["Zapisz ładowanie", "Record charging"],
+      service: ["Dodaj wpis serwisowy", "Add a service record"], document: ["Dodaj dokument", "Add a document"],
+      ask: ["Zapytaj CARA", "Ask CARA"], website: ["Otwórz CARA", "Open CARA"], help: ["Pomoc", "Help"],
+      vehicle: ["Wybierz auto", "Choose a car"], confirm: ["Potwierdź operację", "Confirm an action"],
+      cancel: ["Anuluj operację", "Cancel an action"], language: ["Українська / Polski / English", "Українська / Polski / English"],
+    };
+    for (const [index, language_code] of ["pl", "en"].entries()) {
+      await this.bot.telegram.setMyCommands(commands.map(({ command }) => ({ command, description: descriptions[command][index] })), { language_code });
+    }
 
     await this.bot.telegram.setWebhook(this.webhookUrl, {
       secret_token: this.webhookSecret,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
     });
 
     this.logger.log(`Telegram webhook connected: ${this.webhookUrl}`);
   }
 
-  processUpdate(update: Update): void {
+  async processUpdate(update: Update): Promise<void> {
     if (!this.bot) {
       this.logger.warn("Telegram bot is not initialized");
-      return;
+      throw new ServiceUnavailableException("Telegram is not initialized");
     }
-
-    void this.bot.handleUpdate(update);
+    if (!update || !Number.isSafeInteger(update.update_id)) throw new BadRequestException("Invalid Telegram update");
+    await this.bot.handleUpdate(update);
   }
 
   isValidSecret(secret: string | undefined): boolean {
@@ -138,56 +166,129 @@ export class TelegramService implements OnModuleInit {
   private registerHandlers(): void {
     if (!this.bot) return;
 
+    this.bot.use(async (ctx, next) => {
+      if (ctx.chat?.type !== "private" || !ctx.from || ctx.from.is_bot) return;
+      if (ctx.callbackQuery) await ctx.answerCbQuery().catch(() => undefined);
+      const incomingText = ctx.message && "text" in ctx.message ? ctx.message.text : "";
+      const link = incomingText.match(/^\/start(?:@\w+)?\s+link_([A-Za-z0-9_-]{32})$/);
+      let user: User | null;
+      try {
+        user = link ? await this.authService.linkTelegram(link[1], {
+          id: ctx.from.id, username: ctx.from.username,
+        }) : await this.getTelegramUser(ctx);
+      } catch (error) {
+        const language = botLanguage(ctx.from.language_code);
+        const publicMessage = error instanceof HttpException && error.getStatus() === 409
+          ? botText(language, "Telegram або акаунт уже має іншу прив’язку чи дані. Автоматичне об’єднання недоступне.", "Telegram lub konto ma już inne powiązanie albo dane. Automatyczne łączenie nie jest dostępne.", "Telegram or the account already has another link or saved data. Automatic merging is not available.")
+          : botText(language, "Не вдалося під’єднати Telegram. Створіть нове посилання в налаштуваннях сайту.", "Nie udało się połączyć Telegrama. Utwórz nowy link w ustawieniach strony.", "Telegram could not be linked. Create a new link in the website settings.");
+        await ctx.reply(publicMessage);
+        return;
+      }
+      if (!user) return;
+      this.authenticatedUsers.set(ctx, user);
+      await this.sessionService.run(user.id, ctx.update.update_id, async (state, checkpoint) => {
+        const previousEffectId = state.lastEffect?.id;
+        this.sessions.set(ctx, state);
+        this.checkpoints.set(ctx, checkpoint);
+        const message = ctx.message && "text" in ctx.message ? ctx.message.text.trim() : "";
+        if (message.length > 2000) {
+          await ctx.reply(botText(botLanguage(user.language), "Скоротіть повідомлення до 2000 символів.", "Skróć wiadomość do 2000 znaków.", "Please keep your message under 2000 characters."));
+          return;
+        }
+        const reply = ctx.reply.bind(ctx);
+        ctx.reply = async (text, extra) => {
+          const sent = await reply(text, extra);
+          state.history.push({ role: "assistant", content: typeof text === "string" ? text : text.text });
+          return sent;
+        };
+        if (message) {
+          state.history.push({ role: "user", content: message });
+          if (/^\/(?!confirm\b|cancel\b)/.test(message)) {
+            delete state.pending;
+            delete state.awaitingVehicleFor;
+          }
+        }
+        try {
+          if (/^\/(?:addcar|mileage|expense|fuel|charge|service|document|vin)(?:@\w+)?(?:\s|$)/i.test(message)) await checkpoint();
+          await next();
+        } catch (error) {
+          this.logger.warn(`Telegram handler failed: ${error instanceof Error ? error.name : "UnknownError"}`);
+          const language = botLanguage(user.language);
+          if (state.lastEffect?.status === "uncertain" && state.lastEffect.id !== previousEffectId) {
+            await ctx.reply(interruptedEffectText(language));
+            return;
+          }
+          if (error && typeof error === "object" && "status" in error && error.status === 429) {
+            await ctx.reply(botText(language,
+              "Досягнуто ліміту AI-запитів. Спробуйте ще раз за хвилину. Команди /garage та /mileage залишаються доступними.",
+              "Osiągnięto limit zapytań AI. Spróbuj ponownie za minutę. Komendy /garage i /mileage są nadal dostępne.",
+              "The AI request limit has been reached. Please try again in a minute. Commands such as /garage and /mileage are still available."));
+            return;
+          }
+          const validation = error instanceof HttpException && error.getStatus() >= 400 && error.getStatus() < 500;
+          await ctx.reply(botText(language,
+            validation ? "Перевірте дані: значення некоректне або запис недоступний. Уточніть запит і спробуйте ще раз." : "Не вдалося завершити запит. Спробуйте ще раз трохи пізніше.",
+            validation ? "Sprawdź dane: wartość jest nieprawidłowa lub wpis jest niedostępny. Doprecyzuj prośbę i spróbuj ponownie." : "Nie udało się wykonać prośby. Spróbuj ponownie później.",
+            validation ? "Please check the values or record access, clarify your request, and try again." : "I couldn't complete your request. Please try again shortly."));
+        }
+      });
+    });
+
+    this.bot.action(/^(confirm|cancel):([a-f0-9]{16})$/, async (ctx) => {
+      const user = await this.getTelegramUser(ctx);
+      const state = this.sessions.get(ctx);
+      if (!user || !state) return;
+      if (ctx.match[1] === "confirm") {
+        await this.conversationService.confirm(ctx, user, state, ctx.match[2], this.checkpoints.get(ctx));
+      } else if (state.pending?.id === ctx.match[2]) {
+        await this.conversationService.handle(ctx, user, state, "/cancel");
+      }
+    });
+    this.bot.command(["confirm", "cancel"], async (ctx) => {
+      const user = await this.getTelegramUser(ctx);
+      const state = this.sessions.get(ctx);
+      if (user && state) await this.conversationService.handle(ctx, user, state, ctx.message.text.replace(/@\w+/, ""), this.checkpoints.get(ctx));
+    });
+    this.bot.command("vehicle", async (ctx) => {
+      const user = await this.getTelegramUser(ctx);
+      const state = this.sessions.get(ctx);
+      if (!user || !state) return;
+      const index = ctx.message.text.replace(/^\/vehicle(?:@\w+)?\s*/i, "");
+      if (!/^\d+$/.test(index)) {
+        await ctx.reply(this.buildGarageMessage(await this.garageService.getVehicles(user.id), botLanguage(user.language)));
+        return;
+      }
+      await this.conversationService.handle(ctx, user, state, `#${index}`);
+    });
+    this.bot.command("language", async (ctx) => {
+      const user = await this.getTelegramUser(ctx);
+      if (!user) return;
+      const language = ctx.message.text.replace(/^\/language(?:@\w+)?\s*/i, "").trim();
+      if (!["uk", "pl", "en"].includes(language)) {
+        await ctx.reply("/language uk · Українська\n/language pl · Polski\n/language en · English");
+        return;
+      }
+      await this.authService.updateProfile(user.id, { language });
+      await ctx.reply(botText(botLanguage(language), "Мову збережено: українська.", "Zapisano język: polski.", "Language saved: English."));
+    });
+
     this.bot.start(async (ctx) => {
-      await ctx.reply(
-        [
-          "🚗 IA-CARS · Vehicle Intelligence",
-          "",
-          "Розумна перевірка автомобіля за VIN і єдиний цифровий профіль авто.",
-          "",
-          "Команди:",
-          "/garage — показати автомобілі",
-          "/addcar VIN [назва] — додати авто",
-          "/mileage 123456 — записати пробіг",
-          "/expense 120 PLN мийка — записати витрату",
-          "/fuel 45 l 280 PLN 123456 — заправка",
-          "/charge 42 kWh 90 PLN — зарядка",
-          "/service заміна масла 450 PLN — сервіс",
-          "/document insurance OC 2027-10-06 — документ",
-          "/vin VIN — перевірити VIN без додавання",
-          "/ask запитання — спитати CARA про авто",
-          "/website — відкрити IA-CARS",
-          "/help — допомога",
-        ].join("\n"),
-        this.websiteButton,
-      );
+      if (/\slink_/.test(ctx.message.text)) {
+        const user = await this.getTelegramUser(ctx);
+        await ctx.reply(botText(botLanguage(user?.language), "Telegram під’єднано до вашого акаунта сайту. Гараж і записи тепер спільні. /garage", "Telegram połączono z Twoim kontem na stronie. Garaż i wpisy są teraz wspólne. /garage", "Telegram is linked to your website account. Your garage and records are now shared. /garage"));
+        return;
+      }
+      const user = await this.getTelegramUser(ctx);
+      await ctx.reply(this.helpText(botLanguage(user?.language)), this.websiteButton(ctx));
     });
 
     this.bot.command("help", async (ctx) => {
-      await ctx.reply(
-        [
-          "CARA в Telegram працює з тими самими даними, що й сайт:",
-          "",
-          "/garage — список авто",
-          "/addcar WBA12345678901234 BMW — додати авто",
-          "/mileage 123456 — записати пробіг, якщо авто одне",
-          "/mileage 123456 2 — записати пробіг для авто №2",
-          "/expense 120 PLN мийка 2 — витрата для авто №2",
-          "/fuel 45 l 280 PLN 123456 — заправка",
-          "/charge 42 kWh 90 PLN — зарядка",
-          "/service заміна масла 450 PLN — сервісний запис",
-          "/document insurance OC 2027-10-06 — документ із датою завершення",
-          "/ask що потрібно обслужити? — запитання асистенту",
-          "/vin WBA12345678901234 — швидка VIN-перевірка",
-          "",
-          "Можна писати й звичайним текстом: «пробіг 123456», «що перевірити перед поїздкою?».",
-        ].join("\n"),
-        this.websiteButton,
-      );
+      const user = await this.getTelegramUser(ctx);
+      await ctx.reply(this.helpText(botLanguage(user?.language)), this.websiteButton(ctx));
     });
 
     this.bot.command("website", async (ctx) => {
-      await ctx.reply("🚗 Відкрити IA-CARS:", this.websiteButton);
+      await ctx.reply(this.text(ctx, "Відкрити CARA:", "Otwórz CARA:", "Open CARA:"), this.websiteButton(ctx));
     });
 
     this.bot.command("garage", async (ctx) => {
@@ -195,7 +296,7 @@ export class TelegramService implements OnModuleInit {
       if (!user) return;
 
       const vehicles = await this.garageService.getVehicles(user.id);
-      await ctx.reply(this.buildGarageMessage(vehicles), this.websiteButton);
+      await ctx.reply(this.buildGarageMessage(vehicles, botLanguage(user.language)), this.websiteButton(ctx));
     });
 
     this.bot.command("addcar", async (ctx) => {
@@ -208,11 +309,16 @@ export class TelegramService implements OnModuleInit {
 
       if (!vin || !VIN_REGEX.test(vin)) {
         await ctx.reply(
-          "Надішліть VIN після команди.\n\nПриклад:\n/addcar WBA12345678901234 BMW 320d",
+          this.text(ctx, "Укажіть VIN після команди. Наприклад:\n/addcar WBA12345678901234 BMW 320d", "Podaj VIN po komendzie. Na przykład:\n/addcar WBA12345678901234 BMW 320d", "Enter the VIN after the command, for example:\n/addcar WBA12345678901234 BMW 320d"),
         );
         return;
       }
 
+      const existing = (await this.garageService.getVehicles(user.id, true)).find((vehicle) => vehicle.vin?.toUpperCase() === vin);
+      if (existing) {
+        await ctx.reply(this.text(ctx, "Це авто вже є в гаражі. Відкрийте /garage, щоб вибрати його.", "To auto jest już w garażu. Wybierz je przez /garage.", "This car is already in your garage. Select it with /garage."));
+        return;
+      }
       const vehicle = await this.garageService.createVehicle(user.id, {
         vin,
         nickname: nicknameParts.join(" ").trim() || undefined,
@@ -224,7 +330,7 @@ export class TelegramService implements OnModuleInit {
         } catch (error) {
           this.logger.warn(
             `Telegram addcar VIN decode failed: ${
-              error instanceof Error ? error.message : String(error)
+              error instanceof Error ? error.name : "UnknownError"
             }`,
           );
         }
@@ -234,13 +340,13 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Автомобіль додано в гараж.",
+          this.text(ctx, "Автомобіль додано в гараж.", "Dodano auto do garażu.", "The car has been added to your garage."),
           "",
-          this.formatVehicle(updated, 1),
+          this.formatVehicle(updated, 1, botLanguage(user.language)),
           "",
-          "Тепер можна писати: «пробіг 123456» або ставити запитання про авто.",
+          this.text(ctx, "Можна записати пробіг командою /mileage 123456 або поставити запитання про авто.", "Zapisz przebieg komendą /mileage 123456 lub zapytaj o auto.", "Record mileage with /mileage 123456 or ask a question about the car."),
         ].join("\n"),
-        this.websiteButton,
+        this.websiteButton(ctx),
       );
     });
 
@@ -319,7 +425,7 @@ export class TelegramService implements OnModuleInit {
       const question = ctx.message.text.replace(/^\/ask(?:@\w+)?/i, "").trim();
 
       if (!question) {
-        await ctx.reply("Напишіть запитання після команди.\n\nПриклад:\n/ask що перевірити перед далекою поїздкою?");
+        await ctx.reply(this.text(ctx, "Напишіть запитання після /ask або звичайним повідомленням.", "Napisz pytanie po /ask lub wyślij je jako zwykłą wiadomość.", "Write your question after /ask or send it as a normal message."));
         return;
       }
 
@@ -334,14 +440,14 @@ export class TelegramService implements OnModuleInit {
 
       if (!vin) {
         await ctx.reply(
-          "Надішліть VIN після команди.\n\nПриклад:\n/vin WBA12345678901234",
+          this.text(ctx, "Укажіть VIN після команди. Наприклад:\n/vin WBA12345678901234", "Podaj VIN po komendzie. Na przykład:\n/vin WBA12345678901234", "Enter the VIN after the command, for example:\n/vin WBA12345678901234"),
         );
         return;
       }
 
       if (!VIN_REGEX.test(vin)) {
         await ctx.reply(
-          "❌ VIN має містити рівно 17 символів. Літери I, O та Q не використовуються.",
+          this.text(ctx, "VIN має містити рівно 17 символів без літер I, O та Q.", "VIN musi mieć dokładnie 17 znaków, bez liter I, O i Q.", "A VIN must contain exactly 17 characters, excluding I, O and Q."),
         );
         return;
       }
@@ -349,52 +455,32 @@ export class TelegramService implements OnModuleInit {
       if (!this.vinLookupEnabled) {
         await ctx.reply(
           [
-            `✅ VIN розпізнано: ${vin}`,
+            `VIN: ${vin}`,
             "",
-            "Реальні запити до VIN-провайдера поки вимкнено.",
-            "Увімкнемо їх після перевірки Telegram-інтеграції.",
+            this.text(ctx, "Перевірку у VIN-провайдера вимкнено. Дані автомобіля не перевірено.", "Sprawdzanie u dostawcy VIN jest wyłączone. Dane auta nie zostały zweryfikowane.", "VIN provider lookups are disabled. The vehicle details have not been verified."),
           ].join("\n"),
-          this.websiteButton,
+          this.websiteButton(ctx),
         );
 
         return;
       }
 
-      await ctx.reply(`🔎 Перевіряю VIN ${vin}…`);
+      await ctx.reply(this.text(ctx, "Перевіряю VIN: ", "Sprawdzam VIN: ", "Checking VIN: ") + vin);
 
       try {
         const result = await this.vinService.decodeStandaloneVin(vin);
 
-        const response = [
-          "✅ IA-CARS знайшов дані",
-          "",
-          `VIN: ${vin}`,
-          result.make ? `Марка: ${result.make}` : null,
-          result.model ? `Модель: ${result.model}` : null,
-          result.modelYear ? `Рік: ${result.modelYear}` : null,
-          result.engineCode ? `Двигун: ${result.engineCode}` : null,
-          result.displacementCc ? `Об’єм: ${result.displacementCc} см³` : null,
-          result.powerHp ? `Потужність: ${result.powerHp} к.с.` : null,
-          result.fuelType ? `Пальне: ${result.fuelType}` : null,
-          result.transmissionType ? `КПП: ${result.transmissionType}` : null,
-          result.driveType ? `Привід: ${result.driveType}` : null,
-          "",
-          "Повний профіль автомобіля — в IA-CARS.",
-        ]
-          .filter((line): line is string => line !== null)
-          .join("\n");
-
-        await ctx.reply(response, this.websiteButton);
+        await ctx.reply(this.vinResult(ctx, vin, result), this.websiteButton(ctx));
       } catch (error) {
         this.logger.warn(
           `Telegram VIN lookup failed: ${
-            error instanceof Error ? error.message : String(error)
+            error instanceof Error ? error.name : "UnknownError"
           }`,
         );
 
         await ctx.reply(
-          "❌ Не вдалося отримати дані за цим VIN. Спробуйте пізніше або відкрийте IA-CARS.",
-          this.websiteButton,
+          this.text(ctx, "Не вдалося отримати дані за цим VIN. Спробуйте пізніше або відкрийте сайт.", "Nie udało się pobrać danych dla tego VIN. Spróbuj później lub otwórz stronę.", "I couldn't retrieve details for this VIN. Try later or open the website."),
+          this.websiteButton(ctx),
         );
       }
     });
@@ -411,16 +497,32 @@ export class TelegramService implements OnModuleInit {
         return;
       }
 
-      if (ODOMETER_REGEX.test(text)) {
-        await this.handleMileageMessage(ctx, user, text);
+      if (text.startsWith("/")) {
+        await ctx.reply(botText(botLanguage(user.language), "Такої команди немає. Опишіть прохання звичайним текстом або відкрийте /help.", "Nie ma takiej komendy. Opisz prośbę własnymi słowami lub otwórz /help.", "Unknown command. Describe your request in plain language or open /help."));
         return;
       }
 
       await this.answerQuestion(ctx, user, text);
     });
+    this.bot.on("message", async (ctx) => {
+      const user = await this.getTelegramUser(ctx);
+      await ctx.reply(botText(botLanguage(user?.language),
+        "Поки можу обробляти текстові повідомлення. Файл документа можна завантажити на сайті.",
+        "Na razie obsługuję wiadomości tekstowe. Plik dokumentu możesz przesłać na stronie.",
+        "I currently handle text messages. You can upload document files on the website."), this.websiteButton(ctx));
+    });
+  }
+
+  private helpText(language: "uk" | "pl" | "en"): string {
+    return botText(language,
+      "Вітаю! Я CARA. Запитайте про авто або опишіть, що потрібно записати. Наприклад: «Коли наступне ТО?» або «Запиши мийку за 80 PLN». Перед збереженням покажу дані для підтвердження.\n\n/garage — ваші авто\n/vehicle 2 — вибрати авто\n/language uk, pl, en — мова\n/cancel — скасувати дію\n/website — відкрити сайт\n\nЩоб бачити гараж із сайту, під’єднайте Telegram у налаштуваннях сайту.",
+      "Cześć! Jestem CARA. Zapytaj o auto lub opisz, co chcesz zapisać. Na przykład: „Kiedy następny serwis?” lub „Zapisz myjnię za 80 PLN”. Przed zapisem pokażę dane do potwierdzenia.\n\n/garage — Twoje auta\n/vehicle 2 — wybierz auto\n/language uk, pl, en — język\n/cancel — anuluj operację\n/website — otwórz stronę\n\nAby widzieć garaż ze strony, połącz Telegram w ustawieniach strony.",
+      "Hi! I'm CARA. Ask about your car or describe what you want to record, for example: 'When is the next service?' or 'Record a car wash for 80 PLN'. I'll show the details for confirmation before saving.\n\n/garage — your cars\n/vehicle 2 — choose a car\n/language uk, pl, en — language\n/cancel — cancel an action\n/website — open the website\n\nTo use your website garage, link Telegram in the website settings.");
   }
 
   private async getTelegramUser(ctx: Context): Promise<User | null> {
+    const cached = this.authenticatedUsers.get(ctx);
+    if (cached) return cached;
     if (!ctx.from) {
       await ctx.reply("Не бачу Telegram-профіль. Спробуйте відкрити чат заново.");
       return null;
@@ -444,18 +546,13 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не зрозумів пробіг. Приклад: /mileage 123456 або «пробіг 123456».",
+        this.text(ctx, "Укажіть пробіг числом. Наприклад: /mileage 123456.", "Podaj przebieg jako liczbę. Na przykład: /mileage 123456.", "Enter the mileage as a number, for example: /mileage 123456."),
       );
       return;
     }
 
-    const vehicles = await this.garageService.getVehicles(user.id);
-    const vehicle = this.resolveVehicle(vehicles, parsed.vehicleIndex);
-
-    if (!vehicle) {
-      await ctx.reply(this.buildChooseVehicleMessage(vehicles), this.websiteButton);
-      return;
-    }
+    const vehicle = await this.requireVehicleForTelegram(ctx, user, parsed.vehicleIndex);
+    if (!vehicle) return;
 
     const reading = await this.mileageService.recordReading(user.id, vehicle.id, {
       odometerKm: parsed.odometerKm,
@@ -465,12 +562,12 @@ export class TelegramService implements OnModuleInit {
 
     await ctx.reply(
       [
-        "✅ Пробіг записано.",
+        this.text(ctx, "Пробіг записано.", "Zapisano przebieg.", "Mileage recorded."),
         "",
-        `${this.vehicleTitle(vehicle)}: ${reading.odometerKm.toLocaleString("uk-UA")} км`,
-        `Дата: ${reading.recordedAt.toLocaleDateString("uk-UA")}`,
+        `${this.vehicleTitle(vehicle)}: ${reading.odometerKm.toLocaleString(this.locale(ctx))} ${this.text(ctx, "км", "km", "km")}`,
+        this.text(ctx, "Дата: ", "Data: ", "Date: ") + reading.recordedAt.toLocaleDateString(this.locale(ctx)),
       ].join("\n"),
-      this.websiteButton,
+      this.websiteButton(ctx),
     );
   }
 
@@ -483,7 +580,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не зрозумів витрату. Приклад: /expense 120 PLN мийка або /expense 450 PLN страхування 2",
+        this.text(ctx, "Укажіть суму, валюту й назву. Наприклад: /expense 120 PLN мийка", "Podaj kwotę, walutę i nazwę. Na przykład: /expense 120 PLN myjnia", "Enter the amount, currency and title, for example: /expense 120 PLN car wash"),
       );
       return;
     }
@@ -510,18 +607,18 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Витрату записано.",
+          this.text(ctx, "Витрату записано.", "Zapisano wydatek.", "Expense recorded."),
           "",
           `${this.vehicleTitle(vehicle)}: ${result.expense.title}`,
-          `${result.calculations.totalCost.toLocaleString("uk-UA", {
+          `${result.calculations.totalCost.toLocaleString(this.locale(ctx), {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })} ${result.expense.currency}`,
         ].join("\n"),
-        this.websiteButton,
+        this.websiteButton(ctx),
       );
     } catch (error) {
-      await ctx.reply(this.humanError(error, "Не вдалося записати витрату."));
+      await ctx.reply(this.text(ctx, "Не вдалося записати витрату. Перевірте дані й спробуйте ще раз.", "Nie udało się zapisać wydatku. Sprawdź dane i spróbuj ponownie.", "The expense could not be saved. Check the details and try again."));
     }
   }
 
@@ -535,9 +632,8 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        kind === "fuel"
-          ? "Не зрозумів заправку. Приклад: /fuel 45 l 280 PLN 123456"
-          : "Не зрозумів заряджання. Приклад: /charge 42 kWh 90 PLN 123456",
+        this.text(ctx, "Перевірте формат. Приклад: ", "Sprawdź format. Przykład: ", "Check the format, for example: ") +
+          (kind === "fuel" ? "/fuel 45 l 280 PLN 123456" : "/charge 42 kWh 90 PLN 123456"),
       );
       return;
     }
@@ -552,45 +648,41 @@ export class TelegramService implements OnModuleInit {
     try {
       const result = await this.energyService.createEntry(user.id, vehicle.id, {
         kind,
-        energyType: kind === "fuel" ? "fuel" : "electric",
+        energyType: kind === "fuel" ? "unspecified" : "electricity",
         volumeLiters: parsed.volumeLiters,
         energyKwh: parsed.energyKwh,
         totalCost: parsed.totalCost,
         currency: parsed.currency,
         odometerKm: parsed.odometerKm,
-        isFullTank: kind === "fuel",
+        isFullTank: kind === "fuel" && parsed.isFullTank,
         source: "telegram",
       });
 
       await ctx.reply(
         [
-          kind === "fuel" ? "✅ Заправку записано." : "✅ Заряджання записано.",
+          kind === "fuel" ? this.text(ctx, "Заправку записано.", "Zapisano tankowanie.", "Fuel entry recorded.")
+            : this.text(ctx, "Заряджання записано.", "Zapisano ładowanie.", "Charging entry recorded."),
           "",
           `${this.vehicleTitle(vehicle)}: ${
             parsed.volumeLiters
-              ? `${parsed.volumeLiters} л`
-              : `${parsed.energyKwh} кВт·ч`
+              ? `${parsed.volumeLiters} ${this.text(ctx, "л", "l", "l")}`
+              : `${parsed.energyKwh} ${this.text(ctx, "кВт·год", "kWh", "kWh")}`
           }`,
           result.calculations.totalCost !== null && result.entry.currency
-            ? `${result.calculations.totalCost.toLocaleString("uk-UA", {
+            ? `${result.calculations.totalCost.toLocaleString(this.locale(ctx), {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })} ${result.entry.currency}`
             : null,
-          parsed.odometerKm ? `Пробіг: ${parsed.odometerKm} км` : null,
+          parsed.odometerKm !== undefined ? this.text(ctx, "Пробіг: ", "Przebieg: ", "Mileage: ") + `${parsed.odometerKm} ${this.text(ctx, "км", "km", "km")}` : null,
         ]
           .filter((line): line is string => line !== null)
           .join("\n"),
-        this.websiteButton,
+        this.websiteButton(ctx),
       );
     } catch (error) {
       await ctx.reply(
-        this.humanError(
-          error,
-          kind === "fuel"
-            ? "Не вдалося записати заправку."
-            : "Не вдалося записати заряджання.",
-        ),
+        this.text(ctx, "Не вдалося зберегти запис. Перевірте дані й спробуйте ще раз.", "Nie udało się zapisać wpisu. Sprawdź dane i spróbuj ponownie.", "The entry could not be saved. Check the details and try again."),
       );
     }
   }
@@ -604,7 +696,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не зрозумів сервіс. Приклад: /service заміна масла 450 PLN 123456",
+        this.text(ctx, "Укажіть роботи, суму й пробіг. Наприклад: /service заміна оливи 450 PLN 123456", "Podaj prace, kwotę i przebieg. Na przykład: /service wymiana oleju 450 PLN 123456", "Enter the work, amount and mileage, for example: /service oil change 450 PLN 123456"),
       );
       return;
     }
@@ -632,20 +724,21 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Сервісний запис додано.",
+          this.text(ctx, "Сервісний запис додано.", "Dodano wpis serwisowy.", "Service record added."),
           "",
           `${this.vehicleTitle(vehicle)}: ${result.record.title}`,
           result.record.totalCost && result.record.currency
             ? `${result.record.totalCost} ${result.record.currency}`
             : null,
-          parsed.odometerKm ? `Пробіг: ${parsed.odometerKm} км` : null,
+          parsed.odometerKm !== undefined ? this.text(ctx, "Пробіг: ", "Przebieg: ", "Mileage: ") + `${parsed.odometerKm} ${this.text(ctx, "км", "km", "km")}` : null,
+          parsed.totalCost !== undefined ? this.text(ctx, "Вартість сервісу довідкова. Для фінансового обліку додайте окрему витрату.", "Koszt serwisu jest informacyjny. Do rozliczeń dodaj osobny wydatek.", "The service cost is informational. Add a separate expense to include it in spending totals.") : null,
         ]
           .filter((line): line is string => line !== null)
           .join("\n"),
-        this.websiteButton,
+        this.websiteButton(ctx),
       );
     } catch (error) {
-      await ctx.reply(this.humanError(error, "Не вдалося додати сервіс."));
+      await ctx.reply(this.text(ctx, "Не вдалося додати сервісний запис. Перевірте дані й спробуйте ще раз.", "Nie udało się dodać wpisu serwisowego. Sprawdź dane i spróbuj ponownie.", "The service record could not be added. Check the details and try again."));
     }
   }
 
@@ -658,7 +751,7 @@ export class TelegramService implements OnModuleInit {
 
     if (!parsed) {
       await ctx.reply(
-        "Не зрозумів документ. Приклад: /document insurance OC 2027-10-06",
+        this.text(ctx, "Перевірте формат. Наприклад: /document insurance OC 2027-10-06", "Sprawdź format. Na przykład: /document insurance OC 2027-10-06", "Check the format, for example: /document insurance OC 2027-10-06"),
       );
       return;
     }
@@ -684,19 +777,19 @@ export class TelegramService implements OnModuleInit {
 
       await ctx.reply(
         [
-          "✅ Документ додано.",
+          this.text(ctx, "Документ додано.", "Dodano dokument.", "Document added."),
           "",
           `${this.vehicleTitle(vehicle)}: ${result.document.title}`,
           result.document.expiresAt
-            ? `Діє до: ${result.document.expiresAt.toLocaleDateString("uk-UA")}`
+            ? this.text(ctx, "Діє до: ", "Ważny do: ", "Valid until: ") + result.document.expiresAt.toLocaleDateString(this.locale(ctx))
             : null,
         ]
           .filter((line): line is string => line !== null)
           .join("\n"),
-        this.websiteButton,
+        this.websiteButton(ctx),
       );
     } catch (error) {
-      await ctx.reply(this.humanError(error, "Не вдалося додати документ."));
+      await ctx.reply(this.text(ctx, "Не вдалося додати документ. Перевірте дані й спробуйте ще раз.", "Nie udało się dodać dokumentu. Sprawdź dane i spróbuj ponownie.", "The document could not be added. Check the details and try again."));
     }
   }
 
@@ -705,85 +798,57 @@ export class TelegramService implements OnModuleInit {
     user: User,
     text: string,
   ): Promise<void> {
-    const vehicles = await this.garageService.getVehicles(user.id);
-    const { question, vehicleIndex } = this.extractVehicleIndex(text);
-    const vehicle = this.resolveVehicle(vehicles, vehicleIndex);
-
-    if (!vehicle) {
-      await ctx.reply(this.buildChooseVehicleMessage(vehicles), this.websiteButton);
-      return;
-    }
-
-    await ctx.reply("Думаю за даними автомобіля...");
-
-    const response = await this.assistantService.chat({
-      ownerId: user.id,
-      vehicleId: vehicle.id,
-      message: question,
-    });
-
-    await ctx.reply(this.telegramSafeText(response.answer), this.websiteButton);
+    const state = this.sessions.get(ctx);
+    if (state) await this.conversationService.handle(ctx, user, state, text, this.checkpoints.get(ctx));
   }
 
   private async replyWithVinDecode(ctx: Context, vin: string): Promise<void> {
     if (!this.vinLookupEnabled) {
       await ctx.reply(
         [
-          `✅ VIN розпізнано: ${vin}`,
+          `VIN: ${vin}`,
           "",
-          "Реальні запити до VIN-провайдера поки вимкнено.",
-          "Додати авто можна командою /addcar VIN.",
+          this.text(ctx, "Перевірку у VIN-провайдера вимкнено. Дані автомобіля не перевірено.", "Sprawdzanie u dostawcy VIN jest wyłączone. Dane auta nie zostały zweryfikowane.", "VIN provider lookups are disabled. The vehicle details have not been verified."),
+          this.text(ctx, "Додати авто: /addcar VIN", "Dodaj auto: /addcar VIN", "Add a car: /addcar VIN"),
         ].join("\n"),
-        this.websiteButton,
+        this.websiteButton(ctx),
       );
 
       return;
     }
 
-    await ctx.reply(`🔎 Перевіряю VIN ${vin}...`);
+    await ctx.reply(this.text(ctx, "Перевіряю VIN: ", "Sprawdzam VIN: ", "Checking VIN: ") + vin);
 
     const result = await this.vinService.decodeStandaloneVin(vin);
 
-    await ctx.reply(
-      this.telegramSafeText(
-        [
-          "✅ IA-CARS знайшов дані",
-          "",
-          `VIN: ${vin}`,
-          result.make ? `Марка: ${result.make}` : null,
-          result.model ? `Модель: ${result.model}` : null,
-          result.modelYear ? `Рік: ${result.modelYear}` : null,
-          result.engineCode ? `Двигун: ${result.engineCode}` : null,
-          result.displacementCc ? `Об’єм: ${result.displacementCc} см³` : null,
-          result.powerHp ? `Потужність: ${result.powerHp} к.с.` : null,
-          result.fuelType ? `Пальне: ${result.fuelType}` : null,
-          result.transmissionType ? `КПП: ${result.transmissionType}` : null,
-          result.driveType ? `Привід: ${result.driveType}` : null,
-          "",
-          "Щоб зберегти авто: /addcar " + vin,
-        ]
-          .filter((line): line is string => line !== null)
-          .join("\n"),
-      ),
-      this.websiteButton,
-    );
+    await ctx.reply(this.vinResult(ctx, vin, result) + "\n\n/addcar " + vin, this.websiteButton(ctx));
+  }
+
+  private vinResult(ctx: Context, vin: string, result: Awaited<ReturnType<VinService["decodeStandaloneVin"]>>): string {
+    const language = botLanguage(this.authenticatedUsers.get(ctx)?.language);
+    const fields = [
+      [this.text(ctx, "Марка", "Marka", "Make"), result.make],
+      [this.text(ctx, "Модель", "Model", "Model"), result.model],
+      [this.text(ctx, "Рік", "Rok", "Year"), result.modelYear],
+      [this.text(ctx, "Двигун", "Silnik", "Engine"), result.engineCode],
+      [this.text(ctx, "Об’єм, см³", "Pojemność, cm³", "Displacement, cm³"), result.displacementCc],
+      [this.text(ctx, "Потужність, к.с.", "Moc, KM", "Power, hp"), result.powerHp],
+      [this.text(ctx, "Пальне", "Paliwo", "Fuel"), result.fuelType && botFieldValue("fuelType", result.fuelType, language)],
+      [this.text(ctx, "Коробка передач", "Skrzynia biegów", "Transmission"), result.transmissionType && botFieldValue("transmissionType", result.transmissionType, language)],
+      [this.text(ctx, "Привід", "Napęd", "Drive"), result.driveType && botFieldValue("driveType", result.driveType, language)],
+    ];
+    return [`VIN: ${vin}`, ...fields.filter(([, value]) => value != null && value !== "").map(([label, value]) => `${label}: ${value}`)].join("\n");
   }
 
   private parseMileage(
     text: string,
   ): { odometerKm: number; vehicleIndex?: number } | null {
-    const match =
-      text.match(/^(\d[\d\s]{2,8})(?:\s*(?:км|km))?(?:\s+#?(\d+))?$/i) ??
-      text.match(
-        /(?:пробіг|одометр|mileage)\D*(\d[\d\s]{2,8})(?:\s*(?:км|km))?(?:\s+#?(\d+))?/i,
-      );
-
+    const cleaned = text.replace(/^(?:пробіг|одометр|mileage)\s*[:=]?\s*/i, "");
+    const { text: value, vehicleIndex } = this.extractTrailingVehicleIndex(cleaned);
+    const match = value.match(/^(\d+(?:[ \u00a0]\d{3})*)(?:\s*(?:км|km))?$/i);
     if (!match) return null;
-
     const odometerKm = Number(match[1].replace(/\s+/g, ""));
-    const vehicleIndex = match[2] ? Number(match[2]) : undefined;
-
-    if (!Number.isInteger(odometerKm) || odometerKm <= 0) return null;
+    if (!Number.isSafeInteger(odometerKm) || odometerKm < 0 || odometerKm > 2147483647) return null;
 
     return {
       odometerKm,
@@ -835,22 +900,25 @@ export class TelegramService implements OnModuleInit {
     currency?: string;
     odometerKm?: number;
     vehicleIndex?: number;
+    isFullTank: boolean;
   } | null {
+    if (/(?:^|\s)-\d/.test(text)) return null;
     const { text: withoutVehicleIndex, vehicleIndex } =
       this.extractTrailingVehicleIndex(text);
 
     const volumePattern =
       kind === "fuel"
-        ? /(\d+(?:[.,]\d{1,3})?)\s*(?:l|л|литр(?:а|ов)?)/i
-        : /(\d+(?:[.,]\d{1,3})?)\s*(?:kwh|квт(?:\s*[·.]?\s*ч)?)/i;
+        ? /(\d+(?:[.,]\d{1,3})?)\s*(?:litres?|liters?|літр(?:и|ів|а)?|l|л)(?!\p{L})/iu
+        : /(\d+(?:[.,]\d{1,3})?)\s*(?:kwh|квт\s*[·⋅.]?\s*год)(?!\p{L})/iu;
     const volumeMatch = withoutVehicleIndex.match(volumePattern);
 
     if (!volumeMatch) return null;
 
-    const moneyMatch = withoutVehicleIndex.match(
-      /(\d+(?:[.,]\d{1,2})?)\s*([A-Za-z]{3})/i,
+    const remainder = withoutVehicleIndex.replace(volumeMatch[0], " ");
+    const moneyMatch = remainder.match(
+      /(\d+(?:[.,]\d{1,2})?)\s*([A-Za-z]{3})(?![A-Za-z])/i,
     );
-    const odometerMatch = withoutVehicleIndex.match(
+    const odometerMatch = (moneyMatch ? remainder.replace(moneyMatch[0], " ") : remainder).match(
       /(?:^|\s)(\d{4,8})(?:\s*(?:км|km))?(?:\s|$)/i,
     );
 
@@ -860,6 +928,8 @@ export class TelegramService implements OnModuleInit {
     return {
       volumeLiters: kind === "fuel" ? amount : undefined,
       energyKwh: kind === "charge" ? amount : undefined,
+      isFullTank: kind === "fuel" && /(?:повний\s+бак|pełny\s+bak|full(?:\s+tank)?)/i.test(withoutVehicleIndex)
+        && !/(?:не\s*повний|nie\s*pełny|not\s+(?:a\s+)?full)/i.test(withoutVehicleIndex),
       totalCost: moneyMatch ? this.parseNumber(moneyMatch[1]) : undefined,
       currency: moneyMatch?.[2]?.toUpperCase(),
       odometerKm: odometerMatch ? Number(odometerMatch[1]) : undefined,
@@ -884,19 +954,18 @@ export class TelegramService implements OnModuleInit {
     odometerKm?: number;
     vehicleIndex?: number;
   } | null {
+    if (/(?:^|\s)-\d/.test(text)) return null;
     const { text: withoutVehicleIndex, vehicleIndex } =
       this.extractTrailingVehicleIndex(text);
     const moneyMatch = withoutVehicleIndex.match(
-      /(\d+(?:[.,]\d{1,2})?)\s*([A-Za-z]{3})/i,
+      /(\d+(?:[.,]\d{1,2})?)\s*([A-Za-z]{3})(?![A-Za-z])/i,
     );
-    const odometerMatch = withoutVehicleIndex.match(
+    const withoutMoney = moneyMatch ? withoutVehicleIndex.replace(moneyMatch[0], " ") : withoutVehicleIndex;
+    const odometerMatch = withoutMoney.match(
       /(?:^|\s)(\d{4,8})(?:\s*(?:км|km))?(?:\s|$)/i,
     );
 
-    const title = withoutVehicleIndex
-      .replace(/\d+(?:[.,]\d{1,2})?\s*[A-Za-z]{3}/i, "")
-      .replace(/(?:^|\s)\d{4,8}(?:\s*(?:км|km))?(?:\s|$)/i, " ")
-      .trim();
+    const title = (odometerMatch ? withoutMoney.replace(odometerMatch[0], " ") : withoutMoney).trim();
 
     if (!title) return null;
 
@@ -930,7 +999,8 @@ export class TelegramService implements OnModuleInit {
 
     const expiresAt = dateMatch ? new Date(`${dateMatch[1]}T00:00:00Z`) : undefined;
 
-    if (expiresAt && Number.isNaN(expiresAt.getTime())) return null;
+    if (expiresAt && (Number.isNaN(expiresAt.getTime()) || expiresAt.toISOString().slice(0, 10) !== dateMatch![1])) return null;
+    if (!["insurance", "registration", "inspection", "service-invoice", "purchase", "warranty", "tax", "fine", "receipt", "manual", "other"].includes(typeCandidate.toLowerCase())) return null;
 
     return {
       type: typeCandidate.toLowerCase(),
@@ -977,13 +1047,16 @@ export class TelegramService implements OnModuleInit {
     vehicleIndex?: number,
   ): Promise<Vehicle | null> {
     const vehicles = await this.garageService.getVehicles(user.id);
-    const vehicle = this.resolveVehicle(vehicles, vehicleIndex);
+    const state = this.sessions.get(ctx);
+    const vehicle = vehicleIndex !== undefined ? this.resolveVehicle(vehicles, vehicleIndex)
+      : vehicles.find((v) => v.id === state?.selectedVehicleId && !v.isArchived) ?? this.resolveVehicle(vehicles);
 
     if (!vehicle) {
-      await ctx.reply(this.buildChooseVehicleMessage(vehicles), this.websiteButton);
+      await ctx.reply(this.buildChooseVehicleMessage(vehicles, botLanguage(user.language)), this.websiteButton(ctx));
       return null;
     }
 
+    if (state) state.selectedVehicleId = vehicle.id;
     return vehicle;
   }
 
@@ -991,7 +1064,7 @@ export class TelegramService implements OnModuleInit {
     text: string;
     vehicleIndex?: number;
   } {
-    const match = text.trim().match(/^(.*?)(?:\s+#?(\d{1,2}))?$/s);
+    const match = text.trim().match(/^(.*\S)\s+#?([1-9]\d?)$/s);
     const vehicleIndex = match?.[2] ? Number(match[2]) : undefined;
 
     return {
@@ -1008,12 +1081,12 @@ export class TelegramService implements OnModuleInit {
   private inferExpenseCategory(title: string): string {
     const text = title.toLowerCase();
 
-    if (/страх|oc|ac|insurance/.test(text)) return "insurance";
-    if (/мойк|wash|clean/.test(text)) return "wash";
-    if (/парков|parking/.test(text)) return "parking";
+    if (/страх|ubezpiec|insurance|\b(?:oc|ac)\b/.test(text)) return "insurance";
+    if (/мийк|myjni|wash|clean/.test(text)) return "wash";
+    if (/парку|parking/.test(text)) return "parking";
     if (/штраф|fine|ticket/.test(text)) return "fine";
-    if (/шина|резин|tire|tyre/.test(text)) return "tires";
-    if (/налог|tax/.test(text)) return "tax";
+    if (/шин|opon|tire|tyre/.test(text)) return "tires";
+    if (/подат|podat|tax/.test(text)) return "tax";
 
     return "other";
   }
@@ -1030,73 +1103,65 @@ export class TelegramService implements OnModuleInit {
     | "other" {
     const text = title.toLowerCase();
 
-    if (/діагност|diagnostic/.test(text)) return "diagnostic";
-    if (/огляд|inspection|техогляд|то\b/.test(text)) return "inspection";
-    if (/замін|replace|масл|filter|фільтр/.test(text)) return "replacement";
-    if (/ремонт|repair|fix/.test(text)) return "repair";
+    if (/діагност|diagnost/.test(text)) return "diagnostic";
+    if (/огляд|inspection|техогляд|przegląd/.test(text)) return "inspection";
+    if (/замін|wymian|replace|масл|олив|olej|oil|filter|фільтр/.test(text)) return "replacement";
+    if (/ремонт|napraw|repair|fix/.test(text)) return "repair";
     if (/upgrade|тюнінг|покращ/.test(text)) return "upgrade";
 
     return "maintenance";
   }
 
-  private humanError(error: unknown, fallback: string): string {
-    if (error instanceof Error && error.message) {
-      return `❌ ${fallback}\n${error.message}`;
-    }
-
-    return `❌ ${fallback}`;
-  }
-
-  private buildGarageMessage(vehicles: Vehicle[]): string {
+  private buildGarageMessage(vehicles: Vehicle[], language: BotLanguage): string {
     const activeVehicles = vehicles.filter((vehicle) => !vehicle.isArchived);
 
     if (activeVehicles.length === 0) {
       return [
-        "У гаражі поки немає автомобілів.",
+        botText(language, "У гаражі поки немає автомобілів.", "Garaż jest pusty.", "Your garage is empty."),
         "",
-        "Додати можна так:",
+        botText(language, "Додати можна так:", "Dodaj auto w ten sposób:", "Add a car like this:"),
         "/addcar WBA12345678901234 BMW 320d",
       ].join("\n");
     }
 
     return [
-      "Ваш гараж:",
+      botText(language, "Ваш гараж:", "Twój garaż:", "Your garage:"),
       "",
       ...activeVehicles.map((vehicle, index) =>
-        this.formatVehicle(vehicle, index + 1),
+        this.formatVehicle(vehicle, index + 1, language),
       ),
       "",
-      "Якщо авто кілька, вказуйте номер: /mileage 123456 2 або #2 що перевірити?",
+      botText(language, "Вибрати авто: /vehicle 2. Записати пробіг другого авто: /mileage 123456 2.", "Wybierz auto: /vehicle 2. Zapisz przebieg drugiego auta: /mileage 123456 2.", "Select a car: /vehicle 2. Record mileage for car 2: /mileage 123456 2."),
     ].join("\n");
   }
 
-  private buildChooseVehicleMessage(vehicles: Vehicle[]): string {
+  private buildChooseVehicleMessage(vehicles: Vehicle[], language: BotLanguage): string {
     const activeVehicles = vehicles.filter((vehicle) => !vehicle.isArchived);
 
     if (activeVehicles.length === 0) {
       return [
-        "Спочатку додайте автомобіль.",
+        botText(language, "Спочатку додайте автомобіль.", "Najpierw dodaj auto.", "Add a car first."),
         "",
-        "Приклад:",
+        botText(language, "Приклад:", "Przykład:", "Example:"),
         "/addcar WBA12345678901234 BMW 320d",
       ].join("\n");
     }
 
     return [
-      "Уточніть автомобіль номером:",
+      botText(language, "Виберіть автомобіль за номером:", "Wybierz auto według numeru:", "Choose a car by number:"),
       "",
       ...activeVehicles.map((vehicle, index) =>
-        this.formatVehicle(vehicle, index + 1),
+        this.formatVehicle(vehicle, index + 1, language),
       ),
       "",
-      "Приклади:",
+      botText(language, "Приклади:", "Przykłady:", "Examples:"),
       "/mileage 123456 2",
-      "#2 що перевірити перед поїздкою?",
+      "/vehicle 2",
     ].join("\n");
   }
 
-  private formatVehicle(vehicle: Vehicle, index: number): string {
-    const vin = vehicle.vin ? `VIN ${vehicle.vin}` : "VIN не вказано";
+  private formatVehicle(vehicle: Vehicle, index: number, language: BotLanguage): string {
+    const vin = vehicle.vin ? `VIN ${vehicle.vin}` : botText(language, "VIN не вказано", "Nie podano VIN", "No VIN provided");
     const plate = vehicle.licensePlate ? `, ${vehicle.licensePlate}` : "";
 
     return `${index}. ${this.vehicleTitle(vehicle)} — ${vin}${plate}`;
@@ -1110,19 +1175,17 @@ export class TelegramService implements OnModuleInit {
     );
   }
 
-  private telegramSafeText(text: string): string {
-    const trimmed = text.trim();
-
-    if (trimmed.length <= 3900) {
-      return trimmed;
-    }
-
-    return `${trimmed.slice(0, 3890)}...`;
+  private text(ctx: Context, uk: string, pl: string, en: string): string {
+    return botText(botLanguage(this.authenticatedUsers.get(ctx)?.language), uk, pl, en);
   }
 
-  private get websiteButton() {
+  private locale(ctx: Context): string {
+    return this.text(ctx, "uk-UA", "pl-PL", "en-GB");
+  }
+
+  private websiteButton(ctx: Context) {
     return Markup.inlineKeyboard([
-      [Markup.button.webApp("🚗 Відкрити IA-CARS", this.webAppUrl)],
+      [Markup.button.webApp(this.text(ctx, "Відкрити CARA", "Otwórz CARA", "Open CARA"), this.webAppUrl)],
     ]);
   }
 

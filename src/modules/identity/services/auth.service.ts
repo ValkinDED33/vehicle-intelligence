@@ -135,9 +135,9 @@ export class AuthService {
     if (existingUser) {
       return this.identityDbService.updateTelegramProfile(existingUser.id, {
         displayName:
-          displayName || existingUser.displayName || username || "Telegram user",
+          existingUser.displayName || displayName || username || "Telegram user",
         telegramUsername: username,
-        telegramPhotoUrl: photoUrl,
+        telegramPhotoUrl: photoUrl || existingUser.telegramPhotoUrl,
       });
     }
 
@@ -146,16 +146,39 @@ export class AuthService {
       AuthService.PASSWORD_SALT_ROUNDS,
     );
 
-    return this.identityDbService.createUser({
-      email: `telegram_${telegramId}@telegram.local`,
-      passwordHash,
-      displayName: displayName || username || "Telegram user",
-      country: "PL",
-      language: this.normalizeLanguage(profile.languageCode),
-      telegramId,
-      telegramUsername: username,
-      telegramPhotoUrl: photoUrl,
-    });
+    try {
+      return await this.identityDbService.createUser({
+        email: `telegram_${telegramId}@telegram.local`,
+        passwordHash,
+        displayName: displayName || username || "Telegram user",
+        country: "PL",
+        language: this.normalizeLanguage(profile.languageCode),
+        telegramId,
+        telegramUsername: username,
+        telegramPhotoUrl: photoUrl,
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintViolation(error)) {
+        const concurrent = await this.identityDbService.findByTelegramId(telegramId);
+        if (concurrent) return concurrent;
+      }
+      throw error;
+    }
+  }
+
+  createTelegramLink(userId: string) {
+    return this.identityDbService.createTelegramLink(userId);
+  }
+
+  linkTelegram(token: string, profile: TelegramIdentityProfile): Promise<User> {
+    if (!/^[A-Za-z0-9_-]{32}$/.test(token)) throw new UnauthorizedException("Некоректне посилання Telegram");
+    return this.identityDbService.consumeTelegramLink(token, String(profile.id), profile.username);
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.identityDbService.findById(userId);
+    if (!user) throw new NotFoundException("Користувача не знайдено");
+    return this.publicUser(user);
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
@@ -183,13 +206,15 @@ export class AuthService {
     return {
       accessToken: this.jwtService.sign(payload),
 
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        country: user.country,
-        language: user.language,
-      },
+      user: this.publicUser(user),
+    };
+  }
+
+  private publicUser(user: User) {
+    return {
+      id: user.id, email: user.email, displayName: user.displayName,
+      country: user.country, language: user.language,
+      telegramLinked: Boolean(user.telegramId), telegramUsername: user.telegramUsername,
     };
   }
 
@@ -213,7 +238,7 @@ export class AuthService {
 
     const maxAgeSeconds = 24 * 60 * 60;
     const nowSeconds = Math.floor(Date.now() / 1000);
-    if (nowSeconds - authDate > maxAgeSeconds) return false;
+    if (!Number.isInteger(authDate) || authDate <= 0 || authDate > nowSeconds + 60 || nowSeconds - authDate > maxAgeSeconds) return false;
 
     const dataCheckString = [...params.entries()]
       .filter(([key]) => key !== "hash")

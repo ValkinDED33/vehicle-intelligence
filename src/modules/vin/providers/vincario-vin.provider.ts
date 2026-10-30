@@ -34,7 +34,7 @@ export class VincarioVinProvider implements VinProvider {
     if (!apiKey || !secretKey) {
       throw new ServiceUnavailableException({
         message:
-          "Vincario не настроен: добавьте VINCARIO_API_KEY и VINCARIO_SECRET_KEY.",
+          "Vincario не налаштовано: додайте VINCARIO_API_KEY і VINCARIO_SECRET_KEY.",
         code: "VINCARIO_NOT_CONFIGURED",
       });
     }

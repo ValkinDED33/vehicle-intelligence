@@ -7,6 +7,7 @@ import {
   type MileageReading,
 } from "../api";
 import { CATEGORY_LABELS, donutColors } from "../constants/dashboard";
+import { t } from "../i18n";
 import type { Sparkline } from "../types/dashboard";
 import { urgencyScore } from "./formatters";
 
@@ -98,7 +99,7 @@ export function buildDonut(summary: {
     const color = donutColors[i % donutColors.length];
     segments.push(`${color} ${from.toFixed(1)}% ${to.toFixed(1)}%`);
     return {
-      name: CATEGORY_LABELS[c.category] ?? c.category,
+      name: t(CATEGORY_LABELS[c.category] ?? c.category),
       total: c.totalCost,
       percent: Math.round(pct),
     };

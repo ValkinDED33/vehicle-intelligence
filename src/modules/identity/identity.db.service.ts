@@ -1,12 +1,44 @@
-import { Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { eq, sql } from "drizzle-orm";
+import { createHash, randomBytes } from "crypto";
 
 import { DatabaseService } from "../../common/database/database.service";
 import { type NewUser, type User, users } from "./schemas/user.schema";
+import { telegramLinks } from "./schemas/telegram-link.schema";
+import { vehicles } from "../garage/schemas/vehicle.schema";
 
 @Injectable()
 export class IdentityDbService {
   constructor(private readonly databaseService: DatabaseService) {}
+
+  async createTelegramLink(userId: string): Promise<{ token: string; expiresAt: Date }> {
+    const token = randomBytes(24).toString("base64url");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await this.databaseService.connection.insert(telegramLinks).values({ userId, tokenHash, expiresAt })
+      .onConflictDoUpdate({ target: telegramLinks.userId, set: { tokenHash, expiresAt } });
+    return { token, expiresAt };
+  }
+
+  async consumeTelegramLink(token: string, telegramId: string, username?: string): Promise<User> {
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    return this.databaseService.connection.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`telegram-link:${telegramId}`}))`);
+      const [link] = await tx.select().from(telegramLinks).where(eq(telegramLinks.tokenHash, tokenHash)).for("update");
+      if (!link || link.expiresAt.getTime() < Date.now()) throw new UnauthorizedException("Посилання недійсне або застаріле. Створіть нове на сайті.");
+      const [target] = await tx.select().from(users).where(eq(users.id, link.userId)).for("update");
+      if (!target || (target.telegramId && target.telegramId !== telegramId)) throw new ConflictException("До цього акаунта вже під’єднано інший Telegram.");
+      const [current] = await tx.select().from(users).where(eq(users.telegramId, telegramId)).for("update");
+      if (current && current.id !== target.id) {
+        const [car] = await tx.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.ownerId, current.id)).limit(1);
+        if (car || !current.email.endsWith("@telegram.local")) throw new ConflictException("Telegram уже пов’язаний з іншим акаунтом із даними. Автоматичне перенесення недоступне.");
+        await tx.update(users).set({ telegramId: null, telegramUsername: null, telegramPhotoUrl: null, updatedAt: new Date() }).where(eq(users.id, current.id));
+      }
+      const [linked] = await tx.update(users).set({ telegramId, telegramUsername: username ?? null, updatedAt: new Date() }).where(eq(users.id, target.id)).returning();
+      await tx.delete(telegramLinks).where(eq(telegramLinks.tokenHash, tokenHash));
+      return linked;
+    });
+  }
 
   async findByEmail(email: string): Promise<User | null> {
     const normalizedEmail = email.trim().toLowerCase();

@@ -1,3 +1,4 @@
+import { t, enumLabel } from "../i18n";
 import { useEffect, useState, type FormEvent } from "react";
 import { AlertTriangle, Check, CircleHelp, ClipboardList, FileText, Gauge, Loader2, Plus, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
 import { documentsApi, fmtDate, fmtMoney, fmtNumber, garageApi, maintenanceApi, mileageApi, profileApi, vinApi, type VehicleDocument } from "../api";
@@ -17,25 +18,25 @@ function GaragePage(props: PageProps) {
    {vehiclesLoading&&<Spinner/>}
    {vehiclesError&&<div className="auth-error">{vehiclesError}</div>}
    <div className="page-actions">
-    <label className="toggle-line"><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/> Показати архівні</label>
+    <label className="toggle-line"><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/> {t("Показати архівні")}</label>
    </div>
    <div className="vehicles-grid">
     {visible.map(v=><div key={v.id} className={'vehicle-card'+(vehicle?.id===v.id?' selected':'')}>
       <img src="/car.webp" alt=""/>
       <div className="vehicle-card-body">
-       <b>{vehicleTitle(v)}{v.isArchived&&<span className="badge">АРХІВ</span>}</b>
+       <b>{vehicleTitle(v)}{v.isArchived&&<span className="badge">{t("АРХІВ")}</span>}</b>
        <small>{vehicleLine(v,v.id===vehicle?.id?data.latest:null)}</small>
        {v.vin&&<small className="vin">VIN {v.vin}</small>}
       </div>
       <div className="vehicle-card-actions">
-       {vehicle?.id!==v.id&&<button className="primary" onClick={()=>{selectVehicle(v.id);navigate('Головна','chime')}}>ВИБРАТИ</button>}
-       {vehicle?.id===v.id&&<span className="tag green">Поточний</span>}
+       {vehicle?.id!==v.id&&<button className="primary" onClick={()=>{selectVehicle(v.id);navigate('Головна','chime')}}>{t("ВИБРАТИ")}</button>}
+       {vehicle?.id===v.id&&<span className="tag green">{t("Поточний")}</span>}
        {v.isArchived
-        ?<button className="ghost-btn" onClick={async()=>{await garageApi.restore(v.id);await loadVehicles()}}>Повернути</button>
-        :<button className="ghost-btn" onClick={async()=>{await garageApi.archive(v.id);await loadVehicles()}}>В архів</button>}
+        ?<button className="ghost-btn" onClick={async()=>{await garageApi.restore(v.id);await loadVehicles()}}>{t("Повернути")}</button>
+        :<button className="ghost-btn" onClick={async()=>{await garageApi.archive(v.id);await loadVehicles()}}>{t("В архів")}</button>}
       </div>
      </div>)}
-    {!visible.length&&!vehiclesLoading&&<div className="state-note">Гараж порожній.</div>}
+    {!visible.length&&!vehiclesLoading&&<div className="state-note">{t("Гараж порожній.")}</div>}
    </div>
    <AddVehicleForm onDone={()=>void loadVehicles()}/>
   </>;
@@ -67,12 +68,12 @@ function ProfilePage(props: PageProps) {
   },[profile?.id]);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const decode=async()=>{
-    if(!vehicle.vin){setMessage({kind:'err',text:'В автомобіля не вказано VIN — спочатку додайте його в гаражі.'});return}
+    if(!vehicle.vin){setMessage({kind:'err',text:t("В автомобіля не вказано VIN — спочатку додайте його в гаражі.")});return}
     setBusy(true);setMessage(null);
     try{
       const decoded=await vinApi.decode(vehicle.id);
       const hasProfileData=Boolean(decoded.engineCode||decoded.engineFamily||decoded.displacementCc||decoded.fuelType||decoded.powerKw||decoded.powerHp||decoded.transmissionType||decoded.driveType);
-      setMessage({kind:'ok',text:hasProfileData?'VIN розшифровано — профіль і картку оновлено.':'VIN розшифровано — картку оновлено, але провайдер не повернув технічні дані для профілю.'});
+      setMessage({kind:'ok',text:hasProfileData?t("VIN розшифровано — профіль і картку оновлено."):t("VIN розшифровано — картку оновлено, але провайдер не повернув технічні дані для профілю.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
@@ -89,54 +90,54 @@ function ProfilePage(props: PageProps) {
         trimLevel:emptyToUndefined(correction.trimLevel),
         exteriorColor:emptyToUndefined(correction.exteriorColor),
       });
-      setMessage({kind:'ok',text:'Підтверджені дані збережено — тепер вони мають вищий пріоритет, ніж відповідь VIN-провайдера.'});
+      setMessage({kind:'ok',text:t("Підтверджені дані збережено — тепер вони мають вищий пріоритет, ніж відповідь VIN-провайдера.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSavingProfile(false)}
   };
   const rows:[string,string][]=profile?[
-    ['Двигун',[profile.engineFamily,profile.engineCode].filter(Boolean).join(' ')||'—'],
-    ['Об’єм',profile.displacementCc?`${fmtNumber(profile.displacementCc)} см³`:'—'],
-    ['Пальне',formatFuel(profile.fuelType)],
-    ['Наддув',formatAspiration(profile.aspirationType)],
-    ['Потужність',profile.powerHp?`${fmtNumber(profile.powerHp)} к.с. (${fmtNumber(profile.powerKw)} кВт)`:'—'],
-    ['Коробка',[formatTransmission(profile.transmissionType),profile.transmissionCode].filter(v=>v&&v!=='—').join(' ')||'—'],
-    ['Привід',formatDrive(profile.driveType)],
-    ['Кузов',formatBody(profile.bodyType)],
-    ['Дверей',profile.doorCount!=null?String(profile.doorCount):'—'],
-    ['Місць',profile.seatCount!=null?String(profile.seatCount):'—'],
-    ['Комплектація',profile.trimLevel??'—'],
-    ['Колір',profile.exteriorColor??'—'],
-    ['Бак',profile.fuelTankCapacityLiters?`${profile.fuelTankCapacityLiters} л`:'—'],
-    ['Батарея',profile.batteryUsableCapacityKwh?`${profile.batteryUsableCapacityKwh} кВт⋅год (повна ${profile.batteryGrossCapacityKwh??'—'})`:'—'],
-    ['Версія профілю',`v${profile.version} · ${formatProfileSource(profile.source)}`],
-    ['Підтверджено',fmtDate(profile.confirmedAt)],
+    [t("Двигун"),[profile.engineFamily,profile.engineCode].filter(Boolean).join(' ')||'—'],
+    [t("Об’єм"),profile.displacementCc?t("{0} см³", { 0: fmtNumber(profile.displacementCc) }):'—'],
+    [t("Пальне"),formatFuel(profile.fuelType)],
+    [t("Наддув"),formatAspiration(profile.aspirationType)],
+    [t("Потужність"),profile.powerHp?t("{0} к.с. ({1} кВт)", { 0: fmtNumber(profile.powerHp), 1: fmtNumber(profile.powerKw) }):'—'],
+    [t("Коробка"),[formatTransmission(profile.transmissionType),profile.transmissionCode].filter(v=>v&&v!=='—').join(' ')||'—'],
+    [t("Привід"),formatDrive(profile.driveType)],
+    [t("Кузов"),formatBody(profile.bodyType)],
+    [t("Дверей"),profile.doorCount!=null?String(profile.doorCount):'—'],
+    [t("Місць"),profile.seatCount!=null?String(profile.seatCount):'—'],
+    [t("Комплектація"),profile.trimLevel??'—'],
+    [t("Колір"),profile.exteriorColor??'—'],
+    [t("Бак"),profile.fuelTankCapacityLiters?t("{0} л", { 0: profile.fuelTankCapacityLiters }):'—'],
+    [t("Батарея"),profile.batteryUsableCapacityKwh?t("{0} кВт⋅год (повна {1})", { 0: profile.batteryUsableCapacityKwh, 1: profile.batteryGrossCapacityKwh??'—' }):'—'],
+    [t("Версія профілю"),`v${profile.version} · ${formatProfileSource(profile.source)}`],
+    [t("Підтверджено"),fmtDate(profile.confirmedAt)],
   ]:[
-    ['Марка',vehicle.make??'—'],['Рік',vehicle.modelYear??'—'],['VIN',vehicle.vin??'—'],
-    ['Держномер',vehicle.licensePlate??'—'],['Країна',vehicle.country],
+    [t("Марка"),vehicle.make??'—'],[t("Рік"),vehicle.modelYear??'—'],['VIN',vehicle.vin??'—'],
+    [t("Держномер"),vehicle.licensePlate??'—'],[t("Країна"),vehicle.country],
   ];
   return <>
    <div className="page-actions">
-    <button className="primary" onClick={()=>void decode()} disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Search size={15}/>} {busy?'РОЗШИФРОВУЄМО VIN...':'РОЗШИФРУВАТИ VIN'}</button>
+    <button className="primary" onClick={()=>void decode()} disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Search size={15}/>} {busy?t("РОЗШИФРОВУЄМО VIN..."):t("РОЗШИФРУВАТИ VIN")}</button>
    </div>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    {profile
-    ?<div className="panel spec-panel"><h2>ТЕХНІЧНИЙ ПРОФІЛЬ</h2><div className="spec-grid">{rows.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div></div>
-    :<EmptyState icon={ClipboardList} title="Профіль ще не заповнено" text="Натисніть «Розшифрувати VIN» — дані підтягнуться з Vehicle Databases і збережуться в профілі автомобіля."/>}
+    ?<div className="panel spec-panel"><h2>{t("ТЕХНІЧНИЙ ПРОФІЛЬ")}</h2><div className="spec-grid">{rows.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div></div>
+    :<EmptyState icon={ClipboardList} title={t("Профіль ще не заповнено")} text={t("Натисніть «Розшифрувати VIN» — дані підтягнуться з Vehicle Databases і збережуться в профілі автомобіля.")}/>}
    <form className="panel profile-correction-panel" onSubmit={saveCorrection}>
-    <div className="panel-heading"><h2>ПІДТВЕРДЖЕНІ ДАНІ ВЛАСНИКА</h2><span className="tag green">вище VIN-провайдера</span></div>
+    <div className="panel-heading"><h2>{t("ПІДТВЕРДЖЕНІ ДАНІ ВЛАСНИКА")}</h2><span className="tag green">{t("вище VIN-провайдера")}</span></div>
     <div className="correction-grid">
-     <Field label="Пальне"><select value={correction.fuelType} onChange={e=>setCorrection({...correction,fuelType:e.target.value})}>
-      <option value="">Не вказано</option><option value="petrol">Бензин</option><option value="diesel">Дизель</option><option value="lpg">LPG</option><option value="cng">CNG</option><option value="hybrid">Гібрид</option><option value="phev">PHEV</option><option value="electric">Електро</option>
+     <Field label={t("Пальне")}><select value={correction.fuelType} onChange={e=>setCorrection({...correction,fuelType:e.target.value})}>
+      <option value="">{t("Не вказано")}</option><option value="petrol">{t("Бензин")}</option><option value="diesel">{t("Дизель")}</option><option value="lpg">LPG</option><option value="cng">CNG</option><option value="hybrid">{t("Гібрид")}</option><option value="phev">PHEV</option><option value="electric">{t("Електро")}</option>
      </select></Field>
-     <Field label="Кузов"><select value={correction.bodyType} onChange={e=>setCorrection({...correction,bodyType:e.target.value})}>
-      <option value="">Не вказано</option><option value="hatchback">Хетчбек</option><option value="sedan">Седан</option><option value="wagon">Універсал</option><option value="coupe">Купе</option><option value="suv">SUV</option><option value="mpv">MPV</option><option value="van">Фургон</option><option value="pickup">Пікап</option><option value="convertible">Кабріолет</option><option value="other">Інше</option>
+     <Field label={t("Кузов")}><select value={correction.bodyType} onChange={e=>setCorrection({...correction,bodyType:e.target.value})}>
+      <option value="">{t("Не вказано")}</option><option value="hatchback">{t("Хетчбек")}</option><option value="sedan">{t("Седан")}</option><option value="wagon">{t("Універсал")}</option><option value="coupe">{t("Купе")}</option><option value="suv">SUV</option><option value="mpv">MPV</option><option value="van">{t("Фургон")}</option><option value="pickup">{t("Пікап")}</option><option value="convertible">{t("Кабріолет")}</option><option value="other">{t("Інше")}</option>
      </select></Field>
-     <Field label="Дверей"><input value={correction.doorCount} onChange={e=>setCorrection({...correction,doorCount:e.target.value.replace(/[^\d]/g,'')})} placeholder="3" inputMode="numeric"/></Field>
-     <Field label="Місць"><input value={correction.seatCount} onChange={e=>setCorrection({...correction,seatCount:e.target.value.replace(/[^\d]/g,'')})} placeholder="5" inputMode="numeric"/></Field>
-     <Field label="Комплектація"><input value={correction.trimLevel} onChange={e=>setCorrection({...correction,trimLevel:e.target.value})} placeholder="GOAL"/></Field>
-     <Field label="Колір"><input value={correction.exteriorColor} onChange={e=>setCorrection({...correction,exteriorColor:e.target.value})} placeholder="наприклад, сріблястий"/></Field>
+     <Field label={t("Дверей")}><input value={correction.doorCount} onChange={e=>setCorrection({...correction,doorCount:e.target.value.replace(/[^\d]/g,'')})} placeholder="3" inputMode="numeric"/></Field>
+     <Field label={t("Місць")}><input value={correction.seatCount} onChange={e=>setCorrection({...correction,seatCount:e.target.value.replace(/[^\d]/g,'')})} placeholder="5" inputMode="numeric"/></Field>
+     <Field label={t("Комплектація")}><input value={correction.trimLevel} onChange={e=>setCorrection({...correction,trimLevel:e.target.value})} placeholder="GOAL"/></Field>
+     <Field label={t("Колір")}><input value={correction.exteriorColor} onChange={e=>setCorrection({...correction,exteriorColor:e.target.value})} placeholder={t("наприклад, сріблястий")}/></Field>
     </div>
-    <button className="ghost-btn save-profile-btn" type="submit" disabled={savingProfile}>{savingProfile?<Loader2 size={15} className="spin"/>:<Check size={15}/>} ЗБЕРЕГТИ ПІДТВЕРДЖЕННЯ</button>
+    <button className="ghost-btn save-profile-btn" type="submit" disabled={savingProfile}>{savingProfile?<Loader2 size={15} className="spin"/>:<Check size={15}/>} {t("ЗБЕРЕГТИ ПІДТВЕРДЖЕННЯ")}</button>
    </form>
    <VinDecodedFacts decode={data.vinDecode}/>
   </>;
@@ -155,8 +156,8 @@ type DecodeGroup = {
 function VinDecodedFacts({decode}:{decode:VinDecode|null}) {
   const facts=decode?extractVinFacts(decode):[];
   if(!decode||!facts.length)return <div className="panel decode-panel">
-   <div className="panel-heading"><h2>ПОВНЕ РОЗШИФРУВАННЯ VIN</h2></div>
-   <div className="state-note">Повне розшифрування з’явиться після успішного VIN decode.</div>
+   <div className="panel-heading"><h2>{t("ПОВНЕ РОЗШИФРУВАННЯ VIN")}</h2></div>
+   <div className="state-note">{t("Повне розшифрування з’явиться після успішного VIN decode.")}</div>
   </div>;
   const groups=groupDecodeFacts(facts);
   const hasColor=facts.some(f=>/color|colour|paint|цвет/i.test(f.label));
@@ -164,15 +165,15 @@ function VinDecodedFacts({decode}:{decode:VinDecode|null}) {
   return <div className="panel decode-panel">
    <div className="decode-head">
     <div>
-     <h2>ПОВНЕ РОЗШИФРУВАННЯ VIN</h2>
-     <p>{formatVinProvider(decode.provider)}{decode.decodedAt?` · ${fmtDate(decode.decodedAt,true)}`:''} · {facts.length} полів</p>
+     <h2>{t("ПОВНЕ РОЗШИФРУВАННЯ VIN")}</h2>
+     <p>{formatVinProvider(decode.provider)}{decode.decodedAt?` · ${fmtDate(decode.decodedAt,true)}`:''} · {facts.length} {t("полів")}</p>
     </div>
     {decode.vin&&<span className="decode-vin">{decode.vin}</span>}
    </div>
-   {(!hasColor||!hasTrim)&&<div className="state-note">Провайдер не повернув {[
-    !hasTrim?'комплектацію/trim':null,
-    !hasColor?'колір/paint':null,
-   ].filter(Boolean).join(' і ')} для цього VIN. Інші отримані поля збережено й показано нижче.</div>}
+   {(!hasColor||!hasTrim)&&<div className="state-note">{t("Провайдер не повернув")} {[
+    !hasTrim?t("комплектацію/trim"):null,
+    !hasColor?t("колір/paint"):null,
+   ].filter(Boolean).join(t(" і "))} {t("для цього VIN. Інші отримані поля збережено й показано нижче.")}</div>}
    <div className="decode-groups">
     {groups.map(group=><section key={group.title} className="decode-group">
      <h3>{group.title}</h3>
@@ -218,13 +219,13 @@ function extractVinFacts(decode:VinDecode):DecodeFact[] {
 
 function groupDecodeFacts(facts:DecodeFact[]):DecodeGroup[] {
   const buckets:DecodeGroup[]=[
-    {title:"Ідентифікація",facts:[]},
-    {title:"Кузов і комплектація",facts:[]},
-    {title:"Двигун і трансмісія",facts:[]},
-    {title:"Розміри, маса й колеса",facts:[]},
-    {title:"Оснащення й безпека",facts:[]},
-    {title:"Виробництво й документи",facts:[]},
-    {title:"Інше",facts:[]},
+    {title:t("Ідентифікація"),facts:[]},
+    {title:t("Кузов і комплектація"),facts:[]},
+    {title:t("Двигун і трансмісія"),facts:[]},
+    {title:t("Розміри, маса й колеса"),facts:[]},
+    {title:t("Оснащення й безпека"),facts:[]},
+    {title:t("Виробництво й документи"),facts:[]},
+    {title:t("Інше"),facts:[]},
   ];
   for(const fact of facts){
     bucketForDecodeLabel(fact.label,buckets).facts.push(fact);
@@ -260,39 +261,39 @@ function formatDecodeValue(value:unknown):string {
 function translateDecodeLabel(label:string):string {
   const map:Record<string,string>={
     "VIN":"VIN",
-    "Vehicle ID":"ID автомобіля",
-    "Make":"Марка",
-    "Model":"Модель",
-    "Model Year":"Рік моделі",
-    "Product Type":"Тип ТЗ",
-    "Body":"Кузов",
-    "Series":"Серія",
-    "Drive":"Привід",
-    "Transmission":"Коробка",
-    "Engine Manufacturer":"Виробник двигуна",
-    "Engine Type":"Тип двигуна",
-    "Emission Standard":"Екостандарт",
-    "Average CO2 Emission":"Середній CO2",
-    "Manufacturer":"Виробник",
-    "Plant Country":"Країна складання",
-    "Number of Wheels":"Коліс",
-    "Number of Axles":"Осей",
-    "Number of Doors":"Дверей",
-    "Number of Seats":"Місць",
-    "Rear Brakes":"Задні гальма",
-    "Brake System":"Гальмівна система",
-    "Suspension":"Підвіска",
-    "Steering Type":"Кермове управління",
-    "Wheel Size":"Розмір коліс",
-    "Wheelbase":"Колісна база",
-    "Height":"Висота",
-    "Length":"Довжина",
-    "Width":"Ширина",
-    "Track Front":"Передня колія",
-    "Track Rear":"Задня колія",
-    "Max Speed":"Макс. швидкість",
-    "Weight Empty":"Споряджена маса",
-    "Max Weight":"Макс. маса",
+    "Vehicle ID":t("ID автомобіля"),
+    "Make":t("Марка"),
+    "Model":t("Модель"),
+    "Model Year":t("Рік моделі"),
+    "Product Type":t("Тип ТЗ"),
+    "Body":t("Кузов"),
+    "Series":t("Серія"),
+    "Drive":t("Привід"),
+    "Transmission":t("Коробка"),
+    "Engine Manufacturer":t("Виробник двигуна"),
+    "Engine Type":t("Тип двигуна"),
+    "Emission Standard":t("Екостандарт"),
+    "Average CO2 Emission":t("Середній CO2"),
+    "Manufacturer":t("Виробник"),
+    "Plant Country":t("Країна складання"),
+    "Number of Wheels":t("Коліс"),
+    "Number of Axles":t("Осей"),
+    "Number of Doors":t("Дверей"),
+    "Number of Seats":t("Місць"),
+    "Rear Brakes":t("Задні гальма"),
+    "Brake System":t("Гальмівна система"),
+    "Suspension":t("Підвіска"),
+    "Steering Type":t("Кермове управління"),
+    "Wheel Size":t("Розмір коліс"),
+    "Wheelbase":t("Колісна база"),
+    "Height":t("Висота"),
+    "Length":t("Довжина"),
+    "Width":t("Ширина"),
+    "Track Front":t("Передня колія"),
+    "Track Rear":t("Задня колія"),
+    "Max Speed":t("Макс. швидкість"),
+    "Weight Empty":t("Споряджена маса"),
+    "Max Weight":t("Макс. маса"),
     "ABS":"ABS",
   };
   return map[label]??label;
@@ -309,27 +310,27 @@ function isRecord(value:unknown):value is Record<string,unknown> {
 }
 
 function formatFuel(value:string|null|undefined):string{
-  const map:Record<string,string>={petrol:'бензин',diesel:'дизель',lpg:'LPG',cng:'CNG',hybrid:'гібрид',phev:'plug-in hybrid',electric:'електро',hydrogen:'водень'};
+  const map:Record<string,string>={petrol:t("бензин"),diesel:t("дизель"),lpg:'LPG',cng:'CNG',hybrid:t("гібрид"),phev:'plug-in hybrid',electric:t("електро"),hydrogen:t("водень")};
   return value?map[value]??value:'—';
 }
 
 function formatTransmission(value:string|null|undefined):string{
-  const map:Record<string,string>={manual:'МКПП',automatic:'АКПП',dct:'робот DCT',cvt:'варіатор',other:'інша'};
+  const map:Record<string,string>={manual:t("МКПП"),automatic:t("АКПП"),dct:t("робот DCT"),cvt:t("варіатор"),other:t("інша")};
   return value?map[value]??value:'—';
 }
 
 function formatDrive(value:string|null|undefined):string{
-  const map:Record<string,string>={fwd:'передній',rwd:'задній',awd:'повний AWD','4wd':'повний 4WD',other:'інший'};
+  const map:Record<string,string>={fwd:t("передній"),rwd:t("задній"),awd:t("повний AWD"),'4wd':t("повний 4WD"),other:t("інший")};
   return value?map[value]??value:'—';
 }
 
 function formatBody(value:string|null|undefined):string{
-  const map:Record<string,string>={hatchback:'хетчбек',sedan:'седан',wagon:'універсал',coupe:'купе',suv:'SUV',mpv:'MPV',van:'фургон',pickup:'пікап',convertible:'кабріолет',other:'інший'};
+  const map:Record<string,string>={hatchback:t("хетчбек"),sedan:t("седан"),wagon:t("універсал"),coupe:t("купе"),suv:'SUV',mpv:'MPV',van:t("фургон"),pickup:t("пікап"),convertible:t("кабріолет"),other:t("інший")};
   return value?map[value]??value:'—';
 }
 
 function formatAspiration(value:string|null|undefined):string{
-  const map:Record<string,string>={turbo:'турбо',supercharged:'компресор',naturally_aspirated:'атмосферний'};
+  const map:Record<string,string>={turbo:t("турбо"),supercharged:t("компресор"),naturally_aspirated:t("атмосферний")};
   return value?map[value]??value:'—';
 }
 
@@ -345,8 +346,8 @@ function numberOrUndefined(value:string):number|undefined{
 }
 
 function formatProfileSource(value:string):string{
-  if(value==='manual-confirmed')return 'підтверджено власником';
-  if(value==='manual')return 'ручний профіль';
+  if(value==='manual-confirmed')return t("підтверджено власником");
+  if(value==='manual')return t("ручний профіль");
   if(value==='vin:vincario')return 'Vincario VIN';
   if(value==='vin:vehicle-databases')return 'Vehicle Databases VIN';
   if(value.startsWith('vdb:'))return `Vehicle Databases · ${value.slice(4)}`;
@@ -364,47 +365,47 @@ function MileagePage(props: PageProps) {
   const submit=async(e:FormEvent)=>{
     e.preventDefault();
     const km=Number(odometer);
-    if(!Number.isFinite(km)||km<0){setMessage({kind:'err',text:'Введіть коректний пробіг.'});return}
+    if(!Number.isFinite(km)||km<0){setMessage({kind:'err',text:t("Введіть коректний пробіг.")});return}
     setBusy(true);setMessage(null);
     try{
       await mileageApi.create(vehicle.id,{odometerKm:Math.round(km),source:'web',recordedAt:date?new Date(date).toISOString():undefined});
       setOdometer('');setDate('');
-      setMessage({kind:'ok',text:'Запис пробігу додано.'});
+      setMessage({kind:'ok',text:t("Запис пробігу додано.")});
       await refresh();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
   return <>
    <div className="panels-row">
     <form className="form-card" onSubmit={submit}>
-     <h3><Gauge size={16}/> Додати показання</h3>
+     <h3><Gauge size={16}/> {t("Додати показання")}</h3>
      <div className="form-grid">
-      <Field label="Одометр, км"><input value={odometer} onChange={e=>setOdometer(e.target.value.replace(/[^\d]/g,''))} placeholder="120450" inputMode="numeric"/></Field>
-      <Field label="Дата"><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></Field>
+      <Field label={t("Одометр, км")}><input value={odometer} onChange={e=>setOdometer(e.target.value.replace(/[^\d]/g,''))} placeholder="120450" inputMode="numeric"/></Field>
+      <Field label={t("Дата")}><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></Field>
      </div>
      {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
-     <button className="primary" type="submit" disabled={busy}>{busy?'Зберігаємо...':'ДОДАТИ ЗАПИС'}</button>
+     <button className="primary" type="submit" disabled={busy}>{busy?t("Зберігаємо..."):t("ДОДАТИ ЗАПИС")}</button>
     </form>
     <div className="panel stat-panel">
-     <h2>ОСТАННЄ ПОКАЗАННЯ</h2>
-     <div className="metric-value">{data.latest?fmtNumber(data.latest.odometerKm):'—'} <span>км</span></div>
-     <p>{data.latest?`${fmtDate(data.latest.recordedAt,true)} · джерело ${data.latest.source} · впевненість ${Math.round(data.latest.confidence*100)}%`:'Немає записів'}</p>
+     <h2>{t("ОСТАННЄ ПОКАЗАННЯ")}</h2>
+     <div className="metric-value">{data.latest?fmtNumber(data.latest.odometerKm):'—'} <span>{t("км")}</span></div>
+     <p>{data.latest?t("{0} · джерело {1} · впевненість {2}%", { 0: fmtDate(data.latest.recordedAt,true), 1: data.latest.source, 2: Math.round(data.latest.confidence*100) }):t("Немає записів")}</p>
     </div>
    </div>
    {anomalies.length>0&&<div className="panel anomaly-panel">
-    <h2><AlertTriangle size={14}/> АНОМАЛІЇ ПРОБІГУ ({anomalies.length})</h2>
+    <h2><AlertTriangle size={14}/> {t("АНОМАЛІЇ ПРОБІГУ (")}{anomalies.length})</h2>
     {anomalies.map((a,i)=><div key={i} className={'anomaly '+a.severity}>
-      <span className={'tag '+a.severity}>{a.type==='rollback'?'Скручування пробігу':'Неправдоподібний стрибок'}</span>
-      <div><b>{a.message}</b><small>{fmtDate(a.fromRecordedAt)} → {fmtDate(a.toRecordedAt)} · {fmtNumber(a.fromOdometerKm)} → {fmtNumber(a.toOdometerKm)} км</small></div>
+      <span className={'tag '+a.severity}>{a.type==='rollback'?t("Скручування пробігу"):t("Неправдоподібний стрибок")}</span>
+      <div><b>{a.message}</b><small>{fmtDate(a.fromRecordedAt)} → {fmtDate(a.toRecordedAt)} · {fmtNumber(a.fromOdometerKm)} → {fmtNumber(a.toOdometerKm)} {t("км")}</small></div>
      </div>)}
    </div>}
    <div className="panel list-panel">
-    <h2>ІСТОРІЯ ПРОБІГУ</h2>
+    <h2>{t("ІСТОРІЯ ПРОБІГУ")}</h2>
     {data.loading&&!data.mileageHistory.length?<Spinner/>
      :data.mileageHistory.length
-      ?<table className="data-table"><thead><tr><th>Дата</th><th>Одометр</th><th>Джерело</th><th>Впевненість</th></tr></thead><tbody>
-       {[...data.mileageHistory].reverse().map(r=><tr key={r.id}><td>{fmtDate(r.recordedAt,true)}</td><td><b>{fmtNumber(r.odometerKm)} км</b></td><td>{r.source}</td><td>{Math.round(r.confidence*100)}%</td></tr>)}
+      ?<table className="data-table"><thead><tr><th>{t("Дата")}</th><th>{t("Одометр")}</th><th>{t("Джерело")}</th><th>{t("Впевненість")}</th></tr></thead><tbody>
+       {[...data.mileageHistory].reverse().map(r=><tr key={r.id}><td>{fmtDate(r.recordedAt,true)}</td><td><b>{fmtNumber(r.odometerKm)} {t("км")}</b></td><td>{enumLabel(r.source)}</td><td>{Math.round(r.confidence*100)}%</td></tr>)}
       </tbody></table>
-      :<div className="state-note">Записів поки немає.</div>}
+      :<div className="state-note">{t("Записів поки немає.")}</div>}
    </div>
   </>;
 }
@@ -415,7 +416,7 @@ function ServicePage(props: PageProps) {
   const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
   const [rule,setRule]=useState({
     key:"engine_oil",
-    title:"Заміна масла",
+    title:t("Заміна оливи"),
     intervalKm:"10000",
     intervalMonths:"12",
     warningKmBefore:"1000",
@@ -436,7 +437,7 @@ function ServicePage(props: PageProps) {
         warningDaysBefore:numberOrUndefined(rule.warningDaysBefore),
         completionEventType:`maintenance.${slugifyRuleKey(rule.key||rule.title)}.completed`,
       });
-      setMessage({kind:'ok',text:'Регламент додано. Статуси ТО перераховано.'});
+      setMessage({kind:'ok',text:t("Регламент додано. Статуси ТО перераховано.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
@@ -444,50 +445,50 @@ function ServicePage(props: PageProps) {
     setBusy(true);setMessage(null);
     try{
       await maintenanceApi.deleteRule(vehicle.id,ruleId);
-      setMessage({kind:'ok',text:'Правило регламенту вимкнено.'});
+      setMessage({kind:'ok',text:t("Правило регламенту вимкнено.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
   return <>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    <form className="panel form-card" onSubmit={createRule}>
-    <h2>ДОДАТИ РЕГЛАМЕНТ</h2>
+    <h2>{t("ДОДАТИ РЕГЛАМЕНТ")}</h2>
     <div className="form-grid">
-     <Field label="Ключ"><input value={rule.key} onChange={e=>setRule({...rule,key:e.target.value})} placeholder="engine_oil"/></Field>
-     <Field label="Робота"><input value={rule.title} onChange={e=>setRule({...rule,title:e.target.value})} placeholder="Заміна масла" required/></Field>
-     <Field label="Інтервал, км"><input value={rule.intervalKm} onChange={e=>setRule({...rule,intervalKm:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="10000"/></Field>
-     <Field label="Інтервал, міс."><input value={rule.intervalMonths} onChange={e=>setRule({...rule,intervalMonths:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="12"/></Field>
-     <Field label="Попередити за, км"><input value={rule.warningKmBefore} onChange={e=>setRule({...rule,warningKmBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="1000"/></Field>
-     <Field label="Попередити за, днів"><input value={rule.warningDaysBefore} onChange={e=>setRule({...rule,warningDaysBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="30"/></Field>
+     <Field label={t("Ключ")}><input value={rule.key} onChange={e=>setRule({...rule,key:e.target.value})} placeholder="engine_oil"/></Field>
+     <Field label={t("Робота")}><input value={rule.title} onChange={e=>setRule({...rule,title:e.target.value})} placeholder={t("Заміна оливи")} required/></Field>
+     <Field label={t("Інтервал, км")}><input value={rule.intervalKm} onChange={e=>setRule({...rule,intervalKm:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="10000"/></Field>
+     <Field label={t("Інтервал, міс.")}><input value={rule.intervalMonths} onChange={e=>setRule({...rule,intervalMonths:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="12"/></Field>
+     <Field label={t("Попередити за, км")}><input value={rule.warningKmBefore} onChange={e=>setRule({...rule,warningKmBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="1000"/></Field>
+     <Field label={t("Попередити за, днів")}><input value={rule.warningDaysBefore} onChange={e=>setRule({...rule,warningDaysBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="30"/></Field>
     </div>
-    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} ДОДАТИ РЕГЛАМЕНТ</button>
+    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} {t("ДОДАТИ РЕГЛАМЕНТ")}</button>
    </form>
    <div className="panel list-panel">
-    <h2>СТАТУС ОБСЛУГОВУВАННЯ</h2>
+    <h2>{t("СТАТУС ОБСЛУГОВУВАННЯ")}</h2>
     {data.loading&&!data.maintenance.length?<Spinner/>
      :data.maintenance.length
       ?<div className="status-list">{data.maintenance.map(s=><div key={s.rule.id} className="status-row">
-        <span className={'tag '+URGENCY_META[s.urgency].color}>{URGENCY_META[s.urgency].tag}</span>
-       <div className="status-copy"><b>{s.rule.title}</b><small>{reminderDetail(s)}{s.lastCompletedAt?` · попереднє ТО ${fmtDate(s.lastCompletedAt)}`:' · ще не виконувалося'}</small></div>
-        <div className="status-nums">{s.rule.intervalKm?`інтервал ${fmtNumber(s.rule.intervalKm)} км`:''}{s.rule.intervalMonths?` · ${s.rule.intervalMonths} міс.`:''}</div>
+        <span className={'tag '+URGENCY_META[s.urgency].color}>{t(URGENCY_META[s.urgency].tag)}</span>
+       <div className="status-copy"><b>{s.rule.title}</b><small>{reminderDetail(s)}{s.lastCompletedAt?t(" · попереднє ТО {0}", { 0: fmtDate(s.lastCompletedAt) }):t(" · ще не виконувалося")}</small></div>
+        <div className="status-nums">{s.rule.intervalKm?t("інтервал {0} км", { 0: fmtNumber(s.rule.intervalKm) }):''}{s.rule.intervalMonths?t(" · {0} міс.", { 0: s.rule.intervalMonths }):''}</div>
        </div>)}</div>
-      :<div className="state-note"><Wrench size={15}/> Правила ТО не налаштовані. Додайте перший регламент вище.</div>}
+      :<div className="state-note"><Wrench size={15}/> {t("Правила ТО не налаштовані. Додайте перший регламент вище.")}</div>}
    </div>
    <div className="panel list-panel">
-    <h2>ПРАВИЛА РЕГЛАМЕНТУ</h2>
+    <h2>{t("ПРАВИЛА РЕГЛАМЕНТУ")}</h2>
     {data.maintenance.length
-     ?<table className="data-table"><thead><tr><th>Робота</th><th>Ключ</th><th>Інтервал</th><th>Попередження</th><th></th></tr></thead><tbody>
-      {data.maintenance.map(s=><tr key={s.rule.id}><td><b>{s.rule.title}</b><small className="sub">{s.rule.source??'manual'}</small></td><td className="mono">{s.rule.key}</td><td>{[s.rule.intervalKm?`${fmtNumber(s.rule.intervalKm)} км`:null,s.rule.intervalMonths?`${s.rule.intervalMonths} міс.`:null].filter(Boolean).join(' / ')||'—'}</td><td>{[s.rule.warningKmBefore?`${fmtNumber(s.rule.warningKmBefore)} км`:null,s.rule.warningDaysBefore?`${s.rule.warningDaysBefore} дн.`:null].filter(Boolean).join(' / ')||'—'}</td><td><button className="ghost-btn danger" onClick={()=>void deleteRule(s.rule.id)} disabled={busy}><Trash2 size={14}/> Видалити</button></td></tr>)}
+     ?<table className="data-table"><thead><tr><th>{t("Робота")}</th><th>{t("Ключ")}</th><th>{t("Інтервал")}</th><th>{t("Попередження")}</th><th></th></tr></thead><tbody>
+      {data.maintenance.map(s=><tr key={s.rule.id}><td><b>{s.rule.title}</b><small className="sub">{enumLabel(s.rule.source??'manual')}</small></td><td className="mono">{s.rule.key}</td><td>{[s.rule.intervalKm?t("{0} км", { 0: fmtNumber(s.rule.intervalKm) }):null,s.rule.intervalMonths?t("{0} міс.", { 0: s.rule.intervalMonths }):null].filter(Boolean).join(' / ')||'—'}</td><td>{[s.rule.warningKmBefore?t("{0} км", { 0: fmtNumber(s.rule.warningKmBefore) }):null,s.rule.warningDaysBefore?t("{0} дн.", { 0: s.rule.warningDaysBefore }):null].filter(Boolean).join(' / ')||'—'}</td><td><button className="ghost-btn danger" onClick={()=>void deleteRule(s.rule.id)} disabled={busy}><Trash2 size={14}/> {t("Видалити")}</button></td></tr>)}
      </tbody></table>
-     :<div className="state-note">Правил поки немає.</div>}
+     :<div className="state-note">{t("Правил поки немає.")}</div>}
    </div>
    <div className="panel list-panel">
-    <h2>СЕРВІСНІ ЗАПИСИ</h2>
+    <h2>{t("СЕРВІСНІ ЗАПИСИ")}</h2>
     {data.services.length
-     ?<table className="data-table"><thead><tr><th>Дата</th><th>Робота</th><th>Тип</th><th>Пробіг</th><th>Вартість</th></tr></thead><tbody>
-       {data.services.map(r=><tr key={r.id}><td>{fmtDate(r.occurredAt)}</td><td><b>{r.title}</b>{r.providerName&&<small className="sub">{r.providerName}</small>}</td><td>{r.type}</td><td>{r.odometerKm!==null?`${fmtNumber(r.odometerKm)} км`:'—'}</td><td>{fmtMoney(r.totalCost,r.currency)}</td></tr>)}
+     ?<table className="data-table"><thead><tr><th>{t("Дата")}</th><th>{t("Робота")}</th><th>{t("Тип")}</th><th>{t("Пробіг")}</th><th>{t("Вартість")}</th></tr></thead><tbody>
+       {data.services.map(r=><tr key={r.id}><td>{fmtDate(r.occurredAt)}</td><td><b>{r.title}</b>{r.providerName&&<small className="sub">{r.providerName}</small>}</td><td>{enumLabel(r.type)}</td><td>{r.odometerKm!==null?t("{0} км", { 0: fmtNumber(r.odometerKm) }):'—'}</td><td>{fmtMoney(r.totalCost,r.currency)}</td></tr>)}
       </tbody></table>
-     :<div className="state-note">Сервісних записів поки немає.</div>}
+     :<div className="state-note">{t("Сервісних записів поки немає.")}</div>}
    </div>
   </>;
 }
@@ -497,7 +498,7 @@ const DOCUMENT_TYPES=[
   {value:"registration",label:"Реєстрація"},
   {value:"inspection",label:"Техогляд"},
   {value:"service-invoice",label:"Сервісний рахунок"},
-  {value:"purchase",label:"Покупка"},
+  {value:"purchase",label:"Купівля"},
   {value:"warranty",label:"Гарантія"},
   {value:"tax",label:"Податок"},
   {value:"fine",label:"Штраф"},
@@ -542,7 +543,7 @@ function DocumentsPage(props: PageProps) {
         source:"manual",
       });
       setForm({...form,title:"",documentNumber:"",issuerName:"",issuedAt:"",expiresAt:"",description:""});
-      setMessage({kind:'ok',text:'Документ додано в історію автомобіля.'});
+      setMessage({kind:'ok',text:t("Документ додано в історію автомобіля.")});
       await loadDocuments();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
@@ -550,33 +551,33 @@ function DocumentsPage(props: PageProps) {
     setBusy(true);setMessage(null);
     try{
       await documentsApi.remove(vehicle.id,documentId);
-      setMessage({kind:'ok',text:'Документ видалено.'});
+      setMessage({kind:'ok',text:t("Документ видалено.")});
       await loadDocuments();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
   return <>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    <form className="panel form-card" onSubmit={createDocument}>
-    <h2>ДОДАТИ ДОКУМЕНТ</h2>
+    <h2>{t("ДОДАТИ ДОКУМЕНТ")}</h2>
     <div className="form-grid">
-     <Field label="Тип"><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{DOCUMENT_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}</select></Field>
-     <Field label="Назва"><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} maxLength={180} placeholder="Поліс OC / рахунок за ТО" required/></Field>
-     <Field label="Номер"><input value={form.documentNumber} onChange={e=>setForm({...form,documentNumber:e.target.value})} maxLength={160} placeholder="номер документа"/></Field>
-     <Field label="Ким видано"><input value={form.issuerName} onChange={e=>setForm({...form,issuerName:e.target.value})} maxLength={180} placeholder="страхова / сервіс"/></Field>
-     <Field label="Дата видачі"><input type="date" value={form.issuedAt} onChange={e=>setForm({...form,issuedAt:e.target.value})}/></Field>
-     <Field label="Діє до"><input type="date" value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></Field>
-     <Field label="Опис"><input value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="коротка нотатка"/></Field>
+     <Field label={t("Тип")}><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{DOCUMENT_TYPES.map(type=><option key={type.value} value={type.value}>{t(type.label)}</option>)}</select></Field>
+     <Field label={t("Назва")}><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} maxLength={180} placeholder={t("Поліс OC / рахунок за ТО")} required/></Field>
+     <Field label={t("Номер")}><input value={form.documentNumber} onChange={e=>setForm({...form,documentNumber:e.target.value})} maxLength={160} placeholder={t("номер документа")}/></Field>
+     <Field label={t("Ким видано")}><input value={form.issuerName} onChange={e=>setForm({...form,issuerName:e.target.value})} maxLength={180} placeholder={t("страхова / сервіс")}/></Field>
+     <Field label={t("Дата видачі")}><input type="date" value={form.issuedAt} onChange={e=>setForm({...form,issuedAt:e.target.value})}/></Field>
+     <Field label={t("Діє до")}><input type="date" value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></Field>
+     <Field label={t("Опис")}><input value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder={t("коротка нотатка")}/></Field>
     </div>
-    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} ДОДАТИ ДОКУМЕНТ</button>
+    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} {t("ДОДАТИ ДОКУМЕНТ")}</button>
    </form>
    <div className="panel list-panel">
-    <h2>ДОКУМЕНТИ</h2>
+    <h2>{t("ДОКУМЕНТИ")}</h2>
     {documents===null?<Spinner/>
      :documents.length
-      ?<table className="data-table"><thead><tr><th>Тип</th><th>Документ</th><th>Номер</th><th>Строк</th><th>Статус</th><th></th></tr></thead><tbody>
-       {documents.map(doc=><tr key={doc.id}><td>{formatDocumentType(doc.type)}</td><td><b>{doc.title}</b>{doc.issuerName&&<small className="sub">{doc.issuerName}</small>}</td><td>{doc.documentNumber??'—'}</td><td>{doc.expiresAt?fmtDate(doc.expiresAt):'—'}</td><td><span className={'tag '+documentStatusColor(doc)}>{doc.processingStatus}</span></td><td><button className="ghost-btn danger" onClick={()=>void deleteDocument(doc.id)} disabled={busy}><Trash2 size={14}/> Видалити</button></td></tr>)}
+      ?<table className="data-table"><thead><tr><th>{t("Тип")}</th><th>{t("Документ")}</th><th>{t("Номер")}</th><th>{t("Строк")}</th><th>{t("Статус")}</th><th></th></tr></thead><tbody>
+       {documents.map(doc=><tr key={doc.id}><td>{formatDocumentType(doc.type)}</td><td><b>{doc.title}</b>{doc.issuerName&&<small className="sub">{doc.issuerName}</small>}</td><td>{doc.documentNumber??'—'}</td><td>{doc.expiresAt?fmtDate(doc.expiresAt):'—'}</td><td><span className={'tag '+documentStatusColor(doc)}>{enumLabel(doc.processingStatus)}</span></td><td><button className="ghost-btn danger" onClick={()=>void deleteDocument(doc.id)} disabled={busy}><Trash2 size={14}/> {t("Видалити")}</button></td></tr>)}
       </tbody></table>
-      :<EmptyState icon={FileText} title="Документів поки немає" text="Додайте поліс, техогляд, рахунок за сервіс або інший документ вручну. Завантаження файлів підключається через той самий backend-модуль окремо."/>}
+      :<EmptyState icon={FileText} title={t("Документів поки немає")} text={t("Додайте поліс, техогляд, рахунок за сервіс або інший документ вручну. Завантаження файлів підключається через той самий backend-модуль окремо.")}/>}
    </div>
   </>;
 }
@@ -592,7 +593,7 @@ function VehicleRouter(props: PageProps & { page: string }) {
 }
 
 function formatDocumentType(value:string):string{
-  return DOCUMENT_TYPES.find(type=>type.value===value)?.label??value;
+  return t(DOCUMENT_TYPES.find(type=>type.value===value)?.label??value);
 }
 
 function documentStatusColor(doc:VehicleDocument):string{

@@ -120,6 +120,20 @@
       "when": 1791284400000,
       "tag": "0016_default_uk_language",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793095200000,
+      "tag": "0017_telegram_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793095200001,
+      "tag": "0018_telegram_account_link",
+      "breakpoints": true
     }
   ]
 }

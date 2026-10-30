@@ -1,4 +1,4 @@
-import { Body, Controller, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 
 import { JwtAuthGuard } from "../../../common/guards/jwt-auth.guard";
@@ -34,9 +34,22 @@ export class AuthController {
     return this.authService.loginWithTelegram(dto);
   }
 
+  @Get("me")
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @UseGuards(JwtAuthGuard)
+  getMe(@Req() request: AuthenticatedRequest) {
+    return this.authService.getProfile(request.userId);
+  }
+
   @Patch("me")
   @UseGuards(JwtAuthGuard)
   updateMe(@Req() request: AuthenticatedRequest, @Body() dto: UpdateProfileDto) {
     return this.authService.updateProfile(request.userId, dto);
+  }
+
+  @Post("telegram/link")
+  @UseGuards(JwtAuthGuard)
+  telegramLink(@Req() request: AuthenticatedRequest) {
+    return this.authService.createTelegramLink(request.userId);
   }
 }

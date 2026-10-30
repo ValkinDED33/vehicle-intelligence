@@ -3,7 +3,7 @@ import { defineConfig } from "drizzle-kit";
 
 const env = config().parsed;
 
-const databaseUrl = env?.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL ?? env?.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL environment variable is required");

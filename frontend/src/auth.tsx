@@ -1,9 +1,12 @@
+import { getUiLanguage, setUiLanguage, t, useUiLanguage } from "./i18n";
+import { LanguagePicker } from "./components/LanguagePicker";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -39,9 +42,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
+  const sessionVersion = useRef(0);
 
   useEffect(() => {
-    if (getToken()) setUser(loadStoredUser());
+    if (getToken()) {
+      const stored = loadStoredUser();
+      setUser(stored);
+      setUiLanguage(stored?.language);
+    } else setUiLanguage(getUiLanguage());
     setReady(true);
 
     const onUnauthorized = () => setUser(null);
@@ -50,9 +58,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applySession = useCallback((token: string, sessionUser: AuthUser) => {
+    sessionVersion.current += 1;
     saveSession(token, sessionUser);
+    setUiLanguage(sessionUser.language);
     setUser(sessionUser);
   }, []);
+
+  const refreshUser = useCallback(async () => {
+    const token = getToken();
+    const version = sessionVersion.current;
+    if (!token) return;
+    try {
+      const freshUser = await authApi.me();
+      if (getToken() === token && sessionVersion.current === version) applySession(token, freshUser);
+    } catch {
+      // Keep the cached profile on network failure; request() handles expired sessions.
+    }
+  }, [applySession]);
+
+  useEffect(() => {
+    void refreshUser();
+    const onFocus = () => void refreshUser();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refreshUser]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -72,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     async (input: { email: string; password: string; displayName?: string }) => {
-      const response = await authApi.register(input);
+      const response = await authApi.register({ ...input, language: getUiLanguage() });
       applySession(response.accessToken, response.user);
     },
     [applySession],
@@ -87,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    sessionVersion.current += 1;
     clearSession();
     setUser(null);
   }, []);
@@ -114,6 +144,7 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthScreen() {
+  const language = useUiLanguage();
   const { login, loginWithTelegram, register } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -133,7 +164,7 @@ export function AuthScreen() {
   )?.trim();
   const telegramBotUrl = telegramBotUsername
     ? `https://t.me/${telegramBotUsername.replace(/^@/, "")}`
-    : null;
+    : "https://t.me/IACarsBot";
 
   useEffect(() => {
     window.Telegram?.WebApp?.ready?.();
@@ -158,7 +189,7 @@ export function AuthScreen() {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Не вдалося з’єднатися із сервером. Спробуйте ще раз.",
+          : t("Не вдалося з’єднатися із сервером. Спробуйте ще раз."),
       );
     } finally {
       setBusy(false);
@@ -179,7 +210,7 @@ export function AuthScreen() {
         return;
       }
 
-      setError("Відкрийте сайт через кнопку IA-CARS у Telegram-боті.");
+      setError(t("Відкрийте сайт через кнопку IA-CARS у Telegram-боті."));
       return;
     }
 
@@ -192,7 +223,7 @@ export function AuthScreen() {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Не вдалося увійти через Telegram. Спробуйте ще раз.",
+          : t("Не вдалося увійти через Telegram. Спробуйте ще раз."),
       );
     } finally {
       setTelegramBusy(false);
@@ -208,12 +239,13 @@ export function AuthScreen() {
             <strong>CARA</strong>
             <small>AI CAR ASSISTANT</small>
           </div>
+          <LanguagePicker language={language} onChange={setUiLanguage}/>
         </div>
-        <h1>{mode === "login" ? "З поверненням!" : "Створіть обліковий запис"}</h1>
+        <h1>{mode === "login" ? t("З поверненням!") : t("Створіть обліковий запис")}</h1>
         <p>
           {mode === "login"
-            ? "Увійдіть, щоб під’єднати ваш автомобіль до CARA."
-            : "Реєстрація займає менше хвилини."}
+            ? t("Увійдіть, щоб під’єднати ваш автомобіль до CARA.")
+            : t("Реєстрація займає менше хвилини.")}
         </p>
 
         <div className="auth-tabs">
@@ -221,16 +253,12 @@ export function AuthScreen() {
             type="button"
             className={mode === "login" ? "active" : ""}
             onClick={() => switchMode("login")}
-          >
-            Вхід
-          </button>
+          > {t("Вхід")} </button>
           <button
             type="button"
             className={mode === "register" ? "active" : ""}
             onClick={() => switchMode("register")}
-          >
-            Реєстрація
-          </button>
+          > {t("Реєстрація")} </button>
         </div>
 
         <button
@@ -240,23 +268,23 @@ export function AuthScreen() {
           disabled={telegramBusy}
         >
           {telegramBusy
-            ? "Перевіряємо Telegram..."
+            ? t("Перевіряємо Telegram...")
             : telegramInitData
-              ? "УВІЙТИ ЧЕРЕЗ TELEGRAM"
-              : "ВІДКРИТИ ЧЕРЕЗ TELEGRAM"}
+              ? t("УВІЙТИ ЧЕРЕЗ TELEGRAM")
+              : t("ВІДКРИТИ ЧЕРЕЗ TELEGRAM")}
         </button>
 
         <div className="auth-divider">
-          <span>або</span>
+          <span>{t("або")}</span>
         </div>
 
         {mode === "register" && (
           <label className="auth-field">
-            <span>Ім’я</span>
+            <span>{t("Ім’я")}</span>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Як до вас звертатися"
+              placeholder={t("Як до вас звертатися")}
               maxLength={80}
             />
           </label>
@@ -273,14 +301,14 @@ export function AuthScreen() {
           />
         </label>
         <label className="auth-field">
-          <span>Пароль</span>
+          <span>{t("Пароль")}</span>
           <input
             type="password"
             required
             minLength={mode === "register" ? 10 : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={mode === "register" ? "Мінімум 10 символів" : "Ваш пароль"}
+            placeholder={mode === "register" ? t("Мінімум 10 символів") : t("Ваш пароль")}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
         </label>
@@ -289,12 +317,12 @@ export function AuthScreen() {
 
         <button className="primary auth-submit" type="submit" disabled={busy}>
           {busy
-            ? "Під’єднуємося..."
+            ? t("Під’єднуємося...")
             : mode === "login"
-              ? "УВІЙТИ В ГАРАЖ"
-              : "ЗАРЕЄСТРУВАТИСЯ"}
+              ? t("УВІЙТИ В ГАРАЖ")
+              : t("ЗАРЕЄСТРУВАТИСЯ")}
         </button>
-        <small className="auth-note">Дані захищено JWT · Vehicle Intelligence API</small>
+        <small className="auth-note">{t("Дані захищено JWT · Vehicle Intelligence API")}</small>
       </form>
     </div>
   );

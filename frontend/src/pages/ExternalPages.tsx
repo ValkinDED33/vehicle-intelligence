@@ -1,6 +1,8 @@
+import { t, enumLabel } from "../i18n";
+import { LanguagePicker } from "../components/LanguagePicker";
 import { useEffect, useState, type ReactNode } from "react";
 import { ChartNoAxesCombined, Check, ChevronDown, Download, Loader2, LogOut, MessageCircle, PlugZap } from "lucide-react";
-import { API_BASE, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type UserLanguage, type Vehicle, type VehicleProfile } from "../api";
+import { API_BASE, authApi, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type UserLanguage, type Vehicle, type VehicleProfile } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, EventCard, NoVehicle, Spinner } from "../components/CommonComponents";
 import type { PageProps } from "../types/dashboard";
@@ -36,7 +38,7 @@ function IntegrationsPage(props:PageProps){
       .catch(()=>{if(!cancelled)setSources([])});
     return ()=>{cancelled=true};
   },[vehicleId]);
-  if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
+  if(!vehicle)return <><TelegramIntegrationCard/><NoVehicle onGoGarage={()=>props.navigate('Гараж')}/></>;
   if(sources===null)return <Spinner/>;
   const vinSources=sources.filter(s=>s.fetchableByVehicleVin&&!s.key.startsWith('oneauto-'));
   const oneAutoSources=sources.filter(s=>s.key.startsWith('oneauto-'));
@@ -50,7 +52,7 @@ function IntegrationsPage(props:PageProps){
       const res=await externalReportsApi.fetchAll(vehicle.id);
       setResults(res);
       const ok=res.filter(r=>r.status==='success'||r.status==='no-data').length;
-      setMessage({kind:'ok',text:`Опрацьовано VIN-джерел: ${res.length} з ${vinSources.length} (успішно/без даних: ${ok}).`});
+      setMessage({kind:'ok',text:t("Опрацьовано VIN-джерел: {0} з {1} (успішно/без даних: {2}).", { 0: res.length, 1: vinSources.length, 2: ok })});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
@@ -59,7 +61,7 @@ function IntegrationsPage(props:PageProps){
     try{
       const res=await fetchOneSource(vehicle.id,key);
       setResults([res]);
-      setMessage({kind:res.status==='error'?'err':'ok',text:`${key}: ${res.status}${res.error?` — ${res.error}`:''}`});
+      setMessage({kind:res.status==='error'?'err':'ok',text:`${key}: ${enumLabel(res.status)}${res.error?` — ${res.error}`:''}`});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
@@ -68,7 +70,7 @@ function IntegrationsPage(props:PageProps){
     try{
       const res=await externalReportsApi.fetchOneAutoSource(vehicle.id,key);
       setResults([{source:key,status:res.report.status,reportId:res.report.id}]);
-      setMessage({kind:'ok',text:`${key}: звіт OneAutoAPI збережено. Перевірте raw-відповідь перед перенесенням у підтверджений профіль.`});
+      setMessage({kind:'ok',text:t("{0}: звіт OneAutoAPI збережено. Перевірте raw-відповідь перед перенесенням у підтверджений профіль.", { 0: key })});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
@@ -84,7 +86,7 @@ function IntegrationsPage(props:PageProps){
         page:'1',
       });
       setResults([{source:'cepik-pojazdy',status:res.report.status,reportId:res.report.id}]);
-      setMessage({kind:'ok',text:'CEPiK збережено як альтернативний звіт. Перевірте дані перед перенесенням у підтверджений профіль.'});
+      setMessage({kind:'ok',text:t("CEPiK збережено як альтернативний звіт. Перевірте дані перед перенесенням у підтверджений профіль.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
@@ -93,84 +95,96 @@ function IntegrationsPage(props:PageProps){
     try{
       const res=await externalReportsApi.fetchCepikVehicleById(vehicle.id,cepik.detailId);
       setResults([{source:'cepik-pojazdy-detail',status:res.report.status,reportId:res.report.id}]);
-      setMessage({kind:'ok',text:'CEPiK detail збережено як окремий звіт за технічним ID запису.'});
+      setMessage({kind:'ok',text:t("CEPiK detail збережено як окремий звіт за технічним ID запису.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
   };
   return <>
    <TelegramIntegrationCard />
    <div className="page-actions">
-    <button className="primary" onClick={()=>void fetchAll()} disabled={busy!==null||vinSources.length===0||!vehicle.vin}>{busy==='all'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {busy==='all'?'ЗАБИРАЄМО ЗВІТИ...':'ЗАВАНТАЖИТИ VIN-ЗВІТИ'}</button>
-    <span className="hint-note">Vehicle Databases працює за VIN. CEPiK нижче — окрема польська альтернатива за регіоном і періодом реєстрації.</span>
+    <button className="primary" onClick={()=>void fetchAll()} disabled={busy!==null||vinSources.length===0||!vehicle.vin}>{busy==='all'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {busy==='all'?t("ЗАБИРАЄМО ЗВІТИ..."):t("ЗАВАНТАЖИТИ VIN-ЗВІТИ")}</button>
+    <span className="hint-note">{t("Vehicle Databases працює за VIN. CEPiK нижче — окрема польська альтернатива за регіоном і періодом реєстрації.")}</span>
    </div>
-   {!vehicle.vin&&<div className="state-note">VIN-джерела недоступні, бо для автомобіля не вказано VIN. CEPiK можна запросити окремо, якщо відомі регіон і період реєстрації в Польщі.</div>}
+   {!vehicle.vin&&<div className="state-note">{t("VIN-джерела недоступні, бо для автомобіля не вказано VIN. CEPiK можна запросити окремо, якщо відомі регіон і період реєстрації в Польщі.")}</div>}
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
-   <ProviderAccordion title="OneAutoAPI" meta={`${oneAutoSources.length} VIN-джерел`} open={openProviders.oneauto} onToggle={()=>toggleProvider('oneauto')}>
+   <ProviderAccordion title="OneAutoAPI" meta={t("{0} VIN-джерел", { 0: oneAutoSources.length })} open={openProviders.oneauto} onToggle={()=>toggleProvider('oneauto')}>
     <div className="sources-grid">
      {oneAutoSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOneAuto(s.key)}/>)}
-     {!oneAutoSources.length&&<div className="state-note">Джерела OneAutoAPI не знайдено.</div>}
+     {!oneAutoSources.length&&<div className="state-note">{t("Джерела OneAutoAPI не знайдено.")}</div>}
     </div>
    </ProviderAccordion>
-   <ProviderAccordion title="CEPiK" meta="польский реестр" open={openProviders.cepik} onToggle={()=>toggleProvider('cepik')}>
+   <ProviderAccordion title="CEPiK" meta={t("польський реєстр")} open={openProviders.cepik} onToggle={()=>toggleProvider('cepik')}>
     <div className="cepik-grid">
-      <label><span>Województwo</span><select value={cepik.wojewodztwo} onChange={e=>setCepik({...cepik,wojewodztwo:e.target.value})}>{wojewodztwoOptions.map(w=><option key={w.code} value={w.code}>{w.code} · {w.name}</option>)}</select></label>
-      <label><span>Дата від YYYYMMDD</span><input value={cepik.dataOd} onChange={e=>setCepik({...cepik,dataOd:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20070101"/></label>
-      <label><span>Дата до YYYYMMDD</span><input value={cepik.dataDo} onChange={e=>setCepik({...cepik,dataDo:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20071231"/></label>
-      <label><span>Тип дати</span><select value={cepik.typDaty} onChange={e=>setCepik({...cepik,typDaty:e.target.value as '1'|'2'})}><option value="1">перша реєстрація в PL</option><option value="2">остання реєстрація</option></select></label>
-      <label><span>Лимит</span><input value={cepik.limit} onChange={e=>setCepik({...cepik,limit:e.target.value.replace(/[^\d]/g,'')})} placeholder="25"/></label>
-      <label><span>CEPiK ID запису</span><input value={cepik.detailId} onChange={e=>setCepik({...cepik,detailId:e.target.value.replace(/[^\d]/g,'')})} placeholder="id з /pojazdy"/></label>
+      <label><span>{t("Воєводство")}</span><select value={cepik.wojewodztwo} onChange={e=>setCepik({...cepik,wojewodztwo:e.target.value})}>{wojewodztwoOptions.map(w=><option key={w.code} value={w.code}>{w.code} · {w.name}</option>)}</select></label>
+      <label><span>{t("Дата від YYYYMMDD")}</span><input value={cepik.dataOd} onChange={e=>setCepik({...cepik,dataOd:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20070101"/></label>
+      <label><span>{t("Дата до YYYYMMDD")}</span><input value={cepik.dataDo} onChange={e=>setCepik({...cepik,dataDo:e.target.value.replace(/[^\d]/g,'').slice(0,8)})} placeholder="20071231"/></label>
+      <label><span>{t("Тип дати")}</span><select value={cepik.typDaty} onChange={e=>setCepik({...cepik,typDaty:e.target.value as '1'|'2'})}><option value="1">{t("перша реєстрація в PL")}</option><option value="2">{t("остання реєстрація")}</option></select></label>
+      <label><span>{t("Ліміт")}</span><input value={cepik.limit} onChange={e=>setCepik({...cepik,limit:e.target.value.replace(/[^\d]/g,'')})} placeholder="25"/></label>
+      <label><span>{t("CEPiK ID запису")}</span><input value={cepik.detailId} onChange={e=>setCepik({...cepik,detailId:e.target.value.replace(/[^\d]/g,'')})} placeholder={t("id з /pojazdy")}/></label>
      </div>
      <div className="page-actions">
-      <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepik()} disabled={busy!==null||!cepik.wojewodztwo||!cepik.dataOd}>{busy==='cepik-pojazdy'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} ПОШУК CEPIK</button>
-      <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepikDetail()} disabled={busy!==null||!cepik.detailId}>{busy==='cepik-pojazdy-detail'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} ДЕТАЛІ ЗА ID</button>
+      <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepik()} disabled={busy!==null||!cepik.wojewodztwo||!cepik.dataOd}>{busy==='cepik-pojazdy'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {t("ПОШУК CEPIK")}</button>
+      <button className="ghost-btn save-profile-btn" onClick={()=>void fetchCepikDetail()} disabled={busy!==null||!cepik.detailId}>{busy==='cepik-pojazdy-detail'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {t("ДЕТАЛІ ЗА ID")}</button>
      </div>
    </ProviderAccordion>
-   <ProviderAccordion title="Vehicle Databases" meta={`${vehicleDatabaseSources.length} VIN-джерел`} open={openProviders.vehicleDatabases} onToggle={()=>toggleProvider('vehicleDatabases')}>
+   <ProviderAccordion title="Vehicle Databases" meta={t("{0} VIN-джерел", { 0: vehicleDatabaseSources.length })} open={openProviders.vehicleDatabases} onToggle={()=>toggleProvider('vehicleDatabases')}>
     <div className="sources-grid">
      {vehicleDatabaseSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
     </div>
    </ProviderAccordion>
-   {otherSources.length>0&&<ProviderAccordion title="Окремі потоки" meta={`${otherSources.length} джерел`} open={openProviders.other} onToggle={()=>toggleProvider('other')}>
+   {otherSources.length>0&&<ProviderAccordion title={t("Окремі потоки")} meta={t("{0} джерел", { 0: otherSources.length })} open={openProviders.other} onToggle={()=>toggleProvider('other')}>
     <div className="sources-grid">
      {otherSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
     </div>
    </ProviderAccordion>}
    {results&&results.length>1&&<div className="panel list-panel">
-    <h2>РЕЗУЛЬТАТИ ЗАВАНТАЖЕННЯ</h2>
-    <table className="data-table"><thead><tr><th>Джерело</th><th>Статус</th><th>Деталі</th></tr></thead><tbody>
-     {results.map(r=><tr key={r.source}><td>{r.source}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{r.status}</span></td><td>{r.error??(r.reportId?'звіт збережено':'—')}</td></tr>)}
+    <h2>{t("РЕЗУЛЬТАТИ ЗАВАНТАЖЕННЯ")}</h2>
+    <table className="data-table"><thead><tr><th>{t("Джерело")}</th><th>{t("Статус")}</th><th>{t("Деталі")}</th></tr></thead><tbody>
+     {results.map(r=><tr key={r.source}><td>{r.source}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{enumLabel(r.status)}</span></td><td>{r.error??(r.reportId?t("звіт збережено"):'—')}</td></tr>)}
     </tbody></table>
    </div>}
    <div className="panel list-panel">
-    <h2>ОСТАННІ ПОДІЇ ЗІ ЗВІТІВ</h2>
+    <h2>{t("ОСТАННІ ПОДІЇ ЗІ ЗВІТІВ")}</h2>
     {data.events.filter(e=>e.type.startsWith('external.')).slice(0,8).map(e=><EventCard key={e.id} event={e}/>)}
-    {!data.events.some(e=>e.type.startsWith('external.'))&&<div className="state-note">Подій із зовнішніх джерел поки немає.</div>}
+    {!data.events.some(e=>e.type.startsWith('external.'))&&<div className="state-note">{t("Подій із зовнішніх джерел поки немає.")}</div>}
    </div>
   </>;
 }
 
 function TelegramIntegrationCard(){
+  const {user}=useAuth();
   const botUrl=getTelegramBotUrl();
   const inTelegram=Boolean(window.Telegram?.WebApp?.initData);
+  const [busy,setBusy]=useState(false);
+  const [link,setLink]=useState<{url:string;expiresAt:string}|null>(null);
+  const [error,setError]=useState<string|null>(null);
+  const connect=async()=>{
+    setBusy(true);setError(null);setLink(null);
+    try{
+      const result=await authApi.createTelegramLink();
+      setLink({url:`${botUrl}?start=link_${result.token}`,expiresAt:result.expiresAt});
+    }catch(err){setError(errText(err))}finally{setBusy(false)}
+  };
 
   return <section className="panel telegram-panel">
    <div className="telegram-panel-copy">
     <span className="icon-disc"><MessageCircle size={18}/></span>
     <div>
      <h2>TELEGRAM</h2>
-     <p>{inTelegram?'Mini App відкрито через Telegram.':'Бот доступний як другий інтерфейс CARA.'}</p>
-     <small>/garage · /addcar · /mileage · /expense · /fuel · /charge · /service · /document · /ask</small>
+     <p>{user?.telegramLinked?t("Telegram під’єднано до цього облікового запису.")+(user.telegramUsername?` @${user.telegramUsername}`:""):inTelegram?t("Mini App відкрито через Telegram."):t("Під’єднайте Telegram до цього облікового запису.")}</p>
+     {link&&!user?.telegramLinked&&<small>{t("Посилання діє до")} {fmtDate(link.expiresAt,true)}</small>}
+     {error&&<small role="alert">{error}</small>}
     </div>
    </div>
-   {botUrl
-    ?<a className="primary telegram-panel-action" href={botUrl} target="_blank" rel="noreferrer">ВІДКРИТИ БОТА</a>
-    :<span className="hint-note">Додайте VITE_TELEGRAM_BOT_USERNAME, щоб показати кнопку бота.</span>}
+   {user?.telegramLinked?<span className="tag green">{t("Під’єднано")}</span>:link
+    ?<a className="primary telegram-panel-action" href={link.url} target="_blank" rel="noreferrer"><MessageCircle size={16}/> {t("ВІДКРИТИ TELEGRAM")}</a>
+    :<button className="primary telegram-panel-action" type="button" onClick={()=>void connect()} disabled={busy}>{busy?<Loader2 size={16} className="spin"/>:<MessageCircle size={16}/>} {t("ПІД’ЄДНАТИ TELEGRAM")}</button>}
   </section>;
 }
 
 function getTelegramBotUrl():string|null{
   const username=(import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string|undefined)?.trim();
-  return username?`https://t.me/${username.replace(/^@/,"")}`:null;
+  return `https://t.me/${username?.replace(/^@/,"")||"IACarsBot"}`;
 }
 
 function ProviderAccordion({title,meta,open,onToggle,children}:{title:string;meta:string;open:boolean;onToggle:()=>void;children:ReactNode}){
@@ -196,45 +210,45 @@ function SourceCard({source,result,busy,vehicleHasVin,onClick}:{source:ReportSou
 
 function copyForSource(source:ReportSource):{title:string;description:string;button:string}{
   const copies:Record<string,{title:string;description:string;button:string}>={
-    "oneauto-oe-build-sheet-europe-vin":{title:"Комплектація EU",description:"Заводська комплектація й опції за VIN",button:"Отримати"},
-    "oneauto-oe-build-sheet-vin":{title:"Заводський лист",description:"Build sheet: комплектація, пакети, опції",button:"Отримати"},
-    "oneauto-oe-service-schedule-vin":{title:"Регламент ТО",description:"Заводський графік обслуговування за VIN",button:"Отримати"},
-    "oneauto-recall-check-vin":{title:"Перевірка recall",description:"Чи є сервісні кампанії за VIN",button:"Перевірити"},
-    "oneauto-recall-report-vin":{title:"Звіт по recall",description:"Подробиці сервісних кампаній",button:"Отримати"},
-    "oneauto-vin-decode-basic-us":{title:"VIN база US",description:"Базове розшифрування для ринку США",button:"Перевірити"},
-    "oneauto-vin-decode-plus-us":{title:"VIN розширений US",description:"Розширене розшифрування для ринку США",button:"Перевірити"},
-    "cepik-pojazdy":{title:"CEPiK пошук",description:"Польський реєстр за регіоном і датами",button:"Форма вище"},
-    "basic-vin-decode":{title:"VIN базовий",description:"Марка, модель, рік і базові параметри",button:"Отримати"},
-    "advanced-vin-decode":{title:"VIN розширений",description:"Більше технічних полів за VIN",button:"Отримати"},
-    "europe-vin-decode":{title:"VIN Європа",description:"Європейське розшифрування VIN",button:"Отримати"},
-    "market-value":{title:"Ринкова ціна",description:"Оцінка вартості за VIN/YMM",button:"Оцінити"},
-    "sales-history":{title:"Історія продажів",description:"Знайдені минулі продажі",button:"Отримати"},
-    "auction":{title:"Аукціони",description:"Аукціонні записи за VIN",button:"Перевірити"},
-    "stolen-check":{title:"Перевірка викрадення",description:"Бази викрадених авто",button:"Перевірити"},
-    "title-check":{title:"Title check",description:"Статус title / брендовані записи",button:"Перевірити"},
-    "vehicle-recalls":{title:"Сервісні кампанії",description:"Recall/кампанії виробника",button:"Перевірити"},
-    "vehicle-repairs":{title:"Ремонти",description:"Типові ремонти за моделлю/VIN",button:"Отримати"},
-    "repair-estimates":{title:"Вартість ремонту",description:"Оцінки робіт і деталей",button:"Оцінити"},
-    "vehicle-maintenance":{title:"ТО й обслуговування",description:"Регламент та інтервали обслуговування",button:"Отримати"},
-    "dimensions":{title:"Розміри авто",description:"Колісна база, колія й габарити",button:"Отримати"},
-    "windshield":{title:"Лобове скло",description:"Підбір windshield за VIN",button:"Підібрати"},
-    "vin-suggestion":{title:"VIN підказки",description:"Схожі/можливі VIN",button:"Отримати"},
-    "owner-manual":{title:"Інструкція власника",description:"Інструкція власника за VIN/YMM",button:"Знайти"},
-    "motorcycle-decode":{title:"Мото VIN",description:"Вимкнено для автомобільного гаража",button:"Недоступно"},
-    "electric-vehicle-specifications":{title:"EV характеристики",description:"Потрібен окремий YMMT-потік: рік, марка, модель і trim",button:"Отримати"},
-    "vehicle-warranty":{title:"Гарантія",description:"Потрібен окремий YMM-потік: рік, марка й модель",button:"Отримати"},
-    "ymmt-specifications":{title:"YMMT специфікації",description:"Потрібен окремий YMMT-потік: рік, марка, модель і trim",button:"Отримати"},
-    "uk-registration-decode":{title:"UK номер",description:"Потрібен окремий потік за британським номером",button:"Отримати"},
-    "license-plate-ocr":{title:"OCR номера",description:"Потрібен upload зображення номера",button:"Отримати"},
-    "vin-ocr":{title:"OCR VIN",description:"Потрібен upload фото VIN",button:"Отримати"},
-    "oem-parts":{title:"OEM деталі",description:"Потрібен окремий потік YMMT/каталогу деталі",button:"Отримати"},
+    "oneauto-oe-build-sheet-europe-vin":{title:t("Комплектація EU"),description:t("Заводська комплектація й опції за VIN"),button:t("Отримати")},
+    "oneauto-oe-build-sheet-vin":{title:t("Заводський лист"),description:t("Build sheet: комплектація, пакети, опції"),button:t("Отримати")},
+    "oneauto-oe-service-schedule-vin":{title:t("Регламент ТО"),description:t("Заводський графік обслуговування за VIN"),button:t("Отримати")},
+    "oneauto-recall-check-vin":{title:t("Перевірка recall"),description:t("Чи є сервісні кампанії за VIN"),button:t("Перевірити")},
+    "oneauto-recall-report-vin":{title:t("Звіт по recall"),description:t("Подробиці сервісних кампаній"),button:t("Отримати")},
+    "oneauto-vin-decode-basic-us":{title:t("VIN база US"),description:t("Базове розшифрування для ринку США"),button:t("Перевірити")},
+    "oneauto-vin-decode-plus-us":{title:t("VIN розширений US"),description:t("Розширене розшифрування для ринку США"),button:t("Перевірити")},
+    "cepik-pojazdy":{title:t("CEPiK пошук"),description:t("Польський реєстр за регіоном і датами"),button:t("Форма вище")},
+    "basic-vin-decode":{title:t("VIN базовий"),description:t("Марка, модель, рік і базові параметри"),button:t("Отримати")},
+    "advanced-vin-decode":{title:t("VIN розширений"),description:t("Більше технічних полів за VIN"),button:t("Отримати")},
+    "europe-vin-decode":{title:t("VIN Європа"),description:t("Європейське розшифрування VIN"),button:t("Отримати")},
+    "market-value":{title:t("Ринкова ціна"),description:t("Оцінка вартості за VIN/YMM"),button:t("Оцінити")},
+    "sales-history":{title:t("Історія продажів"),description:t("Знайдені минулі продажі"),button:t("Отримати")},
+    "auction":{title:t("Аукціони"),description:t("Аукціонні записи за VIN"),button:t("Перевірити")},
+    "stolen-check":{title:t("Перевірка викрадення"),description:t("Бази викрадених авто"),button:t("Перевірити")},
+    "title-check":{title:"Title check",description:t("Статус title / брендовані записи"),button:t("Перевірити")},
+    "vehicle-recalls":{title:t("Сервісні кампанії"),description:t("Recall/кампанії виробника"),button:t("Перевірити")},
+    "vehicle-repairs":{title:t("Ремонти"),description:t("Типові ремонти за моделлю/VIN"),button:t("Отримати")},
+    "repair-estimates":{title:t("Вартість ремонту"),description:t("Оцінки робіт і деталей"),button:t("Оцінити")},
+    "vehicle-maintenance":{title:t("ТО й обслуговування"),description:t("Регламент та інтервали обслуговування"),button:t("Отримати")},
+    "dimensions":{title:t("Розміри авто"),description:t("Колісна база, колія й габарити"),button:t("Отримати")},
+    "windshield":{title:t("Лобове скло"),description:t("Підбір windshield за VIN"),button:t("Підібрати")},
+    "vin-suggestion":{title:t("VIN підказки"),description:t("Схожі/можливі VIN"),button:t("Отримати")},
+    "owner-manual":{title:t("Інструкція власника"),description:t("Інструкція власника за VIN/YMM"),button:t("Знайти")},
+    "motorcycle-decode":{title:t("Мото VIN"),description:t("Вимкнено для автомобільного гаража"),button:t("Недоступно")},
+    "electric-vehicle-specifications":{title:t("EV характеристики"),description:t("Потрібен окремий YMMT-потік: рік, марка, модель і trim"),button:t("Отримати")},
+    "vehicle-warranty":{title:t("Гарантія"),description:t("Потрібен окремий YMM-потік: рік, марка й модель"),button:t("Отримати")},
+    "ymmt-specifications":{title:t("YMMT специфікації"),description:t("Потрібен окремий YMMT-потік: рік, марка, модель і trim"),button:t("Отримати")},
+    "uk-registration-decode":{title:t("UK номер"),description:t("Потрібен окремий потік за британським номером"),button:t("Отримати")},
+    "license-plate-ocr":{title:t("OCR номера"),description:t("Потрібен upload зображення номера"),button:t("Отримати")},
+    "vin-ocr":{title:"OCR VIN",description:t("Потрібен upload фото VIN"),button:t("Отримати")},
+    "oem-parts":{title:t("OEM деталі"),description:t("Потрібен окремий потік YMMT/каталогу деталі"),button:t("Отримати")},
   };
 
   if(copies[source.key])return copies[source.key];
   return {
     title:source.apiName,
-    description:source.note??(source.fetchableByVehicleVin?"Звіт за VIN":`Потрібен ввід: ${source.input}`),
-    button:"Отримати",
+    description:source.note??(source.fetchableByVehicleVin?t("Звіт за VIN"):t("Потрібен ввід: {0}", { 0: source.input })),
+    button:t("Отримати"),
   };
 }
 
@@ -303,23 +317,23 @@ function ReportsPage(props:PageProps){
    ?<>
     <div className="panel list-panel">
       <div className="reports-head">
-       <h2>ЗБЕРЕЖЕНІ ЗВІТИ ({filteredReports.length}/{reports.length})</h2>
-       <button className="ghost-btn" onClick={resetFilters} disabled={!query&&provider==="all"&&status==="all"&&type==="all"}>Скинути</button>
+       <h2>{t("ЗБЕРЕЖЕНІ ЗВІТИ (")}{filteredReports.length}/{reports.length})</h2>
+       <button className="ghost-btn" onClick={resetFilters} disabled={!query&&provider==="all"&&status==="all"&&type==="all"}>{t("Скинути")}</button>
       </div>
       <div className="reports-filter">
-       <label><span>Пошук</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="VIN, провайдер, тип звіту"/></label>
-       <label><span>Провайдер</span><select value={provider} onChange={e=>setProvider(e.target.value)}><option value="all">Усі</option>{providers.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
-       <label><span>Статус</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Усі</option>{statuses.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
-       <label><span>Тип</span><select value={type} onChange={e=>setType(e.target.value)}><option value="all">Усі</option>{types.map(item=><option key={item} value={item}>{humanReportType(item)}</option>)}</select></label>
+       <label><span>{t("Пошук")}</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t("VIN, провайдер, тип звіту")}/></label>
+       <label><span>{t("Провайдер")}</span><select value={provider} onChange={e=>setProvider(e.target.value)}><option value="all">{t("Усі")}</option>{providers.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
+       <label><span>{t("Статус")}</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">{t("Усі")}</option>{statuses.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
+       <label><span>{t("Тип")}</span><select value={type} onChange={e=>setType(e.target.value)}><option value="all">{t("Усі")}</option>{types.map(item=><option key={item} value={item}>{humanReportType(item)}</option>)}</select></label>
       </div>
-      <table className="data-table"><thead><tr><th>Тип</th><th>Провайдер</th><th>VIN</th><th>Статус</th><th>Отримано</th><th></th></tr></thead><tbody>
-       {filteredReports.map(r=><tr key={r.id}><td><b>{humanReportType(r.reportType)}</b><small className="sub">{r.reportType}</small></td><td>{r.provider}</td><td className="mono">{r.vin??'—'}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{r.status}</span></td><td>{fmtDate(r.fetchedAt,true)}</td><td><button className="ghost-btn" onClick={()=>setSelectedId(r.id)}>{selected?.id===r.id?'Відкрито':'Відкрити'}</button></td></tr>)}
+      <table className="data-table"><thead><tr><th>{t("Тип")}</th><th>{t("Провайдер")}</th><th>VIN</th><th>{t("Статус")}</th><th>{t("Отримано")}</th><th></th></tr></thead><tbody>
+       {filteredReports.map(r=><tr key={r.id}><td><b>{humanReportType(r.reportType)}</b><small className="sub">{r.reportType}</small></td><td>{r.provider}</td><td className="mono">{r.vin??'—'}</td><td><span className={'tag '+(r.status==='success'?'green':r.status==='no-data'?'purple':'red')}>{enumLabel(r.status)}</span></td><td>{fmtDate(r.fetchedAt,true)}</td><td><button className="ghost-btn" onClick={()=>setSelectedId(r.id)}>{selected?.id===r.id?t("Відкрито"):t("Відкрити")}</button></td></tr>)}
       </tbody></table>
-      {!filteredReports.length&&<div className="state-note">За цими фільтрами звітів немає.</div>}
+      {!filteredReports.length&&<div className="state-note">{t("За цими фільтрами звітів немає.")}</div>}
     </div>
     {selected&&<ReportViewer report={selected} vehicle={vehicle} currentProfile={props.data.profile} afterMutate={props.afterMutate}/>}
    </>
-   :<EmptyState icon={ChartNoAxesCombined} title="Звітів поки немає" text="Завантажте звіти в розділі «Інтеграції» — сирі відповіді Vehicle Databases збережуться тут назавжди."/>;
+   :<EmptyState icon={ChartNoAxesCombined} title={t("Звітів поки немає")} text={t("Завантажте звіти в розділі «Інтеграції» — сирі відповіді Vehicle Databases збережуться тут назавжди.")}/>;
 }
 
 function uniqueSorted(values:string[]):string[]{
@@ -347,7 +361,7 @@ function ReportViewer({report,vehicle,currentProfile,afterMutate}:{report:Extern
     setSaving(true);setMessage(null);
     try{
       await profileApi.create(vehicle.id,selectedDraft);
-      setMessage({kind:'ok',text:'Дані зі звіту перенесено в профіль. Старі ручні поля, яких немає у звіті, збережено.'});
+      setMessage({kind:'ok',text:t("Дані зі звіту перенесено в профіль. Старі ручні поля, яких немає у звіті, збережено.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSaving(false)}
   };
@@ -356,9 +370,9 @@ function ReportViewer({report,vehicle,currentProfile,afterMutate}:{report:Extern
    <div className="decode-head">
     <div>
      <h2>{humanReportType(report.reportType)}</h2>
-     <p>{report.provider} · {fmtDate(report.fetchedAt,true)} · {facts.length} полів показано</p>
+     <p>{report.provider} · {fmtDate(report.fetchedAt,true)} · {facts.length} {t("полів показано")}</p>
     </div>
-    <span className="decode-vin">{report.vin??'без VIN'}</span>
+    <span className="decode-vin">{report.vin??t("без VIN")}</span>
    </div>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    {warnings.length>0&&<div className="report-warnings">
@@ -367,14 +381,14 @@ function ReportViewer({report,vehicle,currentProfile,afterMutate}:{report:Extern
    {oneAutoBuildSheet?<OneAutoBuildSheetView payload={report.rawPayload}/>
     :facts.length?<div className="decode-grid">
     {facts.map(f=><div key={f.path} className="decode-item"><span>{f.path}</span><b>{f.value}</b></div>)}
-   </div>:<div className="state-note">У звіті немає простих полів для показу.</div>}
+   </div>:<div className="state-note">{t("У звіті немає простих полів для показу.")}</div>}
    {draft&&transferFields.length>0&&<section className="transfer-panel">
     <div className="transfer-head">
      <div>
-      <h3>Перенесення в профіль</h3>
-      <p>Оберіть лише ті поля, які реально збігаються з автомобілем.</p>
+      <h3>{t("Перенесення в профіль")}</h3>
+      <p>{t("Оберіть лише ті поля, які реально збігаються з автомобілем.")}</p>
      </div>
-     <span className="tag purple">{selectedFields.length} вибрано</span>
+     <span className="tag purple">{selectedFields.length} {t("вибрано")}</span>
     </div>
     <div className="transfer-table">
      {transferFields.map(field=>{
@@ -383,14 +397,14 @@ function ReportViewer({report,vehicle,currentProfile,afterMutate}:{report:Extern
       return <label key={field.key} className={'transfer-row '+(changed?'changed':'same')}>
        <input type="checkbox" checked={selectedFields.includes(field.key)} onChange={()=>toggleField(field.key)}/>
        <span className="transfer-label">{field.label}</span>
-       <span><small>Зараз</small><b>{displayProfileValue(field.key,current)}</b></span>
-       <span><small>Зі звіту</small><b>{displayProfileValue(field.key,field.value)}</b></span>
+       <span><small>{t("Зараз")}</small><b>{displayProfileValue(field.key,current)}</b></span>
+       <span><small>{t("Зі звіту")}</small><b>{displayProfileValue(field.key,field.value)}</b></span>
       </label>;
      })}
     </div>
     <div className="page-actions report-actions">
-     <button className="primary" onClick={()=>void saveDraft()} disabled={saving||selectedFields.length===0}>{saving?<Loader2 size={15} className="spin"/>:<Check size={15}/>} ЗАСТОСУВАТИ ВИБРАНЕ</button>
-     <span className="hint-note">Комплектацію, двері, пальне й кузов OneAuto тут не підтверджує — їх залишаємо ручним профілем.</span>
+     <button className="primary" onClick={()=>void saveDraft()} disabled={saving||selectedFields.length===0}>{saving?<Loader2 size={15} className="spin"/>:<Check size={15}/>} {t("ЗАСТОСУВАТИ ВИБРАНЕ")}</button>
+     <span className="hint-note">{t("Комплектацію, двері, пальне й кузов OneAuto тут не підтверджує — їх залишаємо ручним профілем.")}</span>
     </div>
    </section>}
    <details className="raw-report"><summary>RAW JSON</summary><pre>{JSON.stringify(report.rawPayload,null,2)}</pre></details>
@@ -401,24 +415,24 @@ function OneAutoBuildSheetView({payload}:{payload:unknown}){
   const result=isRecord(payload)&&isRecord(payload.result)?payload.result:null;
   const options=Array.isArray(result?.options)?result.options.filter(isRecord):[];
   const summary=[
-    ["Колір",stringValue(result?.oem_colour_desc)],
-    ["Салон",stringValue(result?.oem_interior_trim_desc)],
-    ["Двигун",stringValue(result?.oem_engine_desc)],
-    ["Коробка",stringValue(result?.oem_transmission_type_desc)],
-    ["Привід",stringValue(result?.oem_drivetrain_desc)],
-    ["Колеса",stringValue(result?.oem_wheel_desc)],
-    ["Дата виробництва",stringValue(result?.manufactured_date)],
-    ["Дата постачання",stringValue(result?.delivered_date)],
+    [t("Колір"),stringValue(result?.oem_colour_desc)],
+    [t("Салон"),stringValue(result?.oem_interior_trim_desc)],
+    [t("Двигун"),stringValue(result?.oem_engine_desc)],
+    [t("Коробка"),stringValue(result?.oem_transmission_type_desc)],
+    [t("Привід"),stringValue(result?.oem_drivetrain_desc)],
+    [t("Колеса"),stringValue(result?.oem_wheel_desc)],
+    [t("Дата виробництва"),stringValue(result?.manufactured_date)],
+    [t("Дата постачання"),stringValue(result?.delivered_date)],
   ].filter(([,value])=>value);
 
   return <>
    {summary.length>0&&<section className="decode-group">
-    <h3>Підсумок build sheet</h3>
+    <h3>{t("Підсумок build sheet")}</h3>
     <div className="decode-grid">{summary.map(([label,value])=><div key={label} className="decode-item"><span>{label}</span><b>{value}</b></div>)}</div>
    </section>}
    {options.length>0&&<section className="report-options">
-    <h3>Заводські опції ({options.length})</h3>
-    <table className="data-table"><thead><tr><th>Код</th><th>Опція</th><th>Коментар</th></tr></thead><tbody>
+    <h3>{t("Заводські опції (")}{options.length})</h3>
+    <table className="data-table"><thead><tr><th>{t("Код")}</th><th>{t("Опція")}</th><th>{t("Коментар")}</th></tr></thead><tbody>
      {options.map((option,index)=><tr key={`${stringValue(option.factory_code)??index}-${index}`}>
       <td className="mono">{stringValue(option.factory_code)??'—'}</td>
       <td><b>{stringValue(option.factory_desc)??'—'}</b></td>
@@ -426,21 +440,21 @@ function OneAutoBuildSheetView({payload}:{payload:unknown}){
      </tr>)}
     </tbody></table>
    </section>}
-   {!summary.length&&!options.length&&<div className="state-note">OneAuto build sheet збережено, але очікуваних полів result/options немає. Відкрийте RAW JSON нижче.</div>}
+   {!summary.length&&!options.length&&<div className="state-note">{t("OneAuto build sheet збережено, але очікуваних полів result/options немає. Відкрийте RAW JSON нижче.")}</div>}
   </>;
 }
 
 function humanReportType(type:string):string{
   const names:Record<string,string>={
-    "oneauto-oe-build-sheet-europe-vin":"Комплектація EU",
-    "oneauto-oe-build-sheet-vin":"Заводський лист",
-    "oneauto-oe-service-schedule-vin":"Регламент ТО",
-    "oneauto-recall-check-vin":"Перевірка recall",
-    "oneauto-recall-report-vin":"Звіт по recall",
-    "oneauto-vin-decode-basic-us":"VIN база US",
-    "oneauto-vin-decode-plus-us":"VIN розширений US",
-    "cepik-pojazdy":"CEPiK пошук",
-    "cepik-pojazdy-detail":"CEPiK деталі",
+    "oneauto-oe-build-sheet-europe-vin":t("Комплектація EU"),
+    "oneauto-oe-build-sheet-vin":t("Заводський лист"),
+    "oneauto-oe-service-schedule-vin":t("Регламент ТО"),
+    "oneauto-recall-check-vin":t("Перевірка recall"),
+    "oneauto-recall-report-vin":t("Звіт по recall"),
+    "oneauto-vin-decode-basic-us":t("VIN база US"),
+    "oneauto-vin-decode-plus-us":t("VIN розширений US"),
+    "cepik-pojazdy":t("CEPiK пошук"),
+    "cepik-pojazdy-detail":t("CEPiK деталі"),
   };
   return names[type]??type;
 }
@@ -475,10 +489,10 @@ function buildReportWarnings(report:ExternalReport,vehicle:Vehicle,currentProfil
   const reportVin=report.vin?.trim().toUpperCase();
   const vehicleVin=vehicle.vin?.trim().toUpperCase();
   if(reportVin&&vehicleVin&&reportVin!==vehicleVin){
-    warnings.push({level:"danger",text:`VIN звіту ${reportVin} не збігається з поточним VIN ${vehicleVin}. Перенесення заблоковано за замовчуванням.`});
+    warnings.push({level:"danger",text:t("VIN звіту {0} не збігається з поточним VIN {1}. Перенесення заблоковано за замовчуванням.", { 0: reportVin, 1: vehicleVin })});
   }
   if(looksLikeOneAutoDemoPayload(report.rawPayload)){
-    warnings.push({level:"danger",text:"Звіт схожий на sandbox/demo OneAuto: є тестові коди або демонстраційні поля. Позначки знято, застосовуйте тільки після ручної перевірки RAW JSON."});
+    warnings.push({level:"danger",text:t("Звіт схожий на sandbox/demo OneAuto: є тестові коди або демонстраційні поля. Позначки знято, застосовуйте тільки після ручної перевірки RAW JSON.")});
   }
   if(draft&&currentProfile){
     const conflicts=profileTransferFields(draft).filter(field=>{
@@ -486,7 +500,7 @@ function buildReportWarnings(report:ExternalReport,vehicle:Vehicle,currentProfil
       return stringValue(current)&&stringValue(field.value)&&stringValue(current)!==stringValue(field.value);
     });
     if(conflicts.length>0){
-      warnings.push({level:"warn",text:`Є розбіжності з поточним профілем: ${conflicts.map(c=>c.label).join(", ")}. Перевірте перед застосуванням.`});
+      warnings.push({level:"warn",text:t("Є розбіжності з поточним профілем: {0}. Перевірте перед застосуванням.", { 0: conflicts.map(c=>c.label).join(", ") })});
     }
   }
   return warnings;
@@ -504,11 +518,11 @@ function looksLikeOneAutoDemoPayload(payload:unknown):boolean{
 
 function profileTransferFields(draft:Partial<VehicleProfile>):Array<{key:keyof VehicleProfile;label:string;value:unknown}>{
   const fields:Array<{key:keyof VehicleProfile;label:string;value:unknown}>=[
-    {key:"exteriorColor",label:"Колір",value:draft.exteriorColor},
-    {key:"engineFamily",label:"Двигун",value:draft.engineFamily},
-    {key:"transmissionType",label:"Тип коробки",value:draft.transmissionType},
-    {key:"transmissionCode",label:"Код коробки",value:draft.transmissionCode},
-    {key:"driveType",label:"Привід",value:draft.driveType},
+    {key:"exteriorColor",label:t("Колір"),value:draft.exteriorColor},
+    {key:"engineFamily",label:t("Двигун"),value:draft.engineFamily},
+    {key:"transmissionType",label:t("Тип коробки"),value:draft.transmissionType},
+    {key:"transmissionCode",label:t("Код коробки"),value:draft.transmissionCode},
+    {key:"driveType",label:t("Привід"),value:draft.driveType},
   ];
   return fields.filter(field=>field.value!==undefined&&field.value!==null&&String(field.value).trim()!=="");
 }
@@ -523,23 +537,23 @@ function displayProfileValue(key:keyof VehicleProfile,value:unknown):string{
 
 function formatTransferTransmission(value:string):string{
   const names:Record<string,string>={
-    manual:"механіка",
-    automatic:"автомат",
-    dct:"робот/DCT",
-    cvt:"варіатор",
-    "single-speed":"одноступенева",
-    other:"інше",
+    manual:t("механіка"),
+    automatic:t("автомат"),
+    dct:t("робот/DCT"),
+    cvt:t("варіатор"),
+    "single-speed":t("одноступенева"),
+    other:t("інше"),
   };
   return names[value]??value;
 }
 
 function formatTransferDrive(value:string):string{
   const names:Record<string,string>={
-    fwd:"передній",
-    rwd:"задній",
-    awd:"повний AWD",
-    "4wd":"повний 4WD",
-    other:"інше",
+    fwd:t("передній"),
+    rwd:t("задній"),
+    awd:t("повний AWD"),
+    "4wd":t("повний 4WD"),
+    other:t("інше"),
   };
   return names[value]??value;
 }
@@ -601,7 +615,6 @@ function flattenReportFacts(value:unknown,path=""):Array<{path:string;value:stri
 function SettingsPage(props:PageProps){
   const {userName,logout}=props;
   const {user,updateLanguage}=useAuth();
-  const botUrl=getTelegramBotUrl();
   const [languageSaving,setLanguageSaving]=useState(false);
   const [languageMessage,setLanguageMessage]=useState<string|null>(null);
   const currentLanguage=(user?.language==="uk"||user?.language==="pl"||user?.language==="en")?user.language:"uk";
@@ -610,7 +623,7 @@ function SettingsPage(props:PageProps){
     setLanguageMessage(null);
     try{
       await updateLanguage(language);
-      setLanguageMessage("Мову збережено.");
+      setLanguageMessage(t("Мову збережено."));
     }catch(err){
       setLanguageMessage(errText(err));
     }finally{
@@ -619,42 +632,28 @@ function SettingsPage(props:PageProps){
   };
   return <>
    <div className="panel list-panel">
-    <h2>ПРОФІЛЬ КОРИСТУВАЧА</h2>
+    <h2>{t("ПРОФІЛЬ КОРИСТУВАЧА")}</h2>
     <div className="settings-grid">
-     <div><span>Ім’я</span><b>{userName}</b></div>
+     <div><span>{t("Ім’я")}</span><b>{userName}</b></div>
      <div><span>Email</span><b>{user?.email??'—'}</b></div>
-     <div><span>Країна</span><b>{user?.country??'—'}</b></div>
-     <div><span>Мова</span><b>{user?.language??'—'}</b></div>
+     <div><span>{t("Країна")}</span><b>{user?.country??'—'}</b></div>
+     <div><span>{t("Мова")}</span><b>{user?.language??'—'}</b></div>
      <div><span>API</span><b className="mono">{API_BASE||'same-origin'}</b></div>
     </div>
     <div className="settings-language">
-     <label className="field">
-      <span>Мова інтерфейсу</span>
-      <select value={currentLanguage} onChange={e=>void changeLanguage(e.target.value as UserLanguage)} disabled={languageSaving}>
-       <option value="uk">🇺🇦 Українська</option>
-       <option value="pl">🇵🇱 Polski</option>
-       <option value="en">🇬🇧 English</option>
-      </select>
-     </label>
-     {languageSaving&&<span className="hint-note">Зберігаємо...</span>}
+     <span>{t("Мова інтерфейсу")}</span>
+     <LanguagePicker language={currentLanguage} onChange={language=>void changeLanguage(language)} disabled={languageSaving}/>
+     {languageSaving&&<span className="hint-note">{t("Зберігаємо...")}</span>}
      {languageMessage&&<span className="hint-note">{languageMessage}</span>}
     </div>
     <div className="page-actions">
-     <button className="ghost-btn danger" onClick={logout}><LogOut size={15}/> Вийти з акаунта</button>
+     <button className="ghost-btn danger" onClick={logout}><LogOut size={15}/> {t("Вийти з акаунта")}</button>
     </div>
    </div>
+   <TelegramIntegrationCard/>
    <div className="panel list-panel">
-    <h2>TELEGRAM ДОСТУП</h2>
-    <div className="settings-grid">
-     <div><span>Статус</span><b>Увімкнено</b></div>
-     <div><span>Авторизація</span><b>Telegram Mini App + JWT</b></div>
-     <div><span>Команди</span><b>/ask · /garage · /mileage · /expense</b></div>
-    </div>
-    {botUrl&&<div className="page-actions"><a className="ghost-btn" href={botUrl} target="_blank" rel="noreferrer"><MessageCircle size={15}/> Відкрити Telegram-бота</a></div>}
-   </div>
-   <div className="panel list-panel">
-    <h2>ПРО ПЛАТФОРМУ</h2>
-    <p className="about-text">CARA — єдиний профіль автомобіля: VIN-декодування, історія продажів, аукціони, оцінки, recall, перевірки на викрадення (Vehicle Databases) плюс ваші записи пробігу, витрат, пального й ТО. AI працює лише поверх фактів.</p>
+    <h2>{t("ПРО ПЛАТФОРМУ")}</h2>
+    <p className="about-text">{t("CARA — єдиний профіль автомобіля: VIN-декодування, історія продажів, аукціони, оцінки, recall, перевірки на викрадення (Vehicle Databases) плюс ваші записи пробігу, витрат, пального й ТО. AI працює лише поверх фактів.")}</p>
    </div>
   </>;
 }

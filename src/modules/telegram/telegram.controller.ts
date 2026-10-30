@@ -18,16 +18,16 @@ export class TelegramController {
 
   @Post("webhook")
   @HttpCode(200)
-  webhook(
+  async webhook(
     @Headers("x-telegram-bot-api-secret-token")
     secret: string | undefined,
     @Body() update: Update,
-  ): { ok: true } {
+  ): Promise<{ ok: true }> {
     if (!this.telegramService.isValidSecret(secret)) {
       throw new UnauthorizedException("Invalid Telegram webhook secret");
     }
 
-    this.telegramService.processUpdate(update);
+    await this.telegramService.processUpdate(update);
 
     return { ok: true };
   }

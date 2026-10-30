@@ -54,8 +54,11 @@ export class GroqProvider implements AiProvider {
 
   async complete(request: AiTextRequest): Promise<AiTextResponse> {
     const ready = this.ensure();
+    const model = request.purpose === "assistant"
+      ? this.configService.get<string>("GROQ_ASSISTANT_MODEL")?.trim() || "openai/gpt-oss-120b"
+      : ready.model;
     const response = await ready.client.chat.completions.create({
-      model: ready.model,
+      model,
 
       messages: [
         {
@@ -75,16 +78,19 @@ export class GroqProvider implements AiProvider {
             }
           : undefined,
 
-      max_tokens: this.textMaxTokens,
+      max_tokens: request.purpose === "assistant"
+        ? this.readPositiveNumber("GROQ_ASSISTANT_MAX_TOKENS", 2048) : this.textMaxTokens,
+      temperature: request.purpose === "assistant" ? 0.2 : undefined,
+      reasoning_effort: model.startsWith("openai/gpt-oss") ? "low"
+        : model.startsWith("qwen/") ? "none" as never : undefined,
+    }, { maxRetries: request.purpose === "assistant" ? 0 : undefined });
 
-      reasoning_effort: "none" as never,
-    });
-
+    if (response.choices[0]?.finish_reason === "length") throw new Error("AI response exceeded the output limit");
     const text = this.extractFinalText(response.choices[0]?.message?.content);
 
     return {
       provider: this.providerName,
-      model: response.model || ready.model,
+      model: response.model || model,
       text,
       responseId: response.id,
     };

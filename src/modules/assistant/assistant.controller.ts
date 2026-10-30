@@ -19,6 +19,8 @@ export class AssistantController {
       ownerId: request.userId,
       message: dto.message,
       vehicleId: dto.vehicleId,
+      language: dto.language,
+      history: dto.history,
     });
   }
 }

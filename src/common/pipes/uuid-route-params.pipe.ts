@@ -16,7 +16,7 @@ export class UuidRouteParamsPipe implements PipeTransform {
     }
 
     if (!UUID_RE.test(value)) {
-      throw new BadRequestException(`Некорректный идентификатор: ${name}`);
+      throw new BadRequestException(`Некоректний ідентифікатор: ${name}`);
     }
 
     return value;

@@ -12,6 +12,13 @@ import { VinModule } from "../vin/vin.module";
 
 import { TelegramController } from "./telegram.controller";
 import { TelegramService } from "./telegram.service";
+import { TelegramSessionService } from "./telegram-session.service";
+import { TelegramConversationService } from "./telegram-conversation.service";
+import { TelegramActionsService } from "./telegram-actions.service";
+import { MaintenanceModule } from "../maintenance/maintenance.module";
+import { VehicleProfileModule } from "../vehicle-profile/vehicle-profile.module";
+import { ExternalReportsModule } from "../external-reports/external-reports.module";
+import { TelegramReportsService } from "./telegram-reports.service";
 
 @Module({
   imports: [
@@ -24,8 +31,11 @@ import { TelegramService } from "./telegram.service";
     MileageModule,
     ServiceRecordsModule,
     VinModule,
+    MaintenanceModule,
+    VehicleProfileModule,
+    ExternalReportsModule,
   ],
   controllers: [TelegramController],
-  providers: [TelegramService],
+  providers: [TelegramService, TelegramSessionService, TelegramConversationService, TelegramActionsService, TelegramReportsService],
 })
 export class TelegramModule {}

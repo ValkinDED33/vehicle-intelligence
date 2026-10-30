@@ -1,9 +1,4 @@
-/**
- * Единая система уровней срочности для всей платформы.
- *
- * Все модули должны использовать эту шкалу для событий
- * и уведомлений вместо создания собственных уровней.
- */
+/** Shared urgency levels for events and notifications across all modules. */
 export enum UrgencyLevel {
   NORMAL = "normal",
   ATTENTION = "attention",

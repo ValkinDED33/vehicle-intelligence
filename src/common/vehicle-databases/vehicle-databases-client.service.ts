@@ -84,7 +84,7 @@ export class VehicleDatabasesClientService {
     if (!apiKey) {
       throw new ServiceUnavailableException({
         message:
-          "VIN-провайдер не настроен: добавьте VIN_PROVIDER_API_KEY в Render.",
+          "VIN-провайдер не налаштований: додайте VIN_PROVIDER_API_KEY на Render.",
         code: "VIN_PROVIDER_NOT_CONFIGURED",
       } satisfies ProviderUnavailableBody);
     }
@@ -162,7 +162,7 @@ export class VehicleDatabasesClientService {
 
             throw new ServiceUnavailableException({
               message:
-                "Лимит запросов Vehicle Databases исчерпан. Проверьте квоту или дождитесь её обновления.",
+                "Ліміт запитів Vehicle Databases вичерпано. Перевірте квоту або дочекайтеся її оновлення.",
               code: "VIN_PROVIDER_QUOTA_EXHAUSTED",
             } satisfies ProviderUnavailableBody);
           }
@@ -181,7 +181,7 @@ export class VehicleDatabasesClientService {
 
           throw new ServiceUnavailableException({
             message:
-              "Vehicle Databases временно ограничил частоту запросов. Попробуйте позже.",
+              "Vehicle Databases тимчасово обмежив частоту запитів. Спробуйте пізніше.",
             code: "VIN_PROVIDER_RATE_LIMITED",
           } satisfies ProviderUnavailableBody);
         }
@@ -193,7 +193,7 @@ export class VehicleDatabasesClientService {
 
           throw new ServiceUnavailableException({
             message:
-              "Vehicle Databases временно недоступен. Попробуйте позже.",
+              "Vehicle Databases тимчасово недоступний. Спробуйте пізніше.",
             code: "VIN_PROVIDER_TEMPORARILY_UNAVAILABLE",
           } satisfies ProviderUnavailableBody);
         }

@@ -57,7 +57,7 @@ export class MaintenanceService {
     );
 
     if (!rule) {
-      throw new NotFoundException("Регламент обслуживания не найден");
+      throw new NotFoundException("Регламент обслуговування не знайдено");
     }
 
     return rule;

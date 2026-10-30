@@ -113,6 +113,9 @@ import { VehicleDatabasesSourcesService } from "./services/vehicle-databases-sou
     ExternalReportsDbService,
     ExternalReportsService,
     VEHICLE_HISTORY_PROVIDER_TOKEN,
+    VehicleDatabasesSourcesService,
+    OneAutoReportsService,
+    CepikReportsService,
   ],
 })
 export class ExternalReportsModule {}

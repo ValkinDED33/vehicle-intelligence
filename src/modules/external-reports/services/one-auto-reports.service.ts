@@ -125,7 +125,7 @@ export class OneAutoReportsService {
     const vin = vehicle.vin?.trim().toUpperCase();
 
     if (!vin) {
-      throw new BadRequestException("У автомобиля не указан VIN");
+      throw new BadRequestException("В автомобіля не вказано VIN");
     }
 
     const url = new URL(definition.path, this.baseUrl);

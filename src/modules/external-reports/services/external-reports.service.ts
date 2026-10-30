@@ -37,7 +37,7 @@ export class ExternalReportsService {
 
     if (!vin) {
       throw new BadRequestException(
-        "У автомобиля не указан VIN",
+        "В автомобіля не вказано VIN",
       );
     }
 

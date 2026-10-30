@@ -165,7 +165,7 @@ export class VehicleDatabasesSourcesService {
     const vin = vehicle.vin?.trim().toUpperCase();
 
     if (!vin) {
-      throw new BadRequestException("У автомобиля не указан VIN");
+      throw new BadRequestException("В автомобіля не вказано VIN");
     }
 
     return vin;

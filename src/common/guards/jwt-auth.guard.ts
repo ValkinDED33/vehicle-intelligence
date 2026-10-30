@@ -28,20 +28,20 @@ export class JwtAuthGuard implements CanActivate {
     const authorization = request.headers.authorization;
 
     if (!authorization?.startsWith("Bearer ")) {
-      throw new UnauthorizedException("Отсутствует токен авторизации");
+      throw new UnauthorizedException("Відсутній токен авторизації");
     }
 
     const token = authorization.slice("Bearer ".length).trim();
 
     if (!token) {
-      throw new UnauthorizedException("Отсутствует токен авторизации");
+      throw new UnauthorizedException("Відсутній токен авторизації");
     }
 
     try {
       const payload = this.jwtService.verify<JwtPayload>(token);
 
       if (!payload.sub) {
-        throw new UnauthorizedException("Некорректный токен авторизации");
+        throw new UnauthorizedException("Некоректний токен авторизації");
       }
 
       request.userId = payload.sub;
@@ -53,11 +53,11 @@ export class JwtAuthGuard implements CanActivate {
       }
 
       if (error instanceof TokenExpiredError) {
-        throw new UnauthorizedException("Токен авторизации истёк");
+        throw new UnauthorizedException("Строк дії токена авторизації минув");
       }
 
       if (error instanceof JsonWebTokenError) {
-        throw new UnauthorizedException("Недействительный токен авторизации");
+        throw new UnauthorizedException("Недійсний токен авторизації");
       }
 
       throw error;

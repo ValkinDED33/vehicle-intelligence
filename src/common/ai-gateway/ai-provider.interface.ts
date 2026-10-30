@@ -7,6 +7,7 @@ export interface AiTextRequest {
   userPrompt: string;
 
   responseFormat?: "text" | "json";
+  purpose?: "assistant";
 }
 
 export interface AiImageInput {

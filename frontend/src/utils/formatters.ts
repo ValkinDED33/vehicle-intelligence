@@ -1,3 +1,4 @@
+import { t } from "./../i18n";
 import {
   FileText,
   Fuel,
@@ -31,20 +32,20 @@ export function eventIcon(type: string) {
 }
 
 export function humanizeType(type: string) {
-  return EVENT_META[type]?.title ?? type;
+  return t(EVENT_META[type]?.title ?? type);
 }
 
 export function vehicleTitle(v: Vehicle): string {
   const parts = [v.make, v.model].filter(Boolean);
   if (parts.length) return parts.join(" ");
   if (v.nickname) return v.nickname;
-  return v.vin ? `VIN ${v.vin}` : "Автомобіль без назви";
+  return v.vin ? `VIN ${v.vin}` : t("Автомобіль без назви");
 }
 
 export function vehicleLine(v: Vehicle, latest: MileageReading | null): string {
   const bits = [v.modelYear, v.licensePlate].filter(Boolean) as string[];
-  if (latest) bits.push(`${fmtNumber(latest.odometerKm)} км`);
-  return bits.length ? bits.join(" · ") : "Дані не заповнені";
+  if (latest) bits.push(t("{0} км", { 0: fmtNumber(latest.odometerKm) }));
+  return bits.length ? bits.join(" · ") : t("Дані не заповнені");
 }
 
 export function resolvedVehicleTitle(
@@ -65,14 +66,14 @@ export function resolvedVehicleLine(
   const year = vinDecode?.modelYear ? String(vinDecode.modelYear) : v.modelYear;
   const trimOrPlate = profile?.trimLevel ?? v.licensePlate;
   const bits = [year, trimOrPlate].filter(Boolean) as string[];
-  if (latest) bits.push(`${fmtNumber(latest.odometerKm)} км`);
-  return bits.length ? bits.join(" · ") : "Дані не заповнені";
+  if (latest) bits.push(t("{0} км", { 0: fmtNumber(latest.odometerKm) }));
+  return bits.length ? bits.join(" · ") : t("Дані не заповнені");
 }
 
 export function errText(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
-  return "Невідома помилка";
+  return t("Невідома помилка");
 }
 
 export function urgencyScore(urgency: MaintenanceStatus["urgency"]): number {
@@ -87,24 +88,24 @@ export function reminderDetail(s: MaintenanceStatus): string {
   if (s.kmRemaining !== null) {
     parts.push(
       s.kmRemaining <= 0
-        ? `прострочено на ${fmtNumber(Math.abs(s.kmRemaining))} км`
-        : `через ${fmtNumber(s.kmRemaining)} км`,
+        ? t("прострочено на {0} км", { 0: fmtNumber(Math.abs(s.kmRemaining)) })
+        : t("через {0} км", { 0: fmtNumber(s.kmRemaining) }),
     );
   }
   if (s.daysRemaining !== null) {
     parts.push(
       s.daysRemaining <= 0
-        ? `прострочено на ${Math.abs(s.daysRemaining)} дн.`
-        : `через ${s.daysRemaining} дн.`,
+        ? t("прострочено на {0} дн.", { 0: Math.abs(s.daysRemaining) })
+        : t("через {0} дн.", { 0: s.daysRemaining }),
     );
   }
-  return parts.join(" · ") || "Строк не визначено";
+  return parts.join(" · ") || t("Строк не визначено");
 }
 
 export function intervalLines(s: MaintenanceStatus): string[] {
   const lines: string[] = [];
-  if (s.rule.intervalKm) lines.push(`${fmtNumber(s.rule.intervalKm)} км`);
-  if (s.rule.intervalMonths) lines.push(`${s.rule.intervalMonths} міс.`);
-  if (s.rule.intervalEngineHours) lines.push(`${s.rule.intervalEngineHours} м/ч`);
-  return lines.length ? lines : ["Регламент не задано"];
+  if (s.rule.intervalKm) lines.push(t("{0} км", { 0: fmtNumber(s.rule.intervalKm) }));
+  if (s.rule.intervalMonths) lines.push(t("{0} міс.", { 0: s.rule.intervalMonths }));
+  if (s.rule.intervalEngineHours) lines.push(t("{0} мотогод", { 0: s.rule.intervalEngineHours }));
+  return lines.length ? lines : [t("Регламент не задано")];
 }
