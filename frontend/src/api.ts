@@ -536,6 +536,7 @@ export const energyApi = {
 // ---------- service records ----------
 
 export interface ServiceRecord {
+  maintenanceKeys?: string[];
   id: string;
   vehicleId: string;
   expenseId: string | null;
@@ -572,6 +573,7 @@ export interface ServiceRecordItem {
 }
 
 export const serviceRecordsApi = {
+  create: (vehicleId: string, input: { type: string; title: string; odometerKm?: number; occurredAt?: string; maintenanceKeys?: string[]; maintenancePlans?: Partial<MaintenanceRule>[] }) => request<{ record: ServiceRecord; items: ServiceRecordItem[] }>(`/vehicles/${vehicleId}/service-records`, { method: "POST", body: JSON.stringify(input) }),
   list: (vehicleId: string) =>
     request<ServiceRecord[]>(`/vehicles/${vehicleId}/service-records`),
   get: (vehicleId: string, recordId: string) =>
@@ -607,6 +609,7 @@ export interface VehicleDocument {
 }
 
 export interface CreateDocumentInput {
+  reminder?: Pick<ReminderInput, "offsets" | "remindAt" | "timeZone">;
   type: string;
   title: string;
   description?: string;
@@ -638,6 +641,11 @@ export const documentsApi = {
 // ---------- maintenance ----------
 
 export interface MaintenanceRule {
+  telegramEnabled?: boolean;
+  notifyWhenDue?: boolean;
+  reminderOffsets?: ReminderOffset[];
+  remindAt?: string;
+  timeZone?: string;
   id: string;
   vehicleId?: string;
   key: string;
@@ -672,6 +680,7 @@ export interface MaintenanceStatus {
 }
 
 export const maintenanceApi = {
+  updateRule: (vehicleId: string, id: string, input: Partial<MaintenanceRule>) => request<MaintenanceRule>(`/vehicles/${vehicleId}/maintenance/rules/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   rules: (vehicleId: string) =>
     request<MaintenanceRule[]>(`/vehicles/${vehicleId}/maintenance/rules`),
   createRule: (vehicleId: string, input: Partial<MaintenanceRule>) =>
@@ -815,6 +824,21 @@ export const assistantApi = {
 };
 
 // ---------- helpers ----------
+
+export interface ReminderOffset { amount: number; unit: "days" | "weeks" | "months" }
+export interface ReminderInput { title: string; dueDate: string; remindAt: string; timeZone: string; offsets: ReminderOffset[] }
+export interface ScheduledReminder extends ReminderInput {
+  documentId?: string | null; maintenanceRuleId?: string | null; sourcePhase?: string | null; targetOdometerKm?: number | null; serviceDueDate?: string | null;
+  id: string; status: string; revision: number;
+  deliveries: { id: string; scheduledAt: string; status: string; sentAt: string | null; lastError: string | null }[];
+}
+export interface RemindersResponse { telegramLinked: boolean; deliveryEnabled: boolean; reminders: ScheduledReminder[] }
+export const remindersApi = {
+  list: (vehicleId: string) => request<RemindersResponse>(`/vehicles/${vehicleId}/reminders`),
+  preview: (vehicleId: string, input: ReminderInput) => request<ReminderInput & { scheduledAt: string[] }>(`/vehicles/${vehicleId}/reminders/preview`, { method: "POST", body: JSON.stringify(input) }),
+  save: (vehicleId: string, input: ReminderInput, editing?: { id: string; revision: number }) => request(`/vehicles/${vehicleId}/reminders${editing ? `/${editing.id}` : ""}`, { method: editing ? "PATCH" : "POST", body: JSON.stringify({ ...input, ...(editing ? { expectedRevision: editing.revision } : {}) }) }),
+  status: (vehicleId: string, reminder: { id: string; revision: number }, status: "completed" | "cancelled") => request(`/vehicles/${vehicleId}/reminders/${reminder.id}/status`, { method: "PATCH", body: JSON.stringify({ status, expectedRevision: reminder.revision }) }),
+};
 
 export function num(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;

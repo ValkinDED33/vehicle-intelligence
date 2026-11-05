@@ -17,6 +17,7 @@ import { toServiceRecordDecimalString } from "../utils/service-record-number.uti
 
 import { ServiceRecordItemPreparerService } from "./service-record-item-preparer.service";
 import { ServiceRecordValidatorService } from "./service-record-validator.service";
+import { validateMaintenanceRule } from "../../maintenance/maintenance-rule-validation";
 
 @Injectable()
 export class ServiceRecordsService {
@@ -36,6 +37,17 @@ export class ServiceRecordsService {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
     this.validator.validate(input);
+    if (input.maintenanceKeys && (input.maintenanceKeys.length > 20 || new Set(input.maintenanceKeys).size !== input.maintenanceKeys.length
+      || input.maintenanceKeys.some(key => !/^[a-z][a-z0-9_]{0,79}$/.test(key)))) throw new BadRequestException("Некоректні коди виконаних робіт.");
+    if (input.maintenanceKeys?.length && input.occurredAt && input.occurredAt.getTime() > Date.now() + 5 * 60_000) throw new BadRequestException("Дата виконання робіт не може бути в майбутньому.");
+    if (input.maintenancePlans?.length) {
+      if (input.maintenancePlans.length > 20 || new Set(input.maintenancePlans.map(plan => plan.key)).size !== input.maintenancePlans.length) throw new BadRequestException("Некоректні інтервали робіт.");
+      for (const plan of input.maintenancePlans) {
+        validateMaintenanceRule(plan);
+        if (!input.maintenanceKeys?.includes(plan.key) || plan.intervalKm && input.odometerKm === undefined
+          || plan.intervalEngineHours && input.engineHours === undefined) throw new BadRequestException("Для інтервалу потрібні виконана робота та показання на момент обслуговування.");
+      }
+    }
 
     const items = this.itemPreparer.prepare(input.items ?? []);
 
@@ -44,6 +56,8 @@ export class ServiceRecordsService {
       expenseId: input.expenseId,
       type: input.type,
       title: input.title,
+      maintenanceKeys: input.maintenanceKeys,
+      maintenancePlans: input.maintenancePlans,
       description: input.description,
       odometerKm: input.odometerKm,
 
@@ -76,6 +90,8 @@ export class ServiceRecordsService {
 
       payload: {
         serviceRecordId: created.record.id,
+        maintenanceKeys: input.maintenanceKeys ?? [],
+        engineHours: input.engineHours ?? null,
         expenseId: created.record.expenseId,
         serviceType: input.type,
         title: input.title,

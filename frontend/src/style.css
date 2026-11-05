@@ -506,3 +506,34 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .raw-report summary{cursor:pointer;padding:11px 13px;color:#bcd6ff;font-size:12px;font-weight:700}
 .raw-report pre{margin:0;padding:13px;max-height:360px;overflow:auto;border-top:1px solid var(--line);font-size:11px;line-height:1.45;color:#d6e4ff;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:760px){.reports-filter{grid-template-columns:1fr}.reports-head{display:grid}.transfer-row{grid-template-columns:18px 1fr}.transfer-row span:not(.transfer-label){grid-column:2}} 
+.scheduled-reminders{display:grid;gap:16px;min-width:0}
+.scheduled-reminders>h2{display:flex;align-items:center;gap:10px;font-size:18px;letter-spacing:0}
+.reminder-form{max-width:900px;border-radius:8px}
+.reminder-offsets{margin:16px 0;border:0;padding:0;display:grid;gap:10px;justify-items:start;min-width:0}
+.reminder-offsets legend{margin-bottom:10px;font-size:13px}
+.reminder-offset{display:grid;grid-template-columns:90px minmax(100px,160px) 40px;gap:8px;max-width:100%;align-items:center}
+.reminder-offset input,.reminder-offset select{width:100%;min-width:0;height:40px;background:#061428;border:1px solid #315071;color:#fff;border-radius:8px;padding:9px;font:inherit}
+.reminder-offset .icon-btn{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.service-entry,.maintenance-rule-form{border-radius:8px;margin-bottom:18px}
+.service-entry h2,.maintenance-rule-form h2{font-size:16px;letter-spacing:0;display:flex;align-items:center;gap:8px}
+.service-task-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;border:0;padding:0;min-width:0}
+.service-task-list legend{font-size:13px;margin-bottom:12px}
+.service-task-list .toggle-line{margin:0;display:flex;gap:8px;align-items:flex-start;font-size:12px;overflow-wrap:anywhere}
+.service-task-list input{flex-shrink:0}
+.service-plan-row{margin:0;padding:12px 0;border:0;border-top:1px solid var(--line);min-width:0}
+.service-plan-row legend{font-size:13px;padding:0 8px 0 0}
+@media(max-width:600px){.service-task-list{grid-template-columns:1fr}.service-entry .primary{white-space:normal}}
+.scheduled-reminders h3{letter-spacing:0}
+.reminder-form .field input{border-radius:8px;color-scheme:dark}
+.scheduled-reminders .icon-btn{width:40px;height:40px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.scheduled-reminders .page-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0}
+.scheduled-reminders button{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:normal}
+.reminder-preview{display:grid;gap:7px;padding:12px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.scheduled-reminder{padding:16px 0;border-bottom:1px solid var(--line);min-width:0}
+.scheduled-reminder-heading{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.scheduled-reminder h3{font-size:16px;margin:0 0 8px;overflow-wrap:anywhere}
+.scheduled-reminder-heading>div:first-child{min-width:0}
+.reminder-tools{display:flex;gap:4px;flex-shrink:0}
+.reminder-deliveries{padding:0;margin:12px 0 0;list-style:none;display:grid;gap:8px;font-size:12px}
+.reminder-deliveries li{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;overflow-wrap:anywhere}
+@media(max-width:600px){.scheduled-reminder-heading{flex-wrap:wrap}.reminder-form .form-grid{grid-template-columns:1fr}.reminder-offset{grid-template-columns:70px minmax(90px,1fr) 40px;width:100%}}

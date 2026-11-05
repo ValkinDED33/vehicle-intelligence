@@ -2,6 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import type { ReminderPreferences } from "../reminders/reminder-schedule";
+import { saveDocumentReminder } from "../reminders/document-reminder";
 import {
   documentFields,
   type DocumentField,
@@ -30,6 +32,7 @@ export type {
 };
 
 export interface CreateVehicleDocumentData extends CreateVehicleDocumentMetadata {
+  reminder?: ReminderPreferences;
   fields?: CreateDocumentFieldData[];
 }
 
@@ -89,6 +92,7 @@ export class DocumentsDbService {
       if (fields.length !== values.length) {
         throw new Error("Failed to persist all document fields");
       }
+      if (data.reminder) await saveDocumentReminder(tx, document, data.reminder);
 
       return {
         document,

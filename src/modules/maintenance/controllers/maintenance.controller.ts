@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Patch,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -29,6 +30,8 @@ export class MaintenanceController {
     @Body() dto: CreateMaintenanceRuleDto,
   ) {
     return this.maintenanceService.createRule(request.userId, vehicleId, {
+      telegramEnabled: dto.telegramEnabled, notifyWhenDue: dto.notifyWhenDue,
+      reminderOffsets: dto.reminderOffsets, remindAt: dto.remindAt, timeZone: dto.timeZone,
       key: dto.key,
       title: dto.title,
       source: dto.source,
@@ -51,6 +54,11 @@ export class MaintenanceController {
     @Param("vehicleId") vehicleId: string,
   ) {
     return this.maintenanceService.listRules(request.userId, vehicleId);
+  }
+  @Patch("rules/:ruleId")
+  updateRule(@Req() request: AuthenticatedRequest, @Param("vehicleId") vehicleId: string,
+    @Param("ruleId") ruleId: string, @Body() dto: CreateMaintenanceRuleDto) {
+    return this.maintenanceService.updateRule(request.userId, vehicleId, ruleId, dto);
   }
 
   @Delete("rules/:ruleId")

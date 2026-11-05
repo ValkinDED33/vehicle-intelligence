@@ -38,6 +38,8 @@ export class ServiceRecordsController {
       type: dto.type,
 
       title: dto.title,
+      maintenanceKeys: dto.maintenanceKeys,
+      maintenancePlans: dto.maintenancePlans,
       description: dto.description,
 
       odometerKm: dto.odometerKm,

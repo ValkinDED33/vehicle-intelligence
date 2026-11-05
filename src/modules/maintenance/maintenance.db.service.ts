@@ -2,13 +2,15 @@ import { Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import type { CreateMaintenanceRuleInput } from "./maintenance.types";
+import { DEFAULT_OFFSETS } from "../reminders/reminder-schedule";
 import {
   type MaintenanceRule,
   type NewMaintenanceRule,
   maintenanceRules,
 } from "./schemas/maintenance-rule.schema";
 
-export interface CreateMaintenanceRuleData {
+export interface CreateMaintenanceRuleData extends CreateMaintenanceRuleInput {
   vehicleId: string;
   key: string;
   title: string;
@@ -47,6 +49,11 @@ export class MaintenanceDbService {
       completionEventType: data.completionEventType.trim(),
 
       isActive: true,
+      telegramEnabled: data.telegramEnabled ?? false,
+      notifyWhenDue: data.notifyWhenDue ?? true,
+      reminderOffsets: data.reminderOffsets ?? (data.warningDaysBefore != null ? [{ amount: data.warningDaysBefore, unit: "days" }] : DEFAULT_OFFSETS),
+      remindAt: data.remindAt ?? "09:00",
+      timeZone: data.timeZone ?? "Europe/Warsaw",
     };
 
     const [createdRule] = await this.databaseService.connection
@@ -77,6 +84,17 @@ export class MaintenanceDbService {
       .limit(1);
 
     return rule ?? null;
+  }
+
+  async updateRule(vehicleId: string, id: string, input: CreateMaintenanceRuleInput) {
+    const { key, title, completionEventType, intervalKm, intervalMonths, intervalEngineHours,
+      warningKmBefore, warningDaysBefore, warningEngineHoursBefore, telegramEnabled, notifyWhenDue, reminderOffsets, remindAt, timeZone } = input;
+    const [record] = await this.databaseService.connection.update(maintenanceRules).set({
+      key, title, completionEventType, intervalKm: intervalKm ?? null, intervalMonths: intervalMonths ?? null, intervalEngineHours: intervalEngineHours ?? null,
+      warningKmBefore: warningKmBefore ?? null, warningDaysBefore: warningDaysBefore ?? null, warningEngineHoursBefore: warningEngineHoursBefore ?? null,
+      telegramEnabled, notifyWhenDue, reminderOffsets, remindAt, timeZone, updatedAt: new Date(),
+    }).where(and(eq(maintenanceRules.id, id), eq(maintenanceRules.vehicleId, vehicleId), eq(maintenanceRules.isActive, true))).returning();
+    return record ?? null;
   }
 
   async listActiveRules(vehicleId: string): Promise<MaintenanceRule[]> {

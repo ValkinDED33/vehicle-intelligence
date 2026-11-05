@@ -63,6 +63,7 @@ export class DocumentsService {
       source: input.source ?? "manual",
 
       fields,
+      reminder: input.reminder,
     });
   }
 

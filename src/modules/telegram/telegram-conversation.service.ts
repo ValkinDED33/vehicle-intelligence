@@ -7,6 +7,8 @@ import type { User } from "../identity/schemas/user.schema";
 import { TelegramActionsService } from "./telegram-actions.service";
 import { botLanguage, botText, interruptedEffectText, type BotLanguage, type ConversationCheckpoint, type ConversationState } from "./telegram-conversation.types";
 import { reportLabel } from "./telegram-report-catalog";
+import { DateTime } from "luxon";
+import { buildReminderSchedule, type ReminderInput } from "../reminders/reminder-schedule";
 
 export function splitTelegramText(text: string): string[] {
   const chunks: string[] = [];
@@ -100,19 +102,39 @@ export class TelegramConversationService {
       }
       action.expectedVin = vin;
     }
+    const currentReminder = ["update_reminder", "cancel_reminder", "complete_reminder"].includes(action.operation)
+      ? await this.actions.getReminder(user.id, action.vehicleId!, String(action.input.id)) : null;
+    if (currentReminder) {
+      if (currentReminder.status !== "active") {
+        await ctx.reply(botText(language, "Це нагадування вже закрито. Оновіть список: /reminders.", "To przypomnienie jest już zamknięte. Odśwież listę: /reminders.", "This reminder is already closed. Refresh the list with /reminders."));
+        return;
+      }
+      action.expectedReminderRevision = currentReminder.revision;
+    }
     const id = randomBytes(8).toString("hex");
     state.pending = { id, action, expiresAt: Date.now() + 10 * 60 * 1000 };
     delete state.awaitingVehicleFor;
     const targetName = target ? [target.make, target.model, target.nickname, target.licensePlate].filter(Boolean).join(" ") : "";
     const isReport = action.operation === "request_report";
-    const warning = isReport ? "\n\n" + botText(language,
+    let warning = isReport ? "\n\n" + botText(language,
       "Запит може витратити квоту або бути платним за тарифом провайдера. Точну вартість не визначаю. Натисніть кнопку лише якщо погоджуєтеся на цей запит.",
       "Zapytanie może zużyć limit lub być płatne według taryfy dostawcy. Nie znam dokładnej ceny. Potwierdź tylko, jeśli zgadzasz się na to zapytanie.",
       "This request may use quota or incur charges under the provider's plan. I don't know the exact price. Confirm only if you agree to this request.") : "";
+    if (["reminder", "update_reminder"].includes(action.operation)) {
+      const schedule = buildReminderSchedule(action.input as unknown as ReminderInput);
+      warning = "\n\n" + botText(language, "Дати сповіщень у Telegram:", "Terminy powiadomień w Telegramie:", "Telegram notification dates:") + "\n"
+        + schedule.scheduledAt.map(date => DateTime.fromJSDate(date, { zone: schedule.timeZone }).toFormat("dd.MM.yyyy HH:mm")).join("\n")
+        + `\n${schedule.timeZone}`;
+      if (!this.actions.reminderDeliveryEnabled) warning += "\n" + botText(language,
+        "Автоматичне надсилання ще не ввімкнено на сервері.",
+        "Automatyczna wysyłka nie jest jeszcze włączona na serwerze.",
+        "Automatic delivery is not yet enabled on the server.");
+    }
     const preview = (isReport ? botText(language, "Перевірте запит звіту:", "Sprawdź zapytanie o raport:", "Review the report request:")
       : botText(language, "Перевірте перед збереженням:", "Sprawdź przed zapisaniem:", "Review before saving:")) +
       `\n${this.operationLabel(action.operation, language)}${targetName ? `\n${targetName}` : ""}\n` +
       (action.expectedVin ? `VIN: ${action.expectedVin}\n` : "") +
+      (currentReminder ? `${currentReminder.title} · ${currentReminder.dueDate.split("-").reverse().join(".")}\n` : "") +
       Object.entries(action.input).map(([key, value]) => `${this.fieldLabel(key, language)}: ${botFieldValue(key, value, language)}`).join("\n") + warning;
     const chunks = splitTelegramText(preview);
     for (const chunk of chunks.slice(0, -1)) await ctx.reply(chunk);
@@ -146,6 +168,22 @@ export class TelegramConversationService {
       }
     }
     if (!checkpoint) throw new ServiceUnavailableException("Telegram checkpoint is unavailable");
+    if (pending.action.expectedReminderRevision !== undefined) {
+      const current = await this.actions.getReminder(user.id, pending.action.vehicleId!, String(pending.action.input.id));
+      if (current.revision !== pending.action.expectedReminderRevision || current.status !== "active") {
+        delete state.pending;
+        await ctx.reply(botText(language, "Нагадування змінилося. Перевірте /reminders і підготуйте запит ще раз.", "Przypomnienie uległo zmianie. Sprawdź /reminders i przygotuj prośbę ponownie.", "The reminder has changed. Check /reminders and prepare your request again."));
+        return;
+      }
+    }
+    if (["reminder", "update_reminder"].includes(pending.action.operation)) {
+      try { buildReminderSchedule(pending.action.input as unknown as ReminderInput); }
+      catch {
+        delete state.pending;
+        await ctx.reply(botText(language, "Строки нагадування вже минули або некоректні. Укажіть нові дату й час.", "Terminy przypomnienia już minęły lub są nieprawidłowe. Podaj nową datę i godzinę.", "The reminder times have passed or are invalid. Specify a new date and time."));
+        return;
+      }
+    }
     delete state.pending;
     state.lastEffect = { id: pending.id, operation: pending.action.operation, status: "started", at: Date.now() };
     // Consume confirmation durably before a domain write or a quota-consuming provider call.
@@ -173,6 +211,10 @@ export class TelegramConversationService {
       archive_vehicle: ["Архівувати авто", "Archiwizuj auto", "Archive car"], restore_vehicle: ["Відновити авто", "Przywróć auto", "Restore car"],
       delete_document: ["Видалити документ", "Usuń dokument", "Delete document"], deactivate_maintenance: ["Вимкнути правило ТО", "Wyłącz harmonogram", "Deactivate maintenance rule"],
       request_report: ["Новий зовнішній звіт", "Nowy raport zewnętrzny", "New external report"],
+      reminder: ["Нове нагадування", "Nowe przypomnienie", "New reminder"],
+      update_reminder: ["Змінити нагадування", "Zmień przypomnienie", "Update reminder"],
+      cancel_reminder: ["Скасувати нагадування", "Anuluj przypomnienie", "Cancel reminder"],
+      complete_reminder: ["Позначити виконаним", "Oznacz jako wykonane", "Mark complete"],
     };
     return botText(language, ...labels[operation]);
   }
@@ -212,6 +254,10 @@ export class TelegramConversationService {
       batteryGrossCapacityKwh: ["Повна ємність батареї, кВт·год", "Pojemność baterii brutto, kWh", "Gross battery capacity, kWh"],
       batteryUsableCapacityKwh: ["Корисна ємність батареї, кВт·год", "Pojemność użytkowa baterii, kWh", "Usable battery capacity, kWh"],
       sourceKey: ["Джерело звіту", "Źródło raportu", "Report source"],
+      dueDate: ["Дата події", "Data wydarzenia", "Event date"],
+      remindAt: ["Час надсилання", "Godzina wysyłki", "Notification time"],
+      timeZone: ["Часовий пояс", "Strefa czasowa", "Time zone"],
+      offsets: ["Нагадати за", "Przypomnij wcześniej", "Notify before"],
     };
     return labels[key] ? botText(language, ...labels[key]) : key;
   }
@@ -219,6 +265,13 @@ export class TelegramConversationService {
 }
 
 export function botFieldValue(key: string, value: unknown, language: BotLanguage): string {
+    if (key === "dueDate" && typeof value === "string") return value.split("-").reverse().join(".");
+    if (key === "offsets" && Array.isArray(value)) return value.map(offset => {
+      if (offset.amount === 0) return botText(language, "у день події", "w dniu wydarzenia", "on the event date");
+      return new Intl.NumberFormat(language === "uk" ? "uk-UA" : language === "pl" ? "pl-PL" : "en-GB", {
+        style: "unit", unit: offset.unit.slice(0, -1), unitDisplay: "long",
+      }).format(offset.amount);
+    }).join(", ");
     if (key === "sourceKey" && typeof value === "string") return reportLabel(value, language);
     if (typeof value === "boolean") return botText(language, value ? "так" : "ні", value ? "tak" : "nie", value ? "yes" : "no");
     if (key === "type" && value === "manual") return botText(language, "Інструкція", "Instrukcja", "Owner's manual");

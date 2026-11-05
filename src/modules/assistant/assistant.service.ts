@@ -15,6 +15,8 @@ import { VehicleHistoryService } from "../vehicle-history/services/vehicle-histo
 import { ACTION_GUIDE } from "../telegram/telegram-actions.service";
 import { botLanguage, botText, type BotLanguage, type ConversationMessage } from "../telegram/telegram-conversation.types";
 import { ASSISTANT_SAFETY_REFERENCE } from "./assistant-safety";
+import { RemindersService } from "../reminders/reminders.service";
+import { numericReminderDate } from "../reminders/reminder-schedule";
 
 interface AssistantChatInput {
   ownerId: string;
@@ -51,6 +53,7 @@ export class AssistantService {
     private readonly serviceRecordsService: ServiceRecordsService,
     private readonly reportsService: ExternalReportsService,
     private readonly historyService: VehicleHistoryService,
+    private readonly remindersService: RemindersService,
   ) {}
 
   async chat(input: AssistantChatInput): Promise<AssistantChatResponse> {
@@ -120,6 +123,16 @@ ${ACTION_GUIDE}`,
     const clarification = /\?|перед збереженням|przed zapisaniem|before saving/i.test(priorReply) && input.message.length < 80;
     const previousMessage = [...(input.history ?? [])].reverse().find((m) => m.role === "user")?.content ?? "";
     const source = input.message + (clarification ? "\n" + previousMessage : "");
+    if (action && ["reminder", "update_reminder"].includes(action.operation ?? "")) {
+      const explicitDate = numericReminderDate(source);
+      if (action.operation === "reminder" && !explicitDate && !/\b20\d{2}\b|сьогодні|завтра|післязавтра|сегодня|завтра|послезавтра|today|tomorrow|dzisiaj|dziś|jutro|pojutrze/i.test(source)) {
+        return { answer: botText(botLanguage(input.language), "Яка точна дата події? Укажіть день, місяць і рік, наприклад 10.11.2027.", "Jaka jest dokładna data wydarzenia? Podaj dzień, miesiąc i rok, na przykład 10.11.2027.", "What is the exact event date? Include the day, month and year, for example 10.11.2027."), action: null, selectedVehicleId };
+      }
+      if (explicitDate && action.input?.dueDate !== explicitDate) return { answer: botText(botLanguage(input.language),
+        `Підтвердьте дату події: ${explicitDate}. Коли нагадати?`,
+        `Potwierdź datę wydarzenia: ${explicitDate}. Kiedy przypomnieć?`,
+        `Please confirm the event date: ${explicitDate}. When should I remind you?`), action: null, selectedVehicleId };
+    }
     const numbers = (source.replace(/(?<=\d)[ \u00a0\u202f](?=\d{3}(?:\D|$))/g, "").match(/\d+(?:[.,]\d+)?/g) ?? [])
       .flatMap((value) => [Number(value.replace(",", ".")), ...( /^\d{1,3}(?:[.,]\d{3})+$/.test(value) ? [Number(value.replace(/[.,]/g, ""))] : [])]);
     if (action?.input?.odometerKm !== undefined && !numbers.includes(Number(action.input.odometerKm))) {
@@ -227,8 +240,9 @@ ${ACTION_GUIDE}`,
       this.documentsService.getHistory(ownerId, vehicleId, { limit: 10 }),
       this.reportsService.getReports(ownerId, vehicleId),
       this.historyService.getHistory(ownerId, vehicleId, { limit: 10 }),
+      this.remindersService.list(ownerId, vehicleId),
     ]);
-    const names = ["currentMonthCosts", "recentExpenses", "recentEnergy", "fullToFullConsumption", "recentService", "documents", "externalReports", "recentEvents"];
+    const names = ["currentMonthCosts", "recentExpenses", "recentEnergy", "fullToFullConsumption", "recentService", "documents", "externalReports", "recentEvents", "reminders"];
     const additional: Record<string, unknown> = Object.fromEntries(extra.map((result, index) => [names[index], result.status === "fulfilled"
       ? result.value : { unavailable: true }]));
     const reportResult = extra[6];
@@ -237,6 +251,12 @@ ${ACTION_GUIDE}`,
         id: report.id, reportType: report.reportType, provider: report.provider, status: report.status,
         fetchedAt: report.fetchedAt, vin: report.vin,
       }));
+    }
+    const reminderResult = extra[8];
+    if (reminderResult.status === "fulfilled" && reminderResult.value && "reminders" in reminderResult.value) {
+      const value = reminderResult.value;
+      additional.reminders = { telegramLinked: value.telegramLinked, deliveryEnabled: value.deliveryEnabled,
+        records: value.reminders.filter(row => row.status === "active").slice(0, 20).map(({ id, revision, title, dueDate, remindAt, timeZone, offsets }) => ({ id, revision, title, dueDate, remindAt, timeZone, offsets })) };
     }
     return [
       `Vehicle: ${[

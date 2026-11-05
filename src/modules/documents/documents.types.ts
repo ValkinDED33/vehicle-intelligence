@@ -1,4 +1,5 @@
 import { type VehicleDocument } from "./schemas/vehicle-document.schema";
+import type { ReminderPreferences } from "../reminders/reminder-schedule";
 
 export interface CreateDocumentFieldInput {
   fieldKey: string;
@@ -16,6 +17,7 @@ export interface CreateDocumentFieldInput {
 }
 
 export interface CreateDocumentInput {
+  reminder?: ReminderPreferences;
   type: string;
 
   title: string;

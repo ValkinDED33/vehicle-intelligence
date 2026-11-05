@@ -51,6 +51,7 @@ export class DocumentsController {
       expiresAt: dto.expiresAt,
 
       source: dto.source,
+      reminder: dto.reminder,
 
       fields: dto.fields?.map((field) => ({
         fieldKey: field.fieldKey,

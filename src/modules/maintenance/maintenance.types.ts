@@ -1,7 +1,13 @@
 import { UrgencyLevel } from "../../common/urgency/urgency.enum";
 import { type MaintenanceRule } from "./schemas/maintenance-rule.schema";
+import type { ReminderOffset } from "../reminders/reminder-schedule";
 
 export interface CreateMaintenanceRuleInput {
+  telegramEnabled?: boolean;
+  notifyWhenDue?: boolean;
+  reminderOffsets?: ReminderOffset[];
+  remindAt?: string;
+  timeZone?: string;
   key: string;
   title: string;
   source?: string;
@@ -18,6 +24,7 @@ export interface CreateMaintenanceRuleInput {
 }
 
 export interface MaintenanceRuleStatus {
+  lastCompletionId?: string | null;
   rule: MaintenanceRule;
 
   urgency: UrgencyLevel;

@@ -11,8 +11,12 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ArrayMaxSize,
+  ArrayUnique,
+  Matches,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { CreateMaintenanceRuleDto } from "../../maintenance/dto/maintenance.dto";
 
 export class CreateServiceRecordItemDto {
   @IsString()
@@ -75,6 +79,11 @@ export class CreateServiceRecordItemDto {
 }
 
 export class CreateServiceRecordDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @ArrayUnique()
+  @IsString({ each: true }) @Matches(/^[a-z][a-z0-9_]{0,79}$/, { each: true })
+  maintenanceKeys?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => CreateMaintenanceRuleDto)
+  maintenancePlans?: CreateMaintenanceRuleDto[];
   /**
    * Поки тільки посилання на вже наявний Expense.
    * Автоматичне атомарне створення Expense

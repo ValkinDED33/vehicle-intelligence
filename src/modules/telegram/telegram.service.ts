@@ -15,8 +15,10 @@ import { MileageService } from "../mileage/services/mileage.service";
 import { ServiceRecordsService } from "../service-records/services/service-records.service";
 import { VinService } from "../vin/services/vin.service";
 import { TelegramSessionService } from "./telegram-session.service";
-import { botFieldValue, TelegramConversationService } from "./telegram-conversation.service";
+import { botFieldValue, splitTelegramText, TelegramConversationService } from "./telegram-conversation.service";
 import { botLanguage, botText, interruptedEffectText, type BotLanguage, type ConversationCheckpoint, type ConversationState } from "./telegram-conversation.types";
+import { RemindersService } from "../reminders/reminders.service";
+import { DateTime } from "luxon";
 
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
 
@@ -41,6 +43,7 @@ export class TelegramService implements OnModuleInit {
     private readonly vinService: VinService,
     private readonly sessionService: TelegramSessionService,
     private readonly conversationService: TelegramConversationService,
+    private readonly remindersService: RemindersService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -124,6 +127,7 @@ export class TelegramService implements OnModuleInit {
       { command: "confirm", description: "Підтвердити дію" },
       { command: "cancel", description: "Скасувати дію" },
       { command: "language", description: "Українська / Polski / English" },
+      { command: "reminders", description: "Мої нагадування" },
     ];
     await this.bot.telegram.setMyCommands(commands);
     const descriptions: Record<string, [string, string]> = {
@@ -135,6 +139,7 @@ export class TelegramService implements OnModuleInit {
       ask: ["Zapytaj CARA", "Ask CARA"], website: ["Otwórz CARA", "Open CARA"], help: ["Pomoc", "Help"],
       vehicle: ["Wybierz auto", "Choose a car"], confirm: ["Potwierdź operację", "Confirm an action"],
       cancel: ["Anuluj operację", "Cancel an action"], language: ["Українська / Polski / English", "Українська / Polski / English"],
+      reminders: ["Moje przypomnienia", "My reminders"],
     };
     for (const [index, language_code] of ["pl", "en"].entries()) {
       await this.bot.telegram.setMyCommands(commands.map(({ command }) => ({ command, description: descriptions[command][index] })), { language_code });
@@ -270,6 +275,30 @@ export class TelegramService implements OnModuleInit {
       }
       await this.authService.updateProfile(user.id, { language });
       await ctx.reply(botText(botLanguage(language), "Мову збережено: українська.", "Zapisano język: polski.", "Language saved: English."));
+    });
+
+    this.bot.command("reminders", async ctx => {
+      const user = await this.getTelegramUser(ctx);
+      const state = this.sessions.get(ctx);
+      if (!user || !state) return;
+      const vehicles = (await this.garageService.getVehicles(user.id)).filter(vehicle => !vehicle.isArchived);
+      const vehicle = vehicles.find(vehicle => vehicle.id === state.selectedVehicleId) ?? (vehicles.length === 1 ? vehicles[0] : undefined);
+      if (!vehicle) { await ctx.reply(this.buildGarageMessage(vehicles, botLanguage(user.language))); return; }
+      const result = await this.remindersService.list(user.id, vehicle.id);
+      const language = botLanguage(user.language);
+      const active = result.reminders.filter(reminder => reminder.status === "active");
+      const lines = active.slice(0, 20).map((reminder, index) => {
+        const next = reminder.deliveries.find(delivery => delivery.status === "pending" || delivery.status === "sending");
+        const problem = reminder.deliveries.some(delivery => delivery.status === "failed" || delivery.status === "uncertain");
+        return `${index + 1}. ${reminder.title} · ${reminder.dueDate.split("-").reverse().join(".")}`
+          + (next ? `\n${DateTime.fromJSDate(next.scheduledAt, { zone: reminder.timeZone }).toFormat("dd.MM.yyyy HH:mm")} · ${reminder.timeZone}` : "")
+          + (problem ? "\n" + botText(language, "Є непідтверджена доставка. Перевірте статус на сайті.", "Nie potwierdzono dostarczenia jednego z powiadomień. Sprawdź status na stronie.", "A notification was not confirmed delivered. Check its status on the website.") : "");
+      });
+      const text = [botText(language, "Нагадування", "Przypomnienia", "Reminders"), this.vehicleTitle(vehicle),
+        ...lines, !active.length ? botText(language, "Активних нагадувань немає.", "Brak aktywnych przypomnień.", "No active reminders.") : "",
+        !result.deliveryEnabled ? botText(language, "Автоматичне надсилання ще не ввімкнено на сервері.", "Automatyczna wysyłka nie jest jeszcze włączona na serwerze.", "Automatic delivery is not yet enabled on the server.") : "",
+      ].filter(Boolean).join("\n\n");
+      for (const chunk of splitTelegramText(text)) await ctx.reply(chunk);
     });
 
     this.bot.start(async (ctx) => {

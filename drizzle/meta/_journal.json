@@ -134,6 +134,20 @@
       "when": 1793095200001,
       "tag": "0018_telegram_account_link",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793456513883,
+      "tag": "0019_scheduled_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793458655516,
+      "tag": "0020_service_reminder_links",
+      "breakpoints": true
     }
   ]
 }

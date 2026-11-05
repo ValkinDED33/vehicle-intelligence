@@ -19,6 +19,7 @@ import { MaintenanceModule } from "../maintenance/maintenance.module";
 import { VehicleProfileModule } from "../vehicle-profile/vehicle-profile.module";
 import { ExternalReportsModule } from "../external-reports/external-reports.module";
 import { TelegramReportsService } from "./telegram-reports.service";
+import { RemindersModule } from "../reminders/reminders.module";
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { TelegramReportsService } from "./telegram-reports.service";
     MaintenanceModule,
     VehicleProfileModule,
     ExternalReportsModule,
+    RemindersModule,
   ],
   controllers: [TelegramController],
   providers: [TelegramService, TelegramSessionService, TelegramConversationService, TelegramActionsService, TelegramReportsService],

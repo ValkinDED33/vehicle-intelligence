@@ -1,7 +1,11 @@
-import { Injectable } from "@nestjs/common";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { BadRequestException, Injectable } from "@nestjs/common";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { maintenanceRules } from "../maintenance/schemas/maintenance-rule.schema";
+import { vehicles } from "../garage/schemas/vehicle.schema";
+import type { CreateMaintenanceRuleInput } from "../maintenance/maintenance.types";
+import { DEFAULT_OFFSETS } from "../reminders/reminder-schedule";
 import {
   type NewServiceRecordItem,
   type ServiceRecordItem,
@@ -34,6 +38,8 @@ export interface CreateServiceRecordItemData {
 }
 
 export interface CreateServiceRecordData {
+  maintenanceKeys?: string[];
+  maintenancePlans?: CreateMaintenanceRuleInput[];
   vehicleId: string;
 
   expenseId?: string;
@@ -77,6 +83,21 @@ export class ServiceRecordsDbService {
     data: CreateServiceRecordData,
   ): Promise<ServiceRecordWithItems> {
     return this.databaseService.connection.transaction(async (tx) => {
+      if (data.maintenancePlans?.length) {
+        await tx.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.id, data.vehicleId)).for("update");
+        for (const plan of data.maintenancePlans) {
+          const existing = await tx.select().from(maintenanceRules).where(and(eq(maintenanceRules.vehicleId, data.vehicleId), eq(maintenanceRules.key, plan.key), eq(maintenanceRules.isActive, true))).for("update");
+          if (existing.length > 1) throw new BadRequestException("Для цієї роботи є кілька регламентів. Уточніть правило.");
+          const values = { vehicleId: data.vehicleId, key: plan.key, title: plan.title.trim(), source: "manual",
+            intervalKm: plan.intervalKm ?? null, intervalMonths: plan.intervalMonths ?? null, intervalEngineHours: plan.intervalEngineHours ?? null,
+            warningKmBefore: plan.warningKmBefore ?? null, warningDaysBefore: plan.warningDaysBefore ?? null, warningEngineHoursBefore: plan.warningEngineHoursBefore ?? null,
+            completionEventType: `maintenance.${plan.key}.completed`, telegramEnabled: plan.telegramEnabled ?? true,
+            notifyWhenDue: plan.notifyWhenDue ?? true, reminderOffsets: plan.reminderOffsets ?? (plan.warningDaysBefore != null ? [{ amount: plan.warningDaysBefore, unit: "days" as const }] : DEFAULT_OFFSETS),
+            remindAt: plan.remindAt ?? "09:00", timeZone: plan.timeZone ?? "Europe/Warsaw", updatedAt: new Date() };
+          if (existing.length) await tx.update(maintenanceRules).set(values).where(eq(maintenanceRules.id, existing[0].id));
+          else await tx.insert(maintenanceRules).values(values);
+        }
+      }
       const newRecord: NewServiceRecord = {
         vehicleId: data.vehicleId,
 
@@ -87,6 +108,7 @@ export class ServiceRecordsDbService {
         title: data.title.trim(),
 
         description: data.description?.trim() || null,
+        maintenanceKeys: data.maintenanceKeys ?? [],
 
         odometerKm: data.odometerKm ?? null,
 
@@ -195,6 +217,13 @@ export class ServiceRecordsDbService {
       record,
       items,
     };
+  }
+
+  async latestForMaintenance(vehicleId: string, key: string): Promise<ServiceRecord | null> {
+    const [record] = await this.databaseService.connection.select().from(serviceRecords)
+      .where(and(eq(serviceRecords.vehicleId, vehicleId), sql`${serviceRecords.maintenanceKeys} @> ${JSON.stringify([key])}::jsonb`))
+      .orderBy(desc(serviceRecords.occurredAt), desc(serviceRecords.createdAt), desc(serviceRecords.id)).limit(1);
+    return record ?? null;
   }
 
   async listForVehicle(

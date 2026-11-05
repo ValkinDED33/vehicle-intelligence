@@ -4,6 +4,7 @@ import { UrgencyLevel } from "../../common/urgency/urgency.enum";
 import { GarageModule } from "../garage/garage.module";
 import { MileageModule } from "../mileage/mileage.module";
 import { VehicleHistoryModule } from "../vehicle-history/vehicle-history.module";
+import { ServiceRecordsModule } from "../service-records/service-records.module";
 
 import { MaintenanceController } from "./controllers/maintenance.controller";
 import { MaintenanceDbService } from "./maintenance.db.service";
@@ -15,6 +16,7 @@ import { MaintenanceService } from "./services/maintenance.service";
     GarageModule,
     MileageModule,
     VehicleHistoryModule,
+    ServiceRecordsModule,
 
   ],
 

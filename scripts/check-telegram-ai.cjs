@@ -22,9 +22,12 @@ const assistant = new AssistantService(
   { getHistory: async () => [{ title: 'Мийка', totalCost: '80.00', currency: 'PLN' }], getMonthlyCostOfOwnership: async () => ({ currencies: [{ currency: 'PLN', totalCost: 80 }] }) },
   { getHistory: async () => [{ title: 'Заміна оливи', odometerKm: 111500, occurredAt: '2026-10-01' }] },
   { getReports: async () => [] }, { getHistory: async () => [] },
+  { list: async () => ({ telegramLinked: true, deliveryEnabled: true, reminders: [] }) },
 );
 const validator = new TelegramActionsService(garage);
 const cases = [
+  { name: 'inspection date with calendar month and week notices', message: 'У меня 10\\11-27 техосмотр, напомни за месяц и за неделю', check: turn => { assert.equal(turn.action?.operation, 'reminder'); assert.equal(turn.action.input.dueDate, '2027-11-10'); assert.deepEqual(turn.action.input.offsets, [{ amount: 1, unit: 'months' }, { amount: 1, unit: 'weeks' }]); } },
+  { name: 'custom reminder periods and notification time', language: 'pl', message: 'Przypomnij mi o przeglądzie 10.11.2027: 2 miesiące, 3 dni wcześniej i w dniu przeglądu o 18:30 w Europe/Warsaw.', check: turn => { assert.equal(turn.action?.operation, 'reminder'); assert.equal(turn.action.input.remindAt, '18:30'); assert.equal(turn.action.input.offsets.length, 3); } },
   { name: 'general question without a saved car', vehicleId: undefined, message: 'Як правильно перевірити тиск у шинах?', check: turn => assert.equal(turn.action, null) },
   { name: 'mileage question is read-only', message: 'Чи нормальний пробіг 120000 км для цього авто?', check: turn => assert.equal(turn.action, null) },
   { name: 'missing currency asks a clarification', message: 'Запиши мийку за 80', check: turn => { assert.equal(turn.action, null); assert.match(turn.answer, /валют|грив|злот|PLN|UAH/i); } },

@@ -13,6 +13,7 @@ import { ServiceRecordsModule } from "../service-records/service-records.module"
 import { VehicleHistoryModule } from "../vehicle-history/vehicle-history.module";
 import { AssistantController } from "./assistant.controller";
 import { AssistantService } from "./assistant.service";
+import { RemindersModule } from "../reminders/reminders.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AssistantService } from "./assistant.service";
     ExternalReportsModule,
     ServiceRecordsModule,
     VehicleHistoryModule,
+    RemindersModule,
   ],
   controllers: [AssistantController],
   providers: [AssistantService],

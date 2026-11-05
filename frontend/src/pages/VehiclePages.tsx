@@ -1,6 +1,6 @@
 import { t, enumLabel } from "../i18n";
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertTriangle, Check, CircleHelp, ClipboardList, FileText, Gauge, Loader2, Plus, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, ClipboardList, FileText, Gauge, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Wrench, X } from "lucide-react";
 import { documentsApi, fmtDate, fmtMoney, fmtNumber, garageApi, maintenanceApi, mileageApi, profileApi, vinApi, type VehicleDocument } from "../api";
 import { AddVehicleForm } from "../components/AddVehicleForm";
 import { EmptyState, Field, NoVehicle, Spinner } from "../components/CommonComponents";
@@ -9,6 +9,9 @@ import type { PageProps } from "../types/dashboard";
 import type { VinDecode } from "../api";
 import { serviceProgress } from "../utils/calculations";
 import { errText, intervalLines, reminderDetail, urgencyScore, vehicleLine, vehicleTitle } from "../utils/formatters";
+import { ServiceEntry } from "../components/ServiceEntry";
+import { ReminderPreferenceFields, defaultReminderPreferences } from "../components/ReminderPreferenceFields";
+import type { MaintenanceRule } from "../api";
 
 function GaragePage(props: PageProps) {
   const {vehicles,vehicle,selectVehicle,loadVehicles,vehiclesLoading,vehiclesError,navigate,data}=props;
@@ -414,20 +417,25 @@ function ServicePage(props: PageProps) {
   const {vehicle,data,afterMutate}=props;
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
+  const [editing,setEditing]=useState<string>();
+  const [telegramEnabled,setTelegramEnabled]=useState(true);
+  const [notifyWhenDue,setNotifyWhenDue]=useState(true);
+  const [preferences,setPreferences]=useState(defaultReminderPreferences);
   const [rule,setRule]=useState({
     key:"engine_oil",
-    title:t("Заміна оливи"),
-    intervalKm:"10000",
-    intervalMonths:"12",
-    warningKmBefore:"1000",
-    warningDaysBefore:"30",
+    title:"",
+    intervalKm:"",
+    intervalMonths:"",
+    warningKmBefore:"",
+    warningDaysBefore:"",
   });
+  useEffect(()=>{setEditing(undefined);setPreferences(defaultReminderPreferences());setMessage(null)},[vehicle?.id]);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const createRule=async(e:FormEvent)=>{
     e.preventDefault();
     setBusy(true);setMessage(null);
     try{
-      await maintenanceApi.createRule(vehicle.id,{
+      const input={
         key:slugifyRuleKey(rule.key||rule.title),
         title:rule.title.trim(),
         source:"manual",
@@ -436,7 +444,9 @@ function ServicePage(props: PageProps) {
         warningKmBefore:numberOrUndefined(rule.warningKmBefore),
         warningDaysBefore:numberOrUndefined(rule.warningDaysBefore),
         completionEventType:`maintenance.${slugifyRuleKey(rule.key||rule.title)}.completed`,
-      });
+        telegramEnabled,notifyWhenDue,reminderOffsets:preferences.offsets,remindAt:preferences.remindAt,timeZone:preferences.timeZone,
+      };
+      if(editing)await maintenanceApi.updateRule(vehicle.id,editing,input);else await maintenanceApi.createRule(vehicle.id,input);
       setMessage({kind:'ok',text:t("Регламент додано. Статуси ТО перераховано.")});
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
@@ -449,19 +459,29 @@ function ServicePage(props: PageProps) {
       await afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
+  const editRule=(item:MaintenanceRule)=>{
+    setEditing(item.id);setRule({key:item.key,title:item.title,intervalKm:String(item.intervalKm??''),intervalMonths:String(item.intervalMonths??''),warningKmBefore:String(item.warningKmBefore??''),warningDaysBefore:String(item.warningDaysBefore??'')});
+    setTelegramEnabled(item.telegramEnabled??false);setNotifyWhenDue(item.notifyWhenDue??true);
+    setPreferences({offsets:item.reminderOffsets??defaultReminderPreferences().offsets,remindAt:item.remindAt??'09:00',timeZone:item.timeZone??'Europe/Warsaw'});
+    document.querySelector('.maintenance-rule-form')?.scrollIntoView({behavior:'smooth',block:'start'});
+  };
   return <>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
-   <form className="panel form-card" onSubmit={createRule}>
-    <h2>{t("ДОДАТИ РЕГЛАМЕНТ")}</h2>
+   <ServiceEntry key={vehicle.id} vehicleId={vehicle.id} rules={data.maintenance} afterSave={afterMutate}/>
+   <form className="form-card maintenance-rule-form" onSubmit={createRule}>
+    <h2>{editing?t("Змінити регламент"):t("ДОДАТИ РЕГЛАМЕНТ")}</h2>
     <div className="form-grid">
-     <Field label={t("Ключ")}><input value={rule.key} onChange={e=>setRule({...rule,key:e.target.value})} placeholder="engine_oil"/></Field>
+     <Field label={t("Ключ")}><input disabled={!!editing||busy} value={rule.key} onChange={e=>setRule({...rule,key:e.target.value})} placeholder="engine_oil"/></Field>
      <Field label={t("Робота")}><input value={rule.title} onChange={e=>setRule({...rule,title:e.target.value})} placeholder={t("Заміна оливи")} required/></Field>
      <Field label={t("Інтервал, км")}><input value={rule.intervalKm} onChange={e=>setRule({...rule,intervalKm:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="10000"/></Field>
      <Field label={t("Інтервал, міс.")}><input value={rule.intervalMonths} onChange={e=>setRule({...rule,intervalMonths:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="12"/></Field>
      <Field label={t("Попередити за, км")}><input value={rule.warningKmBefore} onChange={e=>setRule({...rule,warningKmBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="1000"/></Field>
      <Field label={t("Попередити за, днів")}><input value={rule.warningDaysBefore} onChange={e=>setRule({...rule,warningDaysBefore:e.target.value.replace(/[^\d]/g,'')})} inputMode="numeric" placeholder="30"/></Field>
     </div>
-    <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} {t("ДОДАТИ РЕГЛАМЕНТ")}</button>
+    <label className="toggle-line"><input type="checkbox" disabled={busy} checked={telegramEnabled} onChange={e=>setTelegramEnabled(e.target.checked)}/>{t("Сповіщення в Telegram")}</label>
+    {telegramEnabled&&<><ReminderPreferenceFields value={preferences} onChange={setPreferences} disabled={busy}/><label className="toggle-line"><input type="checkbox" disabled={busy} checked={notifyWhenDue} onChange={e=>setNotifyWhenDue(e.target.checked)}/>{t("Сповістити при досягненні строку або пробігу")}</label></>}
+    <div className="page-actions"><button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} {editing?t("ЗБЕРЕГТИ ЗМІНИ"):t("ДОДАТИ РЕГЛАМЕНТ")}</button>
+    {editing&&<button type="button" className="ghost-btn" disabled={busy} onClick={()=>{setEditing(undefined);setRule({key:'engine_oil',title:'',intervalKm:'',intervalMonths:'',warningKmBefore:'',warningDaysBefore:''})}}><X size={16}/>{t("Скасувати")}</button>}</div>
    </form>
    <div className="panel list-panel">
     <h2>{t("СТАТУС ОБСЛУГОВУВАННЯ")}</h2>
@@ -469,7 +489,7 @@ function ServicePage(props: PageProps) {
      :data.maintenance.length
       ?<div className="status-list">{data.maintenance.map(s=><div key={s.rule.id} className="status-row">
         <span className={'tag '+URGENCY_META[s.urgency].color}>{t(URGENCY_META[s.urgency].tag)}</span>
-       <div className="status-copy"><b>{s.rule.title}</b><small>{reminderDetail(s)}{s.lastCompletedAt?t(" · попереднє ТО {0}", { 0: fmtDate(s.lastCompletedAt) }):t(" · ще не виконувалося")}</small></div>
+       <div className="status-copy"><b>{s.rule.title}</b><small>{reminderDetail(s)}{s.lastCompletedAt?t(" · попереднє ТО {0}", { 0: fmtDate(s.lastCompletedAt) }):t(" · ще не виконувалося")}</small>{s.rule.telegramEnabled&&<small>{t("Сповіщення в Telegram")}{s.rule.intervalKm&&s.lastCompletedMileageKm===null?' · '+t("Невідомий пробіг під час заміни"):''}</small>}</div>
         <div className="status-nums">{s.rule.intervalKm?t("інтервал {0} км", { 0: fmtNumber(s.rule.intervalKm) }):''}{s.rule.intervalMonths?t(" · {0} міс.", { 0: s.rule.intervalMonths }):''}</div>
        </div>)}</div>
       :<div className="state-note"><Wrench size={15}/> {t("Правила ТО не налаштовані. Додайте перший регламент вище.")}</div>}
@@ -478,7 +498,7 @@ function ServicePage(props: PageProps) {
     <h2>{t("ПРАВИЛА РЕГЛАМЕНТУ")}</h2>
     {data.maintenance.length
      ?<table className="data-table"><thead><tr><th>{t("Робота")}</th><th>{t("Ключ")}</th><th>{t("Інтервал")}</th><th>{t("Попередження")}</th><th></th></tr></thead><tbody>
-      {data.maintenance.map(s=><tr key={s.rule.id}><td><b>{s.rule.title}</b><small className="sub">{enumLabel(s.rule.source??'manual')}</small></td><td className="mono">{s.rule.key}</td><td>{[s.rule.intervalKm?t("{0} км", { 0: fmtNumber(s.rule.intervalKm) }):null,s.rule.intervalMonths?t("{0} міс.", { 0: s.rule.intervalMonths }):null].filter(Boolean).join(' / ')||'—'}</td><td>{[s.rule.warningKmBefore?t("{0} км", { 0: fmtNumber(s.rule.warningKmBefore) }):null,s.rule.warningDaysBefore?t("{0} дн.", { 0: s.rule.warningDaysBefore }):null].filter(Boolean).join(' / ')||'—'}</td><td><button className="ghost-btn danger" onClick={()=>void deleteRule(s.rule.id)} disabled={busy}><Trash2 size={14}/> {t("Видалити")}</button></td></tr>)}
+      {data.maintenance.map(s=><tr key={s.rule.id}><td><b>{s.rule.title}</b><small className="sub">{enumLabel(s.rule.source??'manual')}</small></td><td className="mono">{s.rule.key}</td><td>{[s.rule.intervalKm?t("{0} км", { 0: fmtNumber(s.rule.intervalKm) }):null,s.rule.intervalMonths?t("{0} міс.", { 0: s.rule.intervalMonths }):null].filter(Boolean).join(' / ')||'—'}</td><td>{[s.rule.warningKmBefore?t("{0} км", { 0: fmtNumber(s.rule.warningKmBefore) }):null,s.rule.warningDaysBefore?t("{0} дн.", { 0: s.rule.warningDaysBefore }):null].filter(Boolean).join(' / ')||'—'}</td><td><button className="ghost-btn" title={t("Змінити регламент")} aria-label={t("Змінити регламент")} onClick={()=>editRule(s.rule)} disabled={busy}><Pencil size={16}/></button><button className="ghost-btn danger" onClick={()=>void deleteRule(s.rule.id)} disabled={busy}><Trash2 size={14}/> {t("Видалити")}</button></td></tr>)}
      </tbody></table>
      :<div className="state-note">{t("Правил поки немає.")}</div>}
    </div>
@@ -512,6 +532,8 @@ function DocumentsPage(props: PageProps) {
   const [documents,setDocuments]=useState<VehicleDocument[]|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err';text:string}|null>(null);
+  const [notifyExpiry,setNotifyExpiry]=useState(false);
+  const [preferences,setPreferences]=useState(defaultReminderPreferences);
   const [form,setForm]=useState({
     type:"insurance",
     title:"",
@@ -541,6 +563,7 @@ function DocumentsPage(props: PageProps) {
         expiresAt:emptyToUndefined(form.expiresAt),
         description:emptyToUndefined(form.description),
         source:"manual",
+        reminder:notifyExpiry?preferences:undefined,
       });
       setForm({...form,title:"",documentNumber:"",issuerName:"",issuedAt:"",expiresAt:"",description:""});
       setMessage({kind:'ok',text:t("Документ додано в історію автомобіля.")});
@@ -565,9 +588,11 @@ function DocumentsPage(props: PageProps) {
      <Field label={t("Номер")}><input value={form.documentNumber} onChange={e=>setForm({...form,documentNumber:e.target.value})} maxLength={160} placeholder={t("номер документа")}/></Field>
      <Field label={t("Ким видано")}><input value={form.issuerName} onChange={e=>setForm({...form,issuerName:e.target.value})} maxLength={180} placeholder={t("страхова / сервіс")}/></Field>
      <Field label={t("Дата видачі")}><input type="date" value={form.issuedAt} onChange={e=>setForm({...form,issuedAt:e.target.value})}/></Field>
-     <Field label={t("Діє до")}><input type="date" value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></Field>
+     <Field label={t("Діє до")}><input type="date" required={notifyExpiry} value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></Field>
      <Field label={t("Опис")}><input value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder={t("коротка нотатка")}/></Field>
     </div>
+    <label className="toggle-line"><input type="checkbox" disabled={busy} checked={notifyExpiry} onChange={e=>setNotifyExpiry(e.target.checked)}/>{t("Нагадати про закінчення дії в Telegram")}</label>
+    {notifyExpiry&&<ReminderPreferenceFields value={preferences} onChange={setPreferences} disabled={busy}/>}
     <button className="primary" type="submit" disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Plus size={15}/>} {t("ДОДАТИ ДОКУМЕНТ")}</button>
    </form>
    <div className="panel list-panel">

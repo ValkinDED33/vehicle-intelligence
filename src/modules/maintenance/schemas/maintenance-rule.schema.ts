@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   timestamp,
   uuid,
@@ -9,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { vehicles } from "../../garage/schemas/vehicle.schema";
+import type { ReminderOffset } from "../../reminders/reminder-schedule";
 
 export const maintenanceRules = pgTable(
   "maintenance_rules",
@@ -87,6 +89,11 @@ export const maintenanceRules = pgTable(
     }).notNull(),
 
     isActive: boolean("is_active").notNull().default(true),
+    telegramEnabled: boolean("telegram_enabled").notNull().default(false),
+    notifyWhenDue: boolean("notify_when_due").notNull().default(true),
+    reminderOffsets: jsonb("reminder_offsets").$type<ReminderOffset[]>().notNull().default([{ amount: 1, unit: "months" }, { amount: 1, unit: "weeks" }]),
+    remindAt: varchar("remind_at", { length: 5 }).notNull().default("09:00"),
+    timeZone: varchar("time_zone", { length: 64 }).notNull().default("Europe/Warsaw"),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,

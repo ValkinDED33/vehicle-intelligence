@@ -1,3 +1,5 @@
+import type { CreateMaintenanceRuleInput } from "../maintenance/maintenance.types";
+
 export interface CreateServiceRecordItemInput {
   itemType: "work" | "part" | "fluid" | "consumable" | "diagnostic" | "other";
 
@@ -19,6 +21,8 @@ export interface CreateServiceRecordItemInput {
 }
 
 export interface CreateServiceRecordInput {
+  maintenanceKeys?: string[];
+  maintenancePlans?: CreateMaintenanceRuleInput[];
   /**
    * Поки expenseId приймаємо тільки як посилання
    * на вже наявний Expense.

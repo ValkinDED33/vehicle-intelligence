@@ -17,6 +17,8 @@ const env = { ...(fs.existsSync('.env') ? require('dotenv').parse(fs.readFileSyn
     const result = await client.query(`SELECT
       to_regclass('public.telegram_conversations') IS NOT NULL AS conversations,
       to_regclass('public.telegram_links') IS NOT NULL AS links,
+      to_regclass('public.reminders') IS NOT NULL AS reminders,
+      to_regclass('public.reminder_deliveries') IS NOT NULL AS reminder_deliveries,
       EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='telegram_id') AS identity`);
     console.log('Database schema:', JSON.stringify(result.rows[0]));
     const tracking = await client.query(`SELECT
@@ -30,7 +32,7 @@ const env = { ...(fs.existsSync('.env') ? require('dotenv').parse(fs.readFileSyn
       const last = Number(applied.rows[0]?.created_at ?? 0);
       const known = journal.entries.find(entry => entry.when === last);
       console.log('Migration tracking:', JSON.stringify({ lastApplied: known?.tag ?? (last ? 'unknown migration' : 'empty ledger'), pending: journal.entries.filter(entry => entry.when > last).map(entry => entry.tag) }));
-      if (!known) process.exitCode = 1;
+      if (!known || journal.entries.some(entry => entry.when > last)) process.exitCode = 1;
     } else {
       console.log('Migration tracking: missing; review the existing database baseline before running migrations');
       process.exitCode = 1;

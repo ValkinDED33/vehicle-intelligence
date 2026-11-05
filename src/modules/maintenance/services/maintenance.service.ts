@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { ServiceRecordsDbService } from "../../service-records/service-records.db.service";
+import { validateMaintenanceRule } from "../maintenance-rule-validation";
 
 import { GarageService } from "../../garage/services/garage.service";
 import { MileageService } from "../../mileage/services/mileage.service";
@@ -20,6 +22,7 @@ export class MaintenanceService {
     private readonly mileageService: MileageService,
     private readonly vehicleHistoryService: VehicleHistoryService,
     private readonly statusCalculator: MaintenanceStatusCalculatorService,
+    private readonly serviceRecords: ServiceRecordsDbService,
   ) {}
 
   async createRule(
@@ -28,6 +31,7 @@ export class MaintenanceService {
     input: CreateMaintenanceRuleInput,
   ): Promise<MaintenanceRule> {
     await this.garageService.getVehicle(ownerId, vehicleId);
+    validateMaintenanceRule(input);
 
     return this.maintenanceDbService.createRule({
       vehicleId,
@@ -42,6 +46,14 @@ export class MaintenanceService {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
     return this.maintenanceDbService.listActiveRules(vehicleId);
+  }
+
+  async updateRule(ownerId: string, vehicleId: string, id: string, input: CreateMaintenanceRuleInput) {
+    await this.garageService.getVehicle(ownerId, vehicleId);
+    validateMaintenanceRule(input);
+    const rule = await this.maintenanceDbService.updateRule(vehicleId, id, input);
+    if (!rule) throw new NotFoundException("Регламент обслуговування не знайдено");
+    return rule;
   }
 
   async deactivateRule(
@@ -79,29 +91,33 @@ export class MaintenanceService {
 
     return Promise.all(
       rules.map(async (rule) => {
-        const lastCompletionEvent =
-          await this.vehicleHistoryService.getLatestEvent(
+        const [service, lastCompletionEvent] = await Promise.all([
+          this.serviceRecords.latestForMaintenance(vehicleId, rule.key),
+          rule.completionEventType === "service.completed" ? Promise.resolve(null) : this.vehicleHistoryService.getLatestEvent(
             ownerId,
             vehicleId,
             rule.completionEventType,
-          );
+          ),
+        ]);
+        const useService = !!service && (!lastCompletionEvent || service.occurredAt >= lastCompletionEvent.occurredAt);
+        const completedAt = useService ? service!.occurredAt : lastCompletionEvent?.occurredAt ?? null;
 
-        return this.statusCalculator.calculate({
+        return { ...this.statusCalculator.calculate({
           rule,
 
-          lastCompletedAt: lastCompletionEvent?.occurredAt ?? null,
+          lastCompletedAt: completedAt,
 
-          lastCompletedMileageKm: lastCompletionEvent?.mileageKm ?? null,
+          lastCompletedMileageKm: useService ? service!.odometerKm : lastCompletionEvent?.mileageKm ?? null,
 
-          lastCompletedEngineHours: this.extractEngineHours(
+          lastCompletedEngineHours: useService ? service!.engineHours === null ? null : Number(service!.engineHours) : this.extractEngineHours(
             lastCompletionEvent?.payload,
           ),
 
           currentMileageKm,
           currentEngineHours,
 
-          hasCompletionHistory: lastCompletionEvent !== null,
-        });
+          hasCompletionHistory: completedAt !== null,
+        }), lastCompletionId: useService ? `service:${service!.id}` : lastCompletionEvent ? `event:${lastCompletionEvent.id}` : null };
       }),
     );
   }

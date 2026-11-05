@@ -7,6 +7,7 @@ import { CATEGORY_LABELS, URGENCY_META } from "../constants/dashboard";
 import type { PageProps } from "../types/dashboard";
 import { pickMainCurrency } from "../utils/calculations";
 import { errText, reminderDetail } from "../utils/formatters";
+import { ScheduledReminders } from "../components/ScheduledReminders";
 
 const EXPENSE_CATEGORIES=Object.keys(CATEGORY_LABELS).filter(c=>!['fuel','charge'].includes(c));
 
@@ -162,9 +163,9 @@ function RemindersPage(props:PageProps){
   const {vehicle,data}=props;
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const statuses=pickRemindersAll(data.maintenance);
-  return statuses.length
-   ?<div className="inner-grid">{statuses.map(s=><Reminder key={s.rule.id} icon={Wrench} title={s.rule.title} detail={reminderDetail(s)} tag={URGENCY_META[s.urgency].tag} color={URGENCY_META[s.urgency].color}/>)}</div>
-   :<EmptyState icon={Bell} title={t("Нагадувань немає")} text={t("Налаштуйте правила ТО (сервісний інтервал, строк), і CARA сама порахує, коли час на обслуговування.")}/>;
+  return <><ScheduledReminders key={vehicle.id} vehicleId={vehicle.id} onSettings={()=>props.navigate('Налаштування')}/>
+   {statuses.length>0&&<><h2>{t("Сервіс і ТО")}</h2><div className="inner-grid">{statuses.map(s=><Reminder key={s.rule.id} icon={Wrench} title={s.rule.title} detail={reminderDetail(s)} tag={URGENCY_META[s.urgency].tag} color={URGENCY_META[s.urgency].color}/>)}</div></>}
+  </>;
 }
 
 function pickRemindersAll(statuses: MaintenanceStatus[]): MaintenanceStatus[] {

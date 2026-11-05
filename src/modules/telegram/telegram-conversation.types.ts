@@ -10,6 +10,8 @@ export const ACTION_NAMES = [
   "profile", "add_vehicle", "update_vehicle", "archive_vehicle", "restore_vehicle",
   "delete_document", "deactivate_maintenance",
   "request_report",
+  "reminder", "update_reminder", "cancel_reminder", "complete_reminder",
+  "update_maintenance",
 ] as const;
 
 export type ActionName = typeof ACTION_NAMES[number];
@@ -19,6 +21,7 @@ export interface BotAction {
   vehicleId?: string;
   input: Record<string, unknown>;
   expectedVin?: string;
+  expectedReminderRevision?: number;
 }
 
 export interface ConversationState {

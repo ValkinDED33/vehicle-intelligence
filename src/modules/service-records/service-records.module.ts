@@ -25,6 +25,6 @@ import { ServiceRecordsService } from "./services/service-records.service";
     ServiceRecordsService,
   ],
 
-  exports: [ServiceRecordsService],
+  exports: [ServiceRecordsService, ServiceRecordsDbService],
 })
 export class ServiceRecordsModule {}

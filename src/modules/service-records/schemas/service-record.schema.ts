@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -47,6 +48,7 @@ export const serviceRecords = pgTable(
     }).notNull(),
 
     description: text("description"),
+    maintenanceKeys: jsonb("maintenance_keys").$type<string[]>().notNull().default([]),
 
     odometerKm: integer("odometer_km"),
 

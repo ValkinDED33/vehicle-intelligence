@@ -36,6 +36,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "drizzle-orm": "^0.45.2",
+    "luxon": "^3.7.2",
     "openai": "^7.5.0",
     "pdfjs-dist": "^6.2.108",
     "pg": "^8.23.0",
@@ -44,8 +45,10 @@
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
     "@nestjs/cli": "^12.0.8",
     "@types/bcrypt": "^6.0.0",
+    "@types/luxon": "^3.7.6",
     "@types/node": "^20.14.0",
     "@types/pg": "^8.23.1",
     "dotenv": "^17.4.2",

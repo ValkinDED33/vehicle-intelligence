@@ -3,6 +3,7 @@ import { Injectable } from "@nestjs/common";
 import { UrgencyLevel } from "../../../common/urgency/urgency.enum";
 import { type MaintenanceRuleStatus } from "../maintenance.types";
 import { type MaintenanceRule } from "../schemas/maintenance-rule.schema";
+import { DateTime } from "luxon";
 
 export interface CalculateMaintenanceStatusInput {
   rule: MaintenanceRule;
@@ -145,11 +146,7 @@ export class MaintenanceStatusCalculatorService {
   }
 
   private addMonths(date: Date, months: number): Date {
-    const result = new Date(date);
-
-    result.setUTCMonth(result.getUTCMonth() + months);
-
-    return result;
+    return DateTime.fromJSDate(date, { zone: "UTC" }).plus({ months }).toJSDate();
   }
 
   private daysUntil(target: Date, now: Date): number {

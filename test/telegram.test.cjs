@@ -71,7 +71,14 @@ function harness({ cars = [car()], language = 'uk', plan } = {}) {
     return { report: { id: 'report', status: h.reportStatus || 'success' } };
   } });
   const reports = new TelegramReportsService(garage, reportProvider('vehicle-databases'), reportProvider('oneauto'));
-  const actions = new TelegramActionsService(garage, mileage, expenses, energy, services, documents, maintenance, profiles, reports);
+  const reminders = {
+    deliveryEnabled: true,
+    save: async (owner, id, input, reminderId) => h.writes.push({ kind: 'reminder', owner, id, input, reminderId }),
+    setStatus: async (owner, id, reminderId, status) => h.writes.push({ kind: 'reminder-status', owner, id, reminderId, status }),
+    list: async () => ({ telegramLinked: true, deliveryEnabled: true, reminders: [] }),
+    get: async (owner, vehicleId, id) => ({ id, title: 'Inspection', dueDate: '2027-11-10', status: 'active', revision: h.reminderRevision ?? 1 }),
+  };
+  const actions = new TelegramActionsService(garage, mileage, expenses, energy, services, documents, maintenance, profiles, reports, reminders);
   const assistant = { planTurn: async (input) => {
     h.turns.push(structuredClone(input));
     return plan ? plan(input) : { answer: 'Що саме цікавить?', action: null };
@@ -97,7 +104,7 @@ function harness({ cars = [car()], language = 'uk', plan } = {}) {
     linkTelegram: async () => h.user,
   };
   const config = { get: key => key === 'TELEGRAM_WEBHOOK_SECRET' ? 'test-secret' : undefined };
-  const service = new TelegramService(config, auth, assistant, documents, energy, expenses, garage, mileage, services, {}, sessions, conversation);
+  const service = new TelegramService(config, auth, assistant, documents, energy, expenses, garage, mileage, services, {}, sessions, conversation, reminders);
   service.bot = new Telegraf('123456:test-token');
   service.bot.botInfo = { id: 123456, is_bot: true, username: 'testbot', first_name: 'Test' };
   service.registerHandlers();
@@ -286,12 +293,14 @@ test('assistant receives expenses, energy, service, documents and unavailable-mo
     { getMonthlyCostOfOwnership: async () => ({ total: 80 }), getHistory: async () => [{ title: 'Мийка', totalCost: '80.00' }] },
     { getHistory: async () => [{ title: 'Заміна оливи' }] },
     { getReports: async () => { throw new Error('offline'); } }, { getHistory: async () => [] },
+    { list: async () => ({ telegramLinked: true, deliveryEnabled: true, reminders: [{ id: CAR2, title: 'Техогляд', status: 'active', dueDate: '2027-11-10', offsets: [{ amount: 1, unit: 'months' }] }] }) },
   );
   await service.planTurn({ ownerId: OWNER, vehicleId: CAR, message: 'Що з документами?', language: 'uk' });
   const context = JSON.parse(request.userPrompt).context;
   assert.match(context, /Мийка/); assert.match(context, /Заміна оливи/); assert.match(context, /2027-01-01/);
   assert.match(context, /externalReports.*unavailable/); assert.equal(request.responseFormat, 'json');
   assert.match(context, /kmRemaining=1500, dueOdometerKm=121500/);
+  assert.match(context,/Техогляд/); assert.match(context,/2027-11-10/);
 });
 test('future-dated Telegram credentials are rejected even with a valid HMAC', () => {
   const { createHmac } = require('crypto');
@@ -507,4 +516,36 @@ test('every supported VIN report has readable Ukrainian, Polish and English name
     assert.notEqual(reportLabel(source.key, language), source.key);
     if (language !== 'uk') assert.doesNotMatch(reportLabel(source.key, language), /[А-Яа-яІіЇїЄє]/);
   }
+});
+
+test('inspection reminder previews exact dates and custom periods, then saves only after confirmation', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-31T12:00:00Z') });
+  const action = { operation: 'reminder', vehicleId: CAR, input: { title: 'Техогляд', dueDate: '2027-11-10', offsets: [{ amount: 1, unit: 'months' }, { amount: 1, unit: 'weeks' }] } };
+  const h = harness({ plan: () => ({ answer: 'Review', action }) });
+  const preview = await h.send('У меня 10\\11-27 техосмотр, напомни за месяц и за неделю');
+  assert.match(preview,/10\.11\.2027/); assert.match(preview,/10\.10\.2027 09:00/); assert.match(preview,/03\.11\.2027 09:00/);
+  assert.doesNotMatch(preview,/"amount"|"unit"/); assert.equal(h.writes.length,0);
+  const id=h.state().pending.id; await h.click(`confirm:${id}`); await h.click(`confirm:${id}`);
+  assert.equal(h.writes.length,1); assert.equal(h.writes[0].kind,'reminder'); assert.equal(h.writes[0].input.timeZone,'Europe/Warsaw');
+  await h.send('/reminders'); assert.equal(h.turns.length,1);
+});
+test('reminder changes and cancellation use confirmed owned record ids', async () => {
+  const action={operation:'cancel_reminder',vehicleId:CAR,input:{id:CAR2}};
+  const h=harness({language:'en',plan:()=>({answer:'Review',action})});
+  await h.send('Cancel inspection reminder'); assert.equal(h.writes.length,0);
+  await h.send('yes'); assert.equal(h.writes[0].status,'cancelled'); assert.equal(h.writes[0].owner,OWNER);
+  await assert.rejects(h.actions.prepare({operation:'reminder',vehicleId:CAR,input:{title:'Test',dueDate:'2027-11-10',offsets:[{amount:1,unit:'days',ownerId:OWNER}]}}));
+});
+test('the planner does not invent a reminder year or reverse a numeric day/month date', async () => {
+  const make=dueDate=>new AssistantService({complete:async()=>({text:JSON.stringify({answer:'Review',action:{operation:'reminder',vehicleId:CAR,input:{title:'Inspection',dueDate}}})})},{getVehicles:async()=>[car()]});
+  const missing=await make('2027-11-10').planTurn({ownerId:OWNER,message:'У меня 10/11 техосмотр'}); assert.equal(missing.action,null); assert.match(missing.answer,/рік/);
+  const reversed=await make('2027-10-11').planTurn({ownerId:OWNER,message:'У меня 10\\11-27 техосмотр'});assert.equal(reversed.action,null);assert.match(reversed.answer,/2027-11-10/);
+  const valid=await make('2027-11-10').planTurn({ownerId:OWNER,message:'У меня 10\\11-27 техосмотр'});assert.equal(valid.action.input.dueDate,'2027-11-10');
+});
+
+test('a reminder changed on the website invalidates old Telegram confirmation', async () => {
+  const h=harness({plan:()=>({answer:'Review',action:{operation:'cancel_reminder',vehicleId:CAR,input:{id:CAR2}}})});
+  const preview=await h.send('Скасуй нагадування про техогляд');assert.match(preview,/Inspection/);assert.match(preview,/10\.11\.2027/);
+  const id=h.state().pending.id;h.reminderRevision=2;await h.click(`confirm:${id}`);
+  assert.equal(h.writes.length,0);assert.match(h.replies.at(-1).text,/змінилося/);
 });

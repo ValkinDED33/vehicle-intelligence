@@ -5,9 +5,18 @@ import {
   IsString,
   MaxLength,
   Min,
+  IsBoolean, IsArray, ArrayMaxSize, ValidateNested, Matches, IsUUID,
 } from "class-validator";
+import { Type } from "class-transformer";
+import { ReminderOffsetDto } from "../../reminders/reminder.dto";
 
 export class CreateMaintenanceRuleDto {
+  @IsOptional() @IsBoolean() telegramEnabled?: boolean;
+  @IsOptional() @IsBoolean() notifyWhenDue?: boolean;
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => ReminderOffsetDto)
+  reminderOffsets?: ReminderOffsetDto[];
+  @IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) remindAt?: string;
+  @IsOptional() @IsString() @MaxLength(64) timeZone?: string;
   @IsString()
   @MaxLength(120)
   key!: string;
@@ -55,3 +64,5 @@ export class CreateMaintenanceRuleDto {
   @MaxLength(160)
   completionEventType!: string;
 }
+
+export class UpdateMaintenanceActionDto extends CreateMaintenanceRuleDto { @IsUUID() id!: string }

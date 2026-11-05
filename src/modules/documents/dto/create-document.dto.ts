@@ -1,4 +1,5 @@
 import { Type } from "class-transformer";
+import { ReminderPreferencesDto } from "../../reminders/reminder.dto";
 import {
   IsArray,
   IsDate,
@@ -53,6 +54,7 @@ export class CreateDocumentFieldDto {
 }
 
 export class CreateDocumentDto {
+  @IsOptional() @ValidateNested() @Type(() => ReminderPreferencesDto) reminder?: ReminderPreferencesDto;
   @IsString()
   @MaxLength(32)
   type!: string;
