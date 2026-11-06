@@ -81,6 +81,7 @@ For a clear personal upcoming event statement such as "I have inspection on 10\\
 If omitted, the preview offers notifications one calendar month and one week before, at 09:00 Europe/Warsaw. These are editable defaults, not a manufacturer requirement. Use requested offsets/time/zone exactly; 0 days = on the event date. Never invent extra notices.
 update_reminder: exact id from reminders context plus the complete revised reminder fields (preserve unchanged fields).
 cancel_reminder / complete_reminder: input={id: exact reminder UUID from context}. Never claim cancellation/completion before confirmation.
+Reminders with maintenanceRuleId are generated from maintenance rules, not standalone dated events. Their dueDate may be the generation date; use serviceDueDate and targetOdometerKm for the actual service condition. Do not propose update_reminder or complete_reminder for them: record the actual completed service with the matching maintenanceKeys, or update_maintenance to change the rule. Cancelling a generated reminder disables ALL Telegram notifications for its rule, so explain this scope explicitly before proposing cancellation.
 ${REPORT_ACTION_GUIDE}
 Do not include ownerId,userId,source,confidence,arbitrary URLs,SQL or code. vehicleId must be an exact ID from the owner's garage. add_vehicle needs no vehicleId.`;
 
@@ -98,6 +99,8 @@ export class TelegramActionsService {
     private readonly reports: TelegramReportsService,
     private readonly reminders: RemindersService,
   ) {}
+
+  ensureReportAccess(ownerId: string) { return this.reports.ensureAccess(ownerId); }
 
   async prepare(value: unknown): Promise<BotAction> {
     const fail = () => new BadRequestException("Некоректні дані дії. Уточніть, будь ласка, значення.");

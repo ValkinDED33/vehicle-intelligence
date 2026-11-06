@@ -12,6 +12,8 @@ export default defineConfig({
       "/auth": { target: API_TARGET, changeOrigin: true },
       "/garage": { target: API_TARGET, changeOrigin: true },
       "/vehicles": { target: API_TARGET, changeOrigin: true },
+      "/vin-access": { target: API_TARGET, changeOrigin: true },
+      "/vin": { target: API_TARGET, changeOrigin: true },
       "/assistant": { target: API_TARGET, changeOrigin: true },
       "/health": { target: API_TARGET, changeOrigin: true },
     },

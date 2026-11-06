@@ -8,6 +8,7 @@ import type { PageProps } from "../types/dashboard";
 import { pickMainCurrency } from "../utils/calculations";
 import { errText, reminderDetail } from "../utils/formatters";
 import { ScheduledReminders } from "../components/ScheduledReminders";
+import { MonthlyExpenses } from "../components/MonthlyExpenses";
 
 const EXPENSE_CATEGORIES=Object.keys(CATEGORY_LABELS).filter(c=>!['fuel','charge'].includes(c));
 
@@ -17,7 +18,6 @@ function ExpensesPage(props:PageProps){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err',text:string}|null>(null);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
-  const summary=pickMainCurrency(data.monthExpenses);
   const submit=async(e:FormEvent)=>{
     e.preventDefault();
     setBusy(true);setMessage(null);
@@ -49,12 +49,7 @@ function ExpensesPage(props:PageProps){
      {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
      <button className="primary" type="submit" disabled={busy}>{busy?t("Зберігаємо..."):t("ДОДАТИ ВИТРАТУ")}</button>
     </form>
-    <div className="panel stat-panel">
-     <h2>{t("ПОТОЧНИЙ МІСЯЦЬ")}</h2>
-     <div className="metric-value">{summary?fmtNumber(summary.totalCost,2):'—'} <span>{summary?.currency??''}</span></div>
-     <p>{summary?t("Витрати {0} + енергія {1}{2}", { 0: fmtNumber(summary.expenseCost,2), 1: fmtNumber(summary.energyCost,2), 2: data.monthExpenses?.distanceKm?' · '+t("{0} км", { 0: fmtNumber(data.monthExpenses.distanceKm) }):'' }):t("Немає операцій за місяць")}</p>
-     {summary&&summary.categories.length>0&&<div className="mini-list">{summary.categories.map(c=><div key={c.category}><span>{t(CATEGORY_LABELS[c.category]??c.category)}</span><b>{fmtNumber(c.totalCost,2)} {summary.currency}</b></div>)}</div>}
-    </div>
+    <MonthlyExpenses vehicleId={vehicle.id} current={data.monthExpenses}/>
    </div>
    <div className="panel list-panel">
     <h2>{t("ОСТАННІ ВИТРАТИ")}</h2>
@@ -69,9 +64,11 @@ function ExpensesPage(props:PageProps){
 
 function EnergyPage(props:PageProps){
   const {vehicle,data,refresh}=props;
-  const [form,setForm]=useState({kind:'fuel',energyType:'petrol',volumeLiters:'',unitPrice:'',totalCost:'',currency:'PLN',odometerKm:'',isFullTank:true,occurredAt:''});
+  const [form,setForm]=useState({kind:data.profile?.fuelType==='electric'?'charge':'fuel',energyType:data.profile?.fuelType??'unspecified',volumeLiters:'',unitPrice:'',totalCost:'',currency:'PLN',odometerKm:'',isFullTank:false,occurredAt:''});
+  const [energyKindChosen,setEnergyKindChosen]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err',text:string}|null>(null);
+  useEffect(()=>{const fuel=data.profile?.fuelType;if(!energyKindChosen&&fuel)setForm(current=>({...current,kind:fuel==='electric'?'charge':'fuel',energyType:['petrol','diesel','lpg','cng'].includes(fuel)?fuel:'unspecified',isFullTank:false}))},[data.profile?.fuelType,energyKindChosen]);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const f2f=data.fullToFull;
   const submit=async(e:FormEvent)=>{
@@ -87,12 +84,12 @@ function EnergyPage(props:PageProps){
         totalCost:form.totalCost?Number(form.totalCost.replace(',','.')):undefined,
         currency:form.currency.toUpperCase()||'PLN',
         odometerKm:form.odometerKm?Number(form.odometerKm):undefined,
-        isFullTank:form.isFullTank,
+        isFullTank:form.kind==='fuel'&&form.isFullTank,
         occurredAt:form.occurredAt?new Date(form.occurredAt).toISOString():undefined,
       };
       await energyApi.create(vehicle.id,input);
       setForm(f=>({...f,volumeLiters:'',unitPrice:'',totalCost:'',odometerKm:'',occurredAt:''}));
-      setMessage({kind:'ok',text:t("Заправку додано.")});
+      setMessage({kind:'ok',text:form.kind==='charge'?t("Заряджання додано."):t("Заправку додано.")});
       await refresh();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
@@ -101,8 +98,8 @@ function EnergyPage(props:PageProps){
     <form className="form-card" onSubmit={submit}>
      <h3><Fuel size={16}/> {t("Нова заправка / заряджання")}</h3>
      <div className="form-grid">
-      <Field label={t("Тип")}><select value={form.kind} onChange={e=>setForm({...form,kind:e.target.value})}><option value="fuel">{t("Пальне")}</option><option value="charge">{t("Заряджання")}</option></select></Field>
-      {form.kind==='fuel'&&<Field label={t("Пальне")}><select value={form.energyType} onChange={e=>setForm({...form,energyType:e.target.value})}><option value="petrol">{t("Бензин")}</option><option value="diesel">{t("Дизель")}</option><option value="lpg">LPG</option><option value="cng">CNG</option></select></Field>}
+      <Field label={t("Тип")}><select value={form.kind} onChange={e=>{setEnergyKindChosen(true);setForm({...form,kind:e.target.value,isFullTank:false})}}><option value="fuel">{t("Пальне")}</option><option value="charge">{t("Заряджання")}</option></select></Field>
+      {form.kind==='fuel'&&<Field label={t("Пальне")}><select value={form.energyType} onChange={e=>setForm({...form,energyType:e.target.value})}><option value="unspecified">{t("Не вказано")}</option><option value="petrol">{t("Бензин")}</option><option value="diesel">{t("Дизель")}</option><option value="lpg">LPG</option><option value="cng">CNG</option></select></Field>}
       <Field label={form.kind==='fuel'?t("Літри"):t("кВт⋅год")}><input value={form.volumeLiters} onChange={e=>setForm({...form,volumeLiters:e.target.value})} placeholder="42.5" inputMode="decimal"/></Field>
       <Field label={t("Ціна за одиницю")}><input value={form.unitPrice} onChange={e=>setForm({...form,unitPrice:e.target.value})} placeholder="6.15" inputMode="decimal"/></Field>
       <Field label={t("Сума")}><input value={form.totalCost} onChange={e=>setForm({...form,totalCost:e.target.value})} placeholder="261.00" inputMode="decimal"/></Field>
@@ -110,20 +107,21 @@ function EnergyPage(props:PageProps){
       <Field label={t("Одометр, км")}><input value={form.odometerKm} onChange={e=>setForm({...form,odometerKm:e.target.value.replace(/[^\d]/g,'')})} placeholder="120450" inputMode="numeric"/></Field>
       <Field label={t("Дата")}><input type="date" value={form.occurredAt} onChange={e=>setForm({...form,occurredAt:e.target.value})}/></Field>
      </div>
-     <label className="toggle-line"><input type="checkbox" checked={form.isFullTank} onChange={e=>setForm({...form,isFullTank:e.target.checked})}/> {t("Повний бак")}</label>
+     {form.kind==='fuel'&&<label className="toggle-line"><input type="checkbox" checked={form.isFullTank} onChange={e=>setForm({...form,isFullTank:e.target.checked})}/> {t("Повний бак")}</label>}
      {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
-     <button className="primary" type="submit" disabled={busy}>{busy?t("Зберігаємо..."):t("ДОДАТИ ЗАПРАВКУ")}</button>
+     <button className="primary" type="submit" disabled={busy}>{busy?t("Зберігаємо..."):form.kind==='charge'?t("ДОДАТИ ЗАРЯДЖАННЯ"):t("ДОДАТИ ЗАПРАВКУ")}</button>
     </form>
     <div className="panel stat-panel">
-     <h2>FULL-TO-FULL</h2>
-     {f2f
+     <h2>{data.profile?.fuelType==='electric'?t("ЗАРЯДЖЕНО"):'FULL-TO-FULL'}</h2>
+     {data.profile?.fuelType==='electric'?<div className="metric-value">{data.energyMonth?fmtNumber(data.energyMonth.energyKwh,1):'—'} <span>{t("кВт⋅год")}</span></div>:f2f
       ?<><div className="metric-value">{f2f.consumptionLitersPer100Km.toFixed(1)} <span>{t("л/100км")}</span></div>
         <p>{fmtNumber(f2f.fromOdometerKm)} → {fmtNumber(f2f.toOdometerKm)} {t("км ·")} {fmtNumber(f2f.distanceKm)} {t("км · залито")} {fmtNumber(f2f.fuelAddedLiters,1)} {t("л")}</p>
         {f2f.costPer100Km!==null&&<p>{t("Вартість:")} {fmtNumber(f2f.costPer100Km,2)} {f2f.currency??''} {t("/ 100 км")}</p>}</>
       :<p>{t("Потрібні мінімум дві заправки з повним баком, щоб порахувати точну витрату.")}</p>}
      {data.energyMonth&&data.energyMonth.entriesCount>0&&<div className="mini-list">
       <div><span>{t("За місяць")}</span><b>{data.energyMonth.entriesCount} {t("операцій")}</b></div>
-      <div><span>{t("Пальне")}</span><b>{fmtNumber(data.energyMonth.fuelLiters,1)} {t("л")}</b></div>
+      {data.profile?.fuelType!=='electric'&&<div><span>{t("Пальне")}</span><b>{fmtNumber(data.energyMonth.fuelLiters,1)} {t("л")}</b></div>}
+      {data.energyMonth.energyKwh>0&&<div><span>{t("Заряджання")}</span><b>{fmtNumber(data.energyMonth.energyKwh,1)} {t("кВт⋅год")}</b></div>}
       {data.energyMonth.money.map(m=><div key={m.currency}><span>{t("Витрачено")}</span><b>{fmtNumber(m.totalCost,2)} {m.currency}</b></div>)}
      </div>}
     </div>
@@ -163,7 +161,7 @@ function RemindersPage(props:PageProps){
   const {vehicle,data}=props;
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const statuses=pickRemindersAll(data.maintenance);
-  return <><ScheduledReminders key={vehicle.id} vehicleId={vehicle.id} onSettings={()=>props.navigate('Налаштування')}/>
+  return <><ScheduledReminders key={vehicle.id} vehicleId={vehicle.id} onSettings={()=>props.navigate('Налаштування')} onService={()=>props.navigate('Сервіс і ТО')} onChanged={props.refresh}/>
    {statuses.length>0&&<><h2>{t("Сервіс і ТО")}</h2><div className="inner-grid">{statuses.map(s=><Reminder key={s.rule.id} icon={Wrench} title={s.rule.title} detail={reminderDetail(s)} tag={URGENCY_META[s.urgency].tag} color={URGENCY_META[s.urgency].color}/>)}</div></>}
   </>;
 }

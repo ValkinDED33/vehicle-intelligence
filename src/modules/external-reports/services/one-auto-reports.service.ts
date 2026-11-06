@@ -10,6 +10,7 @@ import { isAxiosError } from "axios";
 import { firstValueFrom } from "rxjs";
 
 import { GarageService } from "../../garage/services/garage.service";
+import { VinAccessService } from "../../vin-access/vin-access.service";
 import { ExternalReportsDbService } from "../external-reports.db.service";
 import { type NormalizationOutcome } from "../normalization/source-normalization.service";
 import { type VehicleExternalReport } from "../schemas/vehicle-external-report.schema";
@@ -82,6 +83,7 @@ export class OneAutoReportsService {
     private readonly externalReportsDbService: ExternalReportsDbService,
     private readonly httpService: HttpService,
     configService: ConfigService,
+    private readonly access: VinAccessService,
   ) {
     this.baseUrl =
       configService.get<string>("ONEAUTO_BASE_URL") ?? DEFAULT_ONE_AUTO_BASE_URL;
@@ -131,25 +133,20 @@ export class OneAutoReportsService {
     const url = new URL(definition.path, this.baseUrl);
     url.searchParams.set("vehicle_identification_number", vin);
 
-    const response = await this.fetchOneAuto(definition, url);
-
-    const report = await this.externalReportsDbService.createReport({
-      vehicleId,
-      provider: "oneauto",
-      reportType: definition.key,
-      vin,
-      status: "success",
-      rawPayload: response.data,
+    return this.access.run(ownerId, sourceKey, vin, async () => {
+      const response = await this.fetchOneAuto(definition, url);
+      const report = await this.externalReportsDbService.createReport({
+        vehicleId, provider: "oneauto", reportType: definition.key,
+        vin, status: "success", rawPayload: response.data,
+      });
+      return {
+        report,
+        normalization: {
+          normalized: false,
+          reason: "OneAutoAPI report is stored as a provider-specific raw report; manual review is required before applying facts.",
+        },
+      };
     });
-
-    return {
-      report,
-      normalization: {
-        normalized: false,
-        reason:
-          "OneAutoAPI report is stored as a provider-specific raw report; manual review is required before applying facts.",
-      },
-    };
   }
 
   private async fetchOneAuto(
@@ -168,6 +165,12 @@ export class OneAutoReportsService {
     } catch (error) {
       if (isAxiosError(error)) {
         const status = error.response?.status;
+        if (status === 401 || status === 403 || status === 429) {
+          throw new ServiceUnavailableException({
+            code: status === 429 ? "VIN_PROVIDER_RATE_LIMITED" : "VIN_PROVIDER_AUTH_FAILED",
+            message: "VIN-провайдер відхилив запит. Безкоштовну перевірку не використано.",
+          });
+        }
         const upstreamMessage = this.extractUpstreamMessage(error.response?.data);
 
         throw new BadGatewayException(

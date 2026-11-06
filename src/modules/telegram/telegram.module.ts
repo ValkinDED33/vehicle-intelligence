@@ -9,6 +9,7 @@ import { IdentityModule } from "../identity/identity.module";
 import { MileageModule } from "../mileage/mileage.module";
 import { ServiceRecordsModule } from "../service-records/service-records.module";
 import { VinModule } from "../vin/vin.module";
+import { VinAccessModule } from "../vin-access/vin-access.module";
 
 import { TelegramController } from "./telegram.controller";
 import { TelegramService } from "./telegram.service";
@@ -23,6 +24,7 @@ import { RemindersModule } from "../reminders/reminders.module";
 
 @Module({
   imports: [
+    VinAccessModule,
     AssistantModule,
     DocumentsModule,
     EnergyModule,

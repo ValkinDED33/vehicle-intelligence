@@ -14,6 +14,8 @@ import { VehicleHistoryModule } from "../vehicle-history/vehicle-history.module"
 import { AssistantController } from "./assistant.controller";
 import { AssistantService } from "./assistant.service";
 import { RemindersModule } from "../reminders/reminders.module";
+import { AssistantMemoryService } from "./assistant-memory.service";
+import { AssistantConversationService } from "./assistant-conversation.service";
 
 @Module({
   imports: [
@@ -31,7 +33,7 @@ import { RemindersModule } from "../reminders/reminders.module";
     RemindersModule,
   ],
   controllers: [AssistantController],
-  providers: [AssistantService],
-  exports: [AssistantService],
+  providers: [AssistantService, AssistantMemoryService, AssistantConversationService],
+  exports: [AssistantService, AssistantMemoryService, AssistantConversationService],
 })
 export class AssistantModule {}

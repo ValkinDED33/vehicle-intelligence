@@ -32,6 +32,17 @@ export class IdentityDbService {
       if (current && current.id !== target.id) {
         const [car] = await tx.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.ownerId, current.id)).limit(1);
         if (car || !current.email.endsWith("@telegram.local")) throw new ConflictException("Telegram уже пов’язаний з іншим акаунтом із даними. Автоматичне перенесення недоступне.");
+        const access = await tx.execute(sql`SELECT state FROM vin_check_access WHERE owner_id = ${current.id} FOR UPDATE`);
+        const previousState = access.rows[0]?.state;
+        if (previousState === "in_progress" || previousState === "uncertain") throw new ConflictException("Спочатку завершіть або перевірте попередній VIN-запит у Telegram.");
+        if (previousState === "used") {
+          await tx.execute(sql`INSERT INTO vin_check_access (owner_id, state, source) VALUES (${target.id}, 'used', 'linked-account')
+            ON CONFLICT (owner_id) DO UPDATE SET state = CASE WHEN vin_check_access.state = 'available' THEN 'used' ELSE vin_check_access.state END`);
+        }
+        // Old JWTs must not receive a fresh trial after their Telegram identity moves.
+        await tx.execute(sql`INSERT INTO vin_check_access (owner_id, state, source) VALUES (${current.id}, 'used', 'retired-account')
+          ON CONFLICT (owner_id) DO UPDATE SET state = 'used', claim_token = NULL`);
+        await tx.execute(sql`UPDATE standalone_vin_checks SET owner_id = ${target.id} WHERE owner_id = ${current.id}`);
         await tx.update(users).set({ telegramId: null, telegramUsername: null, telegramPhotoUrl: null, updatedAt: new Date() }).where(eq(users.id, current.id));
       }
       const [linked] = await tx.update(users).set({ telegramId, telegramUsername: username ?? null, updatedAt: new Date() }).where(eq(users.id, target.id)).returning();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   energyApi,
   expensesApi,
@@ -8,6 +8,10 @@ import {
   profileApi,
   serviceRecordsApi,
   vinApi,
+  vinAccessApi,
+  type VinAccessStatus,
+  remindersApi,
+  type RemindersResponse,
   type AnomalyReport,
   type EnergyEntry,
   type EnergyMonthlySummary,
@@ -24,6 +28,9 @@ import {
 import type { VehicleData } from "../types/dashboard";
 
 export const EMPTY_DATA: VehicleData = {
+  vinAccess: null,
+  reminders: null,
+  errors: [],
   latest: null,
   mileageHistory: [],
   anomalies: null,
@@ -42,14 +49,19 @@ export const EMPTY_DATA: VehicleData = {
 };
 
 export function useVehicleData(vehicleId: string | null) {
-  const [data, setData] = useState<VehicleData>(EMPTY_DATA);
+  const [loaded, setLoaded] = useState<{ vehicleId: string | null; data: VehicleData }>({ vehicleId: null, data: EMPTY_DATA });
+  const currentVehicle = useRef(vehicleId);
+  const generation = useRef(0);
+  currentVehicle.current = vehicleId;
 
   const refresh = useCallback(async () => {
+    if (currentVehicle.current !== vehicleId) return;
+    const requestId = ++generation.current;
     if (!vehicleId) {
-      setData(EMPTY_DATA);
+      setLoaded({ vehicleId, data: EMPTY_DATA });
       return;
     }
-    setData((prev) => ({ ...prev, loading: true, failed: false }));
+    setLoaded(prev => ({ vehicleId, data: { ...(prev.vehicleId === vehicleId ? prev.data : EMPTY_DATA), loading: true, failed: false } }));
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
@@ -68,7 +80,10 @@ export function useVehicleData(vehicleId: string | null) {
       profileApi.current(vehicleId),
       vinApi.latest(vehicleId),
       serviceRecordsApi.list(vehicleId),
+      remindersApi.list(vehicleId),
+      vinAccessApi.status(),
     ]);
+    if (currentVehicle.current !== vehicleId || requestId !== generation.current) return;
 
     const pick = <T>(i: number, fallback: T): T =>
       settled[i].status === "fulfilled"
@@ -76,9 +91,14 @@ export function useVehicleData(vehicleId: string | null) {
         : fallback;
 
     const history = pick<MileageReading[]>(1, []);
-    const anyOk = settled.some((s) => s.status === "fulfilled");
+    const names = ["mileage", "mileageHistory", "anomalies", "monthExpenses", "expenses", "fullToFull", "energy", "energyMonth", "maintenance", "events", "profile", "vinDecode", "services", "reminders"];
+    names.push("vinAccess");
+    const errors = names.filter((_, index) => settled[index].status === "rejected");
 
-    setData({
+    setLoaded({ vehicleId, data: {
+      vinAccess: pick<VinAccessStatus | null>(14, null),
+      reminders: pick<RemindersResponse | null>(13, null),
+      errors,
       latest: pick<MileageReading | null>(0, null),
       mileageHistory: [...history].sort(
         (a, b) =>
@@ -96,13 +116,17 @@ export function useVehicleData(vehicleId: string | null) {
       vinDecode: pick<VinDecode | null>(11, null),
       services: pick<ServiceRecord[]>(12, []),
       loading: false,
-      failed: !anyOk,
-    });
+      failed: errors.length === names.length,
+    } });
   }, [vehicleId]);
 
   useEffect(() => {
     void refresh();
+    const onFocus=()=>void refresh();
+    window.addEventListener('focus',onFocus);
+    return () => { generation.current++; window.removeEventListener('focus',onFocus); };
   }, [refresh]);
 
+  const data = loaded.vehicleId === vehicleId ? loaded.data : { ...EMPTY_DATA, loading: !!vehicleId };
   return { data, refresh };
 }

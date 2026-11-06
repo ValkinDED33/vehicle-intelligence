@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from "../../../common/guards/jwt-auth.guard";
 import { ConfirmDocumentUploadDto } from "../dto/confirm-document-upload.dto";
 import { CreateDocumentDto } from "../dto/create-document.dto";
+import { ConfirmDocumentFieldsDto } from "../dto/confirm-document-fields.dto";
 import { CreateDocumentUploadDto } from "../dto/create-document-upload.dto";
 import { DocumentHistoryQueryDto } from "../dto/document-history-query.dto";
 import { DocumentProcessingService } from "../services/document-processing.service";
@@ -134,6 +135,16 @@ export class DocumentsController {
       vehicleId,
       documentId,
     );
+  }
+
+  @Post(":documentId/fields/confirm")
+  confirmFields(
+    @Req() request: AuthenticatedRequest,
+    @Param("vehicleId") vehicleId: string,
+    @Param("documentId") documentId: string,
+    @Body() dto: ConfirmDocumentFieldsDto,
+  ) {
+    return this.documentsService.confirmFields(request.userId, vehicleId, documentId, dto);
   }
 
   @Get(":documentId/download")

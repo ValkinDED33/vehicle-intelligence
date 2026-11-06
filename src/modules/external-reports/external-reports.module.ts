@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { HttpModule } from "@nestjs/axios";
 
 import { GarageModule } from "../garage/garage.module";
+import { VinAccessModule } from "../vin-access/vin-access.module";
 import { MileageModule } from "../mileage/mileage.module";
 import { VehicleHistoryModule } from "../vehicle-history/vehicle-history.module";
 import { VehicleProfileModule } from "../vehicle-profile/vehicle-profile.module";
@@ -31,6 +32,7 @@ import { VehicleDatabasesSourcesService } from "./services/vehicle-databases-sou
 
 @Module({
   imports: [
+    VinAccessModule,
     HttpModule.register({
       timeout: 30_000,
       maxRedirects: 3,

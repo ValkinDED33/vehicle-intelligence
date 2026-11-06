@@ -19,6 +19,13 @@ export const API_BASE = resolveApiBase();
 const TOKEN_KEY = "cara.token";
 const USER_KEY = "cara.user";
 
+export interface VinAccessStatus {
+  state: "available" | "in_progress" | "used" | "uncertain";
+  freeRemaining: 0 | 1;
+  paidEnabled: false;
+}
+export const vinAccessApi = { status: () => request<VinAccessStatus>("/vin-access") };
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -97,6 +104,17 @@ function safeJsonParse(text: string): unknown {
 }
 
 function extractMessage(body: unknown, status: number): string {
+  if (body && typeof body === "object" && "code" in body) {
+    const messages: Record<string, string> = {
+      VIN_PROVIDER_AUTH_FAILED: "VIN-провайдер зараз недоступний. Безкоштовну перевірку не використано. Зверніться до підтримки.",
+      VIN_TRIAL_USED: "Безкоштовну VIN-перевірку використано. Повторні перевірки закрито до підключення оплати.",
+      VIN_CHECK_IN_PROGRESS: "VIN-перевірка вже триває. Дочекайтеся результату.",
+      VIN_CHECK_UNCERTAIN: "Результат VIN-запиту не підтверджено. Повторні перевірки заблоковано. Зверніться до підтримки.",
+      VIN_NO_DATA: "Джерело не має даних за цим VIN. Безкоштовну перевірку використано.",
+    };
+    const message = messages[String(body.code)];
+    if (message) return t(message);
+  }
   if (body && typeof body === "object" && "message" in body) {
     const message = (body as { message: unknown }).message;
     if (typeof message === "string") {
@@ -620,7 +638,32 @@ export interface CreateDocumentInput {
   source?: "manual" | "upload" | "telegram" | "email" | "integration" | "ocr" | "ai";
 }
 
+export interface DocumentField {
+  id: string;
+  fieldKey: string;
+  fieldLabel: string | null;
+  valueText: string | null;
+  valueNumber: string | number | null;
+  valueJson: unknown;
+  confidence: string | number | null;
+  source: string;
+}
+export interface DocumentDetails { document: VehicleDocument; fields: DocumentField[] }
+export interface DocumentUploadTarget {
+  bucket: string; key: string; uploadUrl: string; method: "PUT" | "POST"; headers?: Record<string,string>;
+}
+
 export const documentsApi = {
+  confirmFields: (vehicleId: string, documentId: string, input: { expectedUpdatedAt: string; fields: { id: string; valueText: string }[] }) => request<DocumentDetails>(`/vehicles/${vehicleId}/documents/${documentId}/fields/confirm`, { method: "POST", body: JSON.stringify(input) }),
+  get: (vehicleId: string, documentId: string) => request<DocumentDetails>(`/vehicles/${vehicleId}/documents/${documentId}`),
+  uploadTarget: (vehicleId: string, documentId: string, file: File) => request<DocumentUploadTarget>(`/vehicles/${vehicleId}/documents/${documentId}/upload`, {
+    method: "POST", body: JSON.stringify({ originalFileName: file.name, mimeType: file.type, fileSizeBytes: file.size }),
+  }),
+  confirmUpload: (vehicleId: string, documentId: string, target: DocumentUploadTarget, originalFileName: string) => request(`/vehicles/${vehicleId}/documents/${documentId}/confirm`, {
+    method: "POST", body: JSON.stringify({ bucket: target.bucket, key: target.key, originalFileName }),
+  }),
+  process: (vehicleId: string, documentId: string) => request<DocumentDetails>(`/vehicles/${vehicleId}/documents/${documentId}/process`, { method: "POST" }),
+  download: (vehicleId: string, documentId: string) => request<{ downloadUrl: string }>(`/vehicles/${vehicleId}/documents/${documentId}/download`),
   list: (vehicleId: string) =>
     request<VehicleDocument[]>(`/vehicles/${vehicleId}/documents`),
   create: (vehicleId: string, input: CreateDocumentInput) =>
@@ -699,6 +742,7 @@ export const maintenanceApi = {
 // ---------- VIN ----------
 
 export interface VinDecode {
+  status?: string;
   id?: string;
   vehicleId?: string;
   provider?: string;
@@ -721,6 +765,7 @@ export interface VinDecode {
 }
 
 export const vinApi = {
+  savedChecks: () => request<StandaloneVinCheck[]>("/vin/checks"),
   decode: (vehicleId: string) =>
     request<VinDecode>(`/vehicles/${vehicleId}/vin/decode`, { method: "POST" }),
   latest: (vehicleId: string) =>
@@ -728,6 +773,14 @@ export const vinApi = {
 };
 
 // ---------- external reports ----------
+
+export interface StandaloneVinCheck {
+  id: string;
+  vin: string;
+  status: string;
+  createdAt: string;
+  result: { provider: string; make?: string; model?: string; modelYear?: number; engineCode?: string; fuelType?: string; transmissionType?: string; driveType?: string; rawPayload?: Record<string, unknown> };
+}
 
 export interface ReportSource {
   key: string;
@@ -813,10 +866,26 @@ export interface AssistantChatResponse {
   answer: string;
   provider: string;
   model: string;
+  history: AssistantHistory;
+}
+
+export interface AssistantHistoryMessage {
+  id: string; role: "user" | "assistant"; content: string; channel: "web" | "telegram"; createdAt: string;
+}
+export interface AssistantHistory { messages: AssistantHistoryMessage[]; epoch: number; expiresAt: string }
+export interface AssistantPreferences {
+  detailLevel: "concise" | "detailed";
+  priority: "balanced" | "reliability" | "economy";
+  drivingPattern: "unspecified" | "city" | "highway" | "mixed";
+  revision: number;
 }
 
 export const assistantApi = {
-  chat: (input: { message: string; vehicleId?: string; language?: UserLanguage; history?: { role: "user" | "assistant"; content: string }[] }) =>
+  preferences: () => request<AssistantPreferences>("/assistant/preferences"),
+  savePreferences: (input: Omit<AssistantPreferences,"revision"> & {expectedRevision:number}) => request<AssistantPreferences>("/assistant/preferences", {method:"PATCH",body:JSON.stringify(input)}),
+  history: (vehicleId: string | null, language: UserLanguage) => request<AssistantHistory>(`/assistant/history${qs({vehicleId:vehicleId??undefined,language})}`),
+  clearHistory: (vehicleId: string | null, language: UserLanguage) => request<AssistantHistory>(`/assistant/history${qs({vehicleId:vehicleId??undefined,language})}`, {method:"DELETE"}),
+  chat: (input: { message: string; vehicleId?: string; language?: UserLanguage; expectedMemoryEpoch: number }) =>
     request<AssistantChatResponse>("/assistant/chat", {
       method: "POST",
       body: JSON.stringify(input),

@@ -3,9 +3,11 @@ import { HttpModule } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 
 import { GarageModule } from "../garage/garage.module";
+import { VinAccessModule } from "../vin-access/vin-access.module";
 import { VehicleProfileModule } from "../vehicle-profile/vehicle-profile.module";
 
 import { VinController } from "./controllers/vin.controller";
+import { StandaloneVinController } from "./controllers/standalone-vin.controller";
 import { VIN_PROVIDER_TOKEN } from "./providers/vin-provider.interface";
 import { VehicleDatabasesVinProvider } from "./providers/vehicle-databases-vin.provider";
 import { AdvancedVinProvider } from "./providers/advanced-vin/advanced-vin.provider";
@@ -15,12 +17,13 @@ import { VinDbService } from "./vin.db.service";
 
 @Module({
   imports: [
+    VinAccessModule,
     HttpModule,
     GarageModule,
     VehicleProfileModule,
   ],
 
-  controllers: [VinController],
+  controllers: [VinController, StandaloneVinController],
 
   providers: [
     VinDbService,

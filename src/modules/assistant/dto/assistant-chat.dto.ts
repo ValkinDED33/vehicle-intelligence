@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
 export class AssistantHistoryMessageDto {
@@ -11,6 +11,7 @@ export class AssistantHistoryMessageDto {
 }
 
 export class AssistantChatDto {
+  @IsOptional() @IsInt() @Min(0) expectedMemoryEpoch?: number;
   @IsString()
   @MaxLength(2000)
   message!: string;
@@ -28,5 +29,6 @@ export class AssistantChatDto {
   @ArrayMaxSize(12)
   @ValidateNested({ each: true })
   @Type(() => AssistantHistoryMessageDto)
+  // Accepted for older clients, but never used as authoritative shared history.
   history?: AssistantHistoryMessageDto[];
 }

@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 
 import { GarageService } from "../../garage/services/garage.service";
+import { VinAccessService } from "../../vin-access/vin-access.service";
 import { ExternalReportsDbService } from "../external-reports.db.service";
 import {
   VEHICLE_HISTORY_PROVIDER_TOKEN,
@@ -22,6 +23,7 @@ export class ExternalReportsService {
 
     @Inject(VEHICLE_HISTORY_PROVIDER_TOKEN)
     private readonly vehicleHistoryProvider: VehicleHistoryProvider,
+    private readonly access: VinAccessService,
   ) {}
 
   async fetchVehicleHistory(
@@ -41,23 +43,18 @@ export class ExternalReportsService {
       );
     }
 
-    try {
-      const result =
-        await this.vehicleHistoryProvider.getHistory(vin);
-
-      return await this.externalReportsDbService.createReport({
-        vehicleId,
-        provider: result.provider,
-        reportType: "vehicle-history",
-        vin: result.vin,
-        status: "success",
-        rawPayload: result.rawPayload,
-      });
-    } catch (error) {
-      await this.saveFailedReport(vehicleId, vin, error);
-
-      throw error;
-    }
+    return this.access.run(ownerId, "vehicle-history", vin, async () => {
+      try {
+        const result = await this.vehicleHistoryProvider.getHistory(vin);
+        return await this.externalReportsDbService.createReport({
+          vehicleId, provider: result.provider, reportType: "vehicle-history",
+          vin: result.vin, status: "success", rawPayload: result.rawPayload,
+        });
+      } catch (error) {
+        await this.saveFailedReport(vehicleId, vin, error);
+        throw error;
+      }
+    });
   }
 
   private async saveFailedReport(

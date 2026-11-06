@@ -19,6 +19,9 @@ import { botFieldValue, splitTelegramText, TelegramConversationService } from ".
 import { botLanguage, botText, interruptedEffectText, type BotLanguage, type ConversationCheckpoint, type ConversationState } from "./telegram-conversation.types";
 import { RemindersService } from "../reminders/reminders.service";
 import { DateTime } from "luxon";
+import { AssistantMemoryService } from "../assistant/assistant-memory.service";
+import { randomBytes } from "crypto";
+import { vinConsentText, vinErrorText } from "./telegram-vin-text";
 
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
 
@@ -44,6 +47,7 @@ export class TelegramService implements OnModuleInit {
     private readonly sessionService: TelegramSessionService,
     private readonly conversationService: TelegramConversationService,
     private readonly remindersService: RemindersService,
+    private readonly memory: AssistantMemoryService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -128,6 +132,7 @@ export class TelegramService implements OnModuleInit {
       { command: "cancel", description: "Скасувати дію" },
       { command: "language", description: "Українська / Polski / English" },
       { command: "reminders", description: "Мої нагадування" },
+      { command: "forget", description: "Очистити спільну історію цього чату" },
     ];
     await this.bot.telegram.setMyCommands(commands);
     const descriptions: Record<string, [string, string]> = {
@@ -140,6 +145,7 @@ export class TelegramService implements OnModuleInit {
       vehicle: ["Wybierz auto", "Choose a car"], confirm: ["Potwierdź operację", "Confirm an action"],
       cancel: ["Anuluj operację", "Cancel an action"], language: ["Українська / Polski / English", "Українська / Polski / English"],
       reminders: ["Moje przypomnienia", "My reminders"],
+      forget: ["Wyczyść wspólną historię tego czatu", "Clear this chat's shared history"],
     };
     for (const [index, language_code] of ["pl", "en"].entries()) {
       await this.bot.telegram.setMyCommands(commands.map(({ command }) => ({ command, description: descriptions[command][index] })), { language_code });
@@ -200,14 +206,10 @@ export class TelegramService implements OnModuleInit {
           await ctx.reply(botText(botLanguage(user.language), "Скоротіть повідомлення до 2000 символів.", "Skróć wiadomość do 2000 znaków.", "Please keep your message under 2000 characters."));
           return;
         }
-        const reply = ctx.reply.bind(ctx);
-        ctx.reply = async (text, extra) => {
-          const sent = await reply(text, extra);
-          state.history.push({ role: "assistant", content: typeof text === "string" ? text : text.text });
-          return sent;
-        };
+        // Conversation messages live in shared memory; never copy setup tokens or commands into it.
+        state.history = [];
         if (message) {
-          state.history.push({ role: "user", content: message });
+          delete state.pendingVin;
           if (/^\/(?!confirm\b|cancel\b)/.test(message)) {
             delete state.pending;
             delete state.awaitingVehicleFor;
@@ -219,6 +221,8 @@ export class TelegramService implements OnModuleInit {
         } catch (error) {
           this.logger.warn(`Telegram handler failed: ${error instanceof Error ? error.name : "UnknownError"}`);
           const language = botLanguage(user.language);
+          const vinError = vinErrorText(error, language);
+          if (vinError) { await ctx.reply(vinError, this.websiteButton(ctx)); return; }
           if (state.lastEffect?.status === "uncertain" && state.lastEffect.id !== previousEffectId) {
             await ctx.reply(interruptedEffectText(language));
             return;
@@ -231,6 +235,13 @@ export class TelegramService implements OnModuleInit {
             return;
           }
           const validation = error instanceof HttpException && error.getStatus() >= 400 && error.getStatus() < 500;
+          if (error instanceof HttpException && error.getStatus() === 409) {
+            await ctx.reply(botText(language,
+              "Історія чату змінилася або помічник уже обробляє інший запит. Спробуйте ще раз за мить.",
+              "Historia czatu uległa zmianie lub asystent obsługuje już inne zapytanie. Spróbuj ponownie za chwilę.",
+              "The chat history changed or the assistant is handling another request. Please try again in a moment."));
+            return;
+          }
           await ctx.reply(botText(language,
             validation ? "Перевірте дані: значення некоректне або запис недоступний. Уточніть запит і спробуйте ще раз." : "Не вдалося завершити запит. Спробуйте ще раз трохи пізніше.",
             validation ? "Sprawdź dane: wartość jest nieprawidłowa lub wpis jest niedostępny. Doprecyzuj prośbę i spróbuj ponownie." : "Nie udało się wykonać prośby. Spróbuj ponownie później.",
@@ -239,6 +250,22 @@ export class TelegramService implements OnModuleInit {
       });
     });
 
+    this.bot.action(/^vin-(confirm|cancel):([a-f0-9]{16})$/, async (ctx) => {
+      const user = await this.getTelegramUser(ctx), state = this.sessions.get(ctx);
+      const pending = state?.pendingVin;
+      if (!user || !state || !pending || pending.id !== ctx.match[2] || pending.expiresAt < Date.now()) {
+        await ctx.reply(this.text(ctx, "Запит застарів. Надішліть VIN ще раз.", "Zapytanie wygasło. Wyślij VIN ponownie.", "This request has expired. Send the VIN again."));
+        return;
+      }
+      delete state.pendingVin;
+      await this.checkpoints.get(ctx)?.();
+      if (ctx.match[1] === "cancel") { await ctx.reply(this.text(ctx, "Скасовано.", "Anulowano.", "Cancelled.")); return; }
+      const result = await this.vinService.decodeStandaloneVin(user.id, pending.vin);
+      await ctx.reply(this.vinResult(ctx, pending.vin, result) + "\n\n" + this.text(ctx,
+        "Результат збережено в розділі «Звіти» на сайті.",
+        "Wynik zapisano w sekcji „Raporty” na stronie.",
+        "The result is saved in Reports on the website."), this.websiteButton(ctx));
+    });
     this.bot.action(/^(confirm|cancel):([a-f0-9]{16})$/, async (ctx) => {
       const user = await this.getTelegramUser(ctx);
       const state = this.sessions.get(ctx);
@@ -275,6 +302,20 @@ export class TelegramService implements OnModuleInit {
       }
       await this.authService.updateProfile(user.id, { language });
       await ctx.reply(botText(botLanguage(language), "Мову збережено: українська.", "Zapisano język: polski.", "Language saved: English."));
+    });
+
+    this.bot.command("forget", async ctx => {
+      const user = await this.getTelegramUser(ctx);
+      const state = this.sessions.get(ctx);
+      if (!user || !state) return;
+      const cars = (await this.garageService.getVehicles(user.id)).filter(car => !car.isArchived);
+      const vehicleId = cars.find(car => car.id === state.selectedVehicleId)?.id ?? (cars.length === 1 ? cars[0].id : undefined);
+      await this.memory.clear({ ownerId: user.id, vehicleId, language: botLanguage(user.language) });
+      state.history = []; delete state.pending; delete state.awaitingVehicleFor;
+      await ctx.reply(botText(botLanguage(user.language),
+        "Спільну історію цього чату на сайті й у Telegram очищено. Записи автомобіля та нагадування збережено.",
+        "Wspólna historia tego czatu na stronie i w Telegramie została wyczyszczona. Wpisy auta i przypomnienia zostały zachowane.",
+        "This chat's shared history on the website and in Telegram has been cleared. Vehicle records and reminders were kept."));
     });
 
     this.bot.command("reminders", async ctx => {
@@ -352,18 +393,6 @@ export class TelegramService implements OnModuleInit {
         vin,
         nickname: nicknameParts.join(" ").trim() || undefined,
       });
-
-      if (this.vinLookupEnabled) {
-        try {
-          await this.vinService.decodeVehicleVin(user.id, vehicle.id);
-        } catch (error) {
-          this.logger.warn(
-            `Telegram addcar VIN decode failed: ${
-              error instanceof Error ? error.name : "UnknownError"
-            }`,
-          );
-        }
-      }
 
       const updated = await this.garageService.getVehicle(user.id, vehicle.id);
 
@@ -462,6 +491,8 @@ export class TelegramService implements OnModuleInit {
     });
 
     this.bot.command("vin", async (ctx) => {
+      const user = await this.getTelegramUser(ctx);
+      if (!user) return;
       const vin = ctx.message.text
         .replace(/^\/vin(?:@\w+)?/i, "")
         .trim()
@@ -494,24 +525,7 @@ export class TelegramService implements OnModuleInit {
         return;
       }
 
-      await ctx.reply(this.text(ctx, "Перевіряю VIN: ", "Sprawdzam VIN: ", "Checking VIN: ") + vin);
-
-      try {
-        const result = await this.vinService.decodeStandaloneVin(vin);
-
-        await ctx.reply(this.vinResult(ctx, vin, result), this.websiteButton(ctx));
-      } catch (error) {
-        this.logger.warn(
-          `Telegram VIN lookup failed: ${
-            error instanceof Error ? error.name : "UnknownError"
-          }`,
-        );
-
-        await ctx.reply(
-          this.text(ctx, "Не вдалося отримати дані за цим VIN. Спробуйте пізніше або відкрийте сайт.", "Nie udało się pobrać danych dla tego VIN. Spróbuj później lub otwórz stronę.", "I couldn't retrieve details for this VIN. Try later or open the website."),
-          this.websiteButton(ctx),
-        );
-      }
+      await this.replyWithVinDecode(ctx, vin);
     });
 
     this.bot.on("text", async (ctx) => {
@@ -543,10 +557,14 @@ export class TelegramService implements OnModuleInit {
   }
 
   private helpText(language: "uk" | "pl" | "en"): string {
-    return botText(language,
+    const help = botText(language,
       "Вітаю! Я CARA. Запитайте про авто або опишіть, що потрібно записати. Наприклад: «Коли наступне ТО?» або «Запиши мийку за 80 PLN». Перед збереженням покажу дані для підтвердження.\n\n/garage — ваші авто\n/vehicle 2 — вибрати авто\n/language uk, pl, en — мова\n/cancel — скасувати дію\n/website — відкрити сайт\n\nЩоб бачити гараж із сайту, під’єднайте Telegram у налаштуваннях сайту.",
       "Cześć! Jestem CARA. Zapytaj o auto lub opisz, co chcesz zapisać. Na przykład: „Kiedy następny serwis?” lub „Zapisz myjnię za 80 PLN”. Przed zapisem pokażę dane do potwierdzenia.\n\n/garage — Twoje auta\n/vehicle 2 — wybierz auto\n/language uk, pl, en — język\n/cancel — anuluj operację\n/website — otwórz stronę\n\nAby widzieć garaż ze strony, połącz Telegram w ustawieniach strony.",
       "Hi! I'm CARA. Ask about your car or describe what you want to record, for example: 'When is the next service?' or 'Record a car wash for 80 PLN'. I'll show the details for confirmation before saving.\n\n/garage — your cars\n/vehicle 2 — choose a car\n/language uk, pl, en — language\n/cancel — cancel an action\n/website — open the website\n\nTo use your website garage, link Telegram in the website settings.");
+    return help + "\n\n" + botText(language,
+      "/forget - очистити спільну історію цього чату на сайті й у Telegram; записи авто та нагадування залишаться.",
+      "/forget - wyczyść wspólną historię tego czatu na stronie i w Telegramie; wpisy auta i przypomnienia zostaną zachowane.",
+      "/forget - clear this chat's shared history on the website and in Telegram; vehicle records and reminders will be kept.");
   }
 
   private async getTelegramUser(ctx: Context): Promise<User | null> {
@@ -846,11 +864,16 @@ export class TelegramService implements OnModuleInit {
       return;
     }
 
-    await ctx.reply(this.text(ctx, "Перевіряю VIN: ", "Sprawdzam VIN: ", "Checking VIN: ") + vin);
-
-    const result = await this.vinService.decodeStandaloneVin(vin);
-
-    await ctx.reply(this.vinResult(ctx, vin, result) + "\n\n/addcar " + vin, this.websiteButton(ctx));
+    const user = await this.getTelegramUser(ctx), state = this.sessions.get(ctx);
+    if (!user || !state) return;
+    await this.vinService.ensureAccess(user.id);
+    delete state.pending;
+    const id = randomBytes(8).toString("hex");
+    await ctx.reply(`VIN: ${vin}\n\n${vinConsentText(botLanguage(user.language))}`, Markup.inlineKeyboard([
+      Markup.button.callback(this.text(ctx, "Перевірити VIN", "Sprawdź VIN", "Check VIN"), `vin-confirm:${id}`),
+      Markup.button.callback(this.text(ctx, "Скасувати", "Anuluj", "Cancel"), `vin-cancel:${id}`),
+    ]));
+    state.pendingVin = { id, vin, expiresAt: Date.now() + 10 * 60 * 1000 };
   }
 
   private vinResult(ctx: Context, vin: string, result: Awaited<ReturnType<VinService["decodeStandaloneVin"]>>): string {

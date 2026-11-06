@@ -12,9 +12,14 @@ import type {
   Vehicle,
   VehicleProfile,
   VinDecode,
+  VinAccessStatus,
+  RemindersResponse,
 } from "../api";
 
 export interface VehicleData {
+  vinAccess: VinAccessStatus | null;
+  reminders: RemindersResponse | null;
+  errors: string[];
   latest: MileageReading | null;
   mileageHistory: MileageReading[];
   anomalies: AnomalyReport | null;

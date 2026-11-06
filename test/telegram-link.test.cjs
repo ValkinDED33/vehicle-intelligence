@@ -27,7 +27,7 @@ function fixture({ current, targetTelegramId = null, expired = false, hasCars = 
     return { from: () => ({ where: () => ({ for: async () => rows(), limit: async () => rows() }) }) };
   };
   const tx = {
-    execute: async () => {}, select,
+    execute: async () => ({ rows: [] }), select,
     update: () => ({ set: data => ({ where: () => {
       writes.push(data); const result = Promise.resolve();
       result.returning = async () => [{ ...target, ...data }]; return result;

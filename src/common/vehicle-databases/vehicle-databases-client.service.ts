@@ -11,7 +11,7 @@ import { firstValueFrom } from "rxjs";
 
 interface ProviderUnavailableBody {
   message: string;
-  code: "VIN_PROVIDER_NOT_CONFIGURED" | "VIN_PROVIDER_QUOTA_EXHAUSTED" | "VIN_PROVIDER_RATE_LIMITED" | "VIN_PROVIDER_TEMPORARILY_UNAVAILABLE";
+  code: "VIN_PROVIDER_NOT_CONFIGURED" | "VIN_PROVIDER_AUTH_FAILED" | "VIN_PROVIDER_QUOTA_EXHAUSTED" | "VIN_PROVIDER_RATE_LIMITED" | "VIN_PROVIDER_TEMPORARILY_UNAVAILABLE";
 }
 
 interface VehicleDatabasesEnvelope<TData> {
@@ -171,9 +171,9 @@ export class VehicleDatabasesClientService {
             `${options.apiName} authentication failed with HTTP ${status}`,
           );
 
-          throw new ServiceUnavailableException(
-            `${options.apiName} authentication failed`,
-          );
+          throw new ServiceUnavailableException({
+            code: "VIN_PROVIDER_AUTH_FAILED", message: "VIN-провайдер відхилив авторизацію. Зверніться до підтримки.",
+          } satisfies ProviderUnavailableBody);
         }
 
         if (status === 429) {

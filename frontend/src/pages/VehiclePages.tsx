@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AlertTriangle, Check, CircleHelp, ClipboardList, FileText, Gauge, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Wrench, X } from "lucide-react";
 import { documentsApi, fmtDate, fmtMoney, fmtNumber, garageApi, maintenanceApi, mileageApi, profileApi, vinApi, type VehicleDocument } from "../api";
 import { AddVehicleForm } from "../components/AddVehicleForm";
+import { VinAccessNotice, vinConsent } from "../components/VinAccessNotice";
 import { EmptyState, Field, NoVehicle, Spinner } from "../components/CommonComponents";
 import { URGENCY_META } from "../constants/dashboard";
 import type { PageProps } from "../types/dashboard";
@@ -10,6 +11,8 @@ import type { VinDecode } from "../api";
 import { serviceProgress } from "../utils/calculations";
 import { errText, intervalLines, reminderDetail, urgencyScore, vehicleLine, vehicleTitle } from "../utils/formatters";
 import { ServiceEntry } from "../components/ServiceEntry";
+import { DocumentFileActions } from "../components/DocumentFileActions";
+import { ProfileHistory } from "../components/ProfileHistory";
 import { ReminderPreferenceFields, defaultReminderPreferences } from "../components/ReminderPreferenceFields";
 import type { MaintenanceRule } from "../api";
 
@@ -72,13 +75,14 @@ function ProfilePage(props: PageProps) {
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const decode=async()=>{
     if(!vehicle.vin){setMessage({kind:'err',text:t("В автомобіля не вказано VIN — спочатку додайте його в гаражі.")});return}
+    if(data.vinAccess?.state!=="available"||!window.confirm(`VIN: ${vehicle.vin}\n\n${vinConsent()}`))return;
     setBusy(true);setMessage(null);
     try{
       const decoded=await vinApi.decode(vehicle.id);
       const hasProfileData=Boolean(decoded.engineCode||decoded.engineFamily||decoded.displacementCc||decoded.fuelType||decoded.powerKw||decoded.powerHp||decoded.transmissionType||decoded.driveType);
       setMessage({kind:'ok',text:hasProfileData?t("VIN розшифровано — профіль і картку оновлено."):t("VIN розшифровано — картку оновлено, але провайдер не повернув технічні дані для профілю.")});
       await afterMutate();
-    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false);void props.refresh()}
   };
   const saveCorrection=async(e:FormEvent)=>{
     e.preventDefault();
@@ -120,8 +124,9 @@ function ProfilePage(props: PageProps) {
   ];
   return <>
    <div className="page-actions">
-    <button className="primary" onClick={()=>void decode()} disabled={busy}>{busy?<Loader2 size={15} className="spin"/>:<Search size={15}/>} {busy?t("РОЗШИФРОВУЄМО VIN..."):t("РОЗШИФРУВАТИ VIN")}</button>
+    <button className="primary" onClick={()=>void decode()} disabled={busy||data.loading||data.vinAccess?.state!=="available"||!vehicle.vin}>{busy?<Loader2 size={15} className="spin"/>:<Search size={15}/>} {busy?t("РОЗШИФРОВУЄМО VIN..."):t("РОЗШИФРУВАТИ VIN")}</button>
    </div>
+   <VinAccessNotice access={data.vinAccess}/>
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    {profile
     ?<div className="panel spec-panel"><h2>{t("ТЕХНІЧНИЙ ПРОФІЛЬ")}</h2><div className="spec-grid">{rows.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div></div>
@@ -143,6 +148,7 @@ function ProfilePage(props: PageProps) {
     <button className="ghost-btn save-profile-btn" type="submit" disabled={savingProfile}>{savingProfile?<Loader2 size={15} className="spin"/>:<Check size={15}/>} {t("ЗБЕРЕГТИ ПІДТВЕРДЖЕННЯ")}</button>
    </form>
    <VinDecodedFacts decode={data.vinDecode}/>
+   <ProfileHistory vehicleId={vehicle.id} version={profile?.version}/>
   </>;
 }
 
@@ -157,6 +163,7 @@ type DecodeGroup = {
 };
 
 function VinDecodedFacts({decode}:{decode:VinDecode|null}) {
+  if(decode?.status==='no-data')return <section className="panel decode-panel"><h2>{t("ПОВНЕ РОЗШИФРУВАННЯ VIN")}</h2><p className="mono">{decode.vin}</p><div className="state-note">{t("Джерело не має даних за цим VIN. Безкоштовну перевірку використано.")}</div></section>;
   const facts=decode?extractVinFacts(decode):[];
   if(!decode||!facts.length)return <div className="panel decode-panel">
    <div className="panel-heading"><h2>{t("ПОВНЕ РОЗШИФРУВАННЯ VIN")}</h2></div>
@@ -548,7 +555,7 @@ function DocumentsPage(props: PageProps) {
     if(!vehicleId)return;
     setDocuments(await documentsApi.list(vehicleId));
   };
-  useEffect(()=>{setDocuments(null);if(vehicleId)void loadDocuments().catch(err=>setMessage({kind:'err',text:errText(err)}))},[vehicleId]);
+  useEffect(()=>{if(vehicleId&&!props.data.loading)void loadDocuments().catch(err=>setMessage({kind:'err',text:errText(err)}))},[vehicleId,props.data.loading]);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const createDocument=async(e:FormEvent)=>{
     e.preventDefault();
@@ -568,14 +575,17 @@ function DocumentsPage(props: PageProps) {
       setForm({...form,title:"",documentNumber:"",issuerName:"",issuedAt:"",expiresAt:"",description:""});
       setMessage({kind:'ok',text:t("Документ додано в історію автомобіля.")});
       await loadDocuments();
+      await props.afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
   const deleteDocument=async(documentId:string)=>{
+    if(!window.confirm(t("Видалити документ і пов’язані нагадування?")))return;
     setBusy(true);setMessage(null);
     try{
       await documentsApi.remove(vehicle.id,documentId);
       setMessage({kind:'ok',text:t("Документ видалено.")});
       await loadDocuments();
+      await props.afterMutate();
     }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(false)}
   };
   return <>
@@ -600,9 +610,9 @@ function DocumentsPage(props: PageProps) {
     {documents===null?<Spinner/>
      :documents.length
       ?<table className="data-table"><thead><tr><th>{t("Тип")}</th><th>{t("Документ")}</th><th>{t("Номер")}</th><th>{t("Строк")}</th><th>{t("Статус")}</th><th></th></tr></thead><tbody>
-       {documents.map(doc=><tr key={doc.id}><td>{formatDocumentType(doc.type)}</td><td><b>{doc.title}</b>{doc.issuerName&&<small className="sub">{doc.issuerName}</small>}</td><td>{doc.documentNumber??'—'}</td><td>{doc.expiresAt?fmtDate(doc.expiresAt):'—'}</td><td><span className={'tag '+documentStatusColor(doc)}>{enumLabel(doc.processingStatus)}</span></td><td><button className="ghost-btn danger" onClick={()=>void deleteDocument(doc.id)} disabled={busy}><Trash2 size={14}/> {t("Видалити")}</button></td></tr>)}
+       {documents.map(doc=><tr key={doc.id}><td>{formatDocumentType(doc.type)}</td><td><b>{doc.title}</b>{doc.issuerName&&<small className="sub">{doc.issuerName}</small>}<DocumentFileActions document={doc} onChanged={loadDocuments}/></td><td>{doc.documentNumber??'—'}</td><td>{doc.expiresAt?fmtDate(doc.expiresAt):'—'}</td><td><span className={'tag '+documentStatusColor(doc)}>{enumLabel(doc.processingStatus)}</span></td><td><button className="ghost-btn danger" title={t("Видалити")} aria-label={t("Видалити")} onClick={()=>void deleteDocument(doc.id)} disabled={busy}><Trash2 size={14}/></button></td></tr>)}
       </tbody></table>
-      :<EmptyState icon={FileText} title={t("Документів поки немає")} text={t("Додайте поліс, техогляд, рахунок за сервіс або інший документ вручну. Завантаження файлів підключається через той самий backend-модуль окремо.")}/>}
+      :<EmptyState icon={FileText} title={t("Документів поки немає")} text={t("Страхування, техогляди та рахунки за обслуговування.")}/>}
    </div>
   </>;
 }

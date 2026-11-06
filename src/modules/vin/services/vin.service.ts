@@ -10,6 +10,8 @@ import {
 } from "../providers/vin-provider.interface";
 import { type VinDecode } from "../schemas/vin-decode.schema";
 import { VinDbService } from "../vin.db.service";
+import { VinAccessService } from "../../vin-access/vin-access.service";
+import { VehicleDatabasesNoRecordsError } from "../../../common/vehicle-databases/vehicle-databases-client.service";
 
 @Injectable()
 export class VinService {
@@ -20,7 +22,12 @@ export class VinService {
 
     @Inject(VIN_PROVIDER_TOKEN)
     private readonly vinProvider: VinProvider,
+    private readonly access: VinAccessService,
   ) {}
+
+  ensureAccess(ownerId: string) { return this.access.ensureAvailable(ownerId); }
+  getAccessStatus(ownerId: string) { return this.access.status(ownerId); }
+  getStandaloneChecks(ownerId: string) { return this.vinDbService.listStandalone(ownerId); }
 
   async decodeVehicleVin(
     ownerId: string,
@@ -34,25 +41,23 @@ export class VinService {
       throw new BadRequestException("В автомобіля не вказано VIN");
     }
 
-    const result = await this.vinProvider.decode(vin);
-
-    await this.updateVehicleIdentityFromDecode(
-      ownerId,
-      vehicleId,
-      vehicle,
-      result,
-    );
-
-    await this.createVehicleProfileFromDecode(ownerId, vehicleId, result);
-
-    return this.vinDbService.saveDecodeResult({
-      vehicleId,
-      vin,
-      result,
+    return this.access.run(ownerId, "vin-decode", vin, async () => {
+      let result: VinDecodeResult;
+      try { result = await this.vinProvider.decode(vin); }
+      catch (error) {
+        if (error instanceof VehicleDatabasesNoRecordsError) {
+          await this.vinDbService.saveDecodeResult({ vehicleId, vin, status: "no-data", result: { provider: "vehicle-databases", rawPayload: { status: "no-data" } } });
+        }
+        throw error;
+      }
+      await this.updateVehicleIdentityFromDecode(ownerId, vehicleId, vehicle, result);
+      await this.createVehicleProfileFromDecode(ownerId, vehicleId, result);
+      return this.vinDbService.saveDecodeResult({ vehicleId, vin, result });
     });
   }
 
   async decodeStandaloneVin(
+    ownerId: string,
     vin: string,
   ): Promise<VinDecodeResult> {
     const normalizedVin = vin.trim().toUpperCase();
@@ -61,7 +66,18 @@ export class VinService {
       throw new BadRequestException("Некоректний VIN");
     }
 
-    return this.vinProvider.decode(normalizedVin);
+    return this.access.run(ownerId, "vin-decode", normalizedVin, async () => {
+      let result: VinDecodeResult;
+      try { result = await this.vinProvider.decode(normalizedVin); }
+      catch (error) {
+        if (error instanceof VehicleDatabasesNoRecordsError) {
+          await this.vinDbService.saveStandalone(ownerId, normalizedVin, { provider: "vehicle-databases", rawPayload: { status: "no-data" } }, "no-data");
+        }
+        throw error;
+      }
+      await this.vinDbService.saveStandalone(ownerId, normalizedVin, result);
+      return result;
+    });
   }
 
   async getLatestDecode(

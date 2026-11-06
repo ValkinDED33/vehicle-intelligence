@@ -8,21 +8,32 @@ import {
   vinDecodes,
 } from "./schemas/vin-decode.schema";
 import { type VinDecodeResult } from "./providers/vin-provider.interface";
+import { standaloneVinChecks } from "./schemas/standalone-vin-check.schema";
 
 @Injectable()
 export class VinDbService {
   constructor(private readonly databaseService: DatabaseService) {}
 
+  async saveStandalone(ownerId: string, vin: string, result: VinDecodeResult, status = "success"): Promise<void> {
+    await this.databaseService.connection.insert(standaloneVinChecks).values({ ownerId, vin, result, status });
+  }
+
+  listStandalone(ownerId: string) {
+    return this.databaseService.connection.select({ id: standaloneVinChecks.id, vin: standaloneVinChecks.vin, status: standaloneVinChecks.status, result: standaloneVinChecks.result, createdAt: standaloneVinChecks.createdAt })
+      .from(standaloneVinChecks).where(eq(standaloneVinChecks.ownerId, ownerId)).orderBy(desc(standaloneVinChecks.createdAt));
+  }
+
   async saveDecodeResult(data: {
     vehicleId: string;
     vin: string;
     result: VinDecodeResult;
+    status?: "success" | "no-data";
   }): Promise<VinDecode> {
     const newDecode: NewVinDecode = {
       vehicleId: data.vehicleId,
       vin: data.vin.trim().toUpperCase(),
       provider: data.result.provider,
-      status: "success",
+      status: data.status ?? "success",
 
       make: data.result.make?.trim() || null,
       model: data.result.model?.trim() || null,

@@ -14,6 +14,17 @@ export interface ClaimedReminder {
   sourceVersion?: Date | null;
 }
 
+type StoredClaim = Omit<ClaimedReminder, "scheduledAt" | "sourceVersion"> & {
+  scheduledAt: string | Date;
+  sourceVersion?: string | Date | null;
+};
+
+function storedDate(value: string | Date): Date {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) throw new Error("Invalid reminder timestamp");
+  return date;
+}
+
 @Injectable()
 export class ReminderDeliveryStore {
   constructor(private readonly database: DatabaseService, private readonly maintenance: MaintenanceService) {}
@@ -59,7 +70,9 @@ export class ReminderDeliveryStore {
         concat_ws(' ', v.make, v.model, v.nickname, v.license_plate) AS "vehicleName"
         FROM reminders r JOIN vehicles v ON v.id=r.vehicle_id JOIN users u ON u.id=v.owner_id
         WHERE r.id=${reminderId}::uuid`);
-      return { ...job, ...details.rows[0] } as unknown as ClaimedReminder;
+      const row = { ...job, ...details.rows[0] } as StoredClaim;
+      return { ...row, scheduledAt: storedDate(row.scheduledAt),
+        sourceVersion: row.sourceVersion == null ? null : storedDate(row.sourceVersion) };
     });
   }
 

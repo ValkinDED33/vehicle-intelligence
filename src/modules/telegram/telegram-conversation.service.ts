@@ -1,14 +1,17 @@
-import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { Markup, type Context } from "telegraf";
-import { AssistantService } from "../assistant/assistant.service";
+import { AssistantConversationService } from "../assistant/assistant-conversation.service";
+import { AssistantMemoryService } from "../assistant/assistant-memory.service";
 import { GarageService } from "../garage/services/garage.service";
 import type { User } from "../identity/schemas/user.schema";
 import { TelegramActionsService } from "./telegram-actions.service";
-import { botLanguage, botText, interruptedEffectText, type BotLanguage, type ConversationCheckpoint, type ConversationState } from "./telegram-conversation.types";
+import { botLanguage, botText, interruptedEffectText, type ActionName, type BotLanguage, type ConversationCheckpoint, type ConversationState } from "./telegram-conversation.types";
 import { reportLabel } from "./telegram-report-catalog";
 import { DateTime } from "luxon";
 import { buildReminderSchedule, type ReminderInput } from "../reminders/reminder-schedule";
+import { MAINTENANCE_TASKS } from "../maintenance/maintenance-keys";
+import { vinConsentText } from "./telegram-vin-text";
 
 export function splitTelegramText(text: string): string[] {
   const chunks: string[] = [];
@@ -26,18 +29,23 @@ export function splitTelegramText(text: string): string[] {
 
 @Injectable()
 export class TelegramConversationService {
+  private readonly logger = new Logger(TelegramConversationService.name);
   constructor(
-    private readonly assistant: AssistantService,
+    private readonly assistant: AssistantConversationService,
     private readonly garage: GarageService,
     private readonly actions: TelegramActionsService,
+    private readonly memory: AssistantMemoryService,
   ) {}
 
   async handle(ctx: Context, user: User, state: ConversationState, message: string, checkpoint?: ConversationCheckpoint): Promise<void> {
     const language = botLanguage(user.language);
     if (/^(?:\/cancel|скасувати|скасуй|ні|не треба|anuluj|nie|cancel|no|нет|отмена)[.!]?$/i.test(message)) {
+      const reference = state.pending?.memory;
       delete state.pending;
       delete state.awaitingVehicleFor;
-      await ctx.reply(botText(language, "Скасовано.", "Anulowano.", "Cancelled."));
+      const answer = botText(language, "Скасовано.", "Anulowano.", "Cancelled.");
+      if (reference) await this.memory.record({ ownerId: user.id, ...reference }, reference.epoch, [{ role: "assistant", content: answer }], "telegram").catch(() => undefined);
+      await ctx.reply(answer);
       return;
     }
     if (/^(?:\/confirm|підтверджую|підтвердити|збережи|зберегти|так|potwierdzam|potwierdź|zapisz|tak|confirm|yes|save|ok|ок|добре|да)[.!]?$/i.test(message)) {
@@ -68,16 +76,22 @@ export class TelegramConversationService {
     await ctx.sendChatAction("typing").catch(() => undefined);
     let turn = await this.assistant.planTurn({
       ownerId: user.id, vehicleId: state.selectedVehicleId, message, language,
-      history: state.history.slice(0, -1),
     });
-    if (turn.selectedVehicleId && turn.selectedVehicleId !== state.selectedVehicleId) {
-      state.selectedVehicleId = turn.selectedVehicleId;
-      if (!turn.action) {
-        turn = await this.assistant.planTurn({
-          ownerId: user.id, vehicleId: state.selectedVehicleId, message, language,
-          history: state.history.slice(0, -1),
-        });
+    const requestedVehicle = turn.selectedVehicleId ?? (turn.action as { vehicleId?: string } | null)?.vehicleId;
+    if (requestedVehicle && requestedVehicle !== state.selectedVehicleId) {
+      const owned = await this.garage.getVehicles(user.id, true);
+      if (owned.some(vehicle => vehicle.id === requestedVehicle)) {
+        state.selectedVehicleId = requestedVehicle;
+        turn = await this.assistant.planTurn({ ownerId: user.id, vehicleId: requestedVehicle, message, language });
       }
+    }
+    const finalVehicle = turn.selectedVehicleId ?? (turn.action as { vehicleId?: string } | null)?.vehicleId;
+    if (finalVehicle && finalVehicle !== state.selectedVehicleId) {
+      await ctx.reply(botText(language, "Уточніть авто в /garage. Змін не збережено.", "Wybierz auto w /garage. Nie zapisano zmian.", "Choose a car in /garage. No changes were saved."));
+      return;
+    }
+    if (!await this.memory.isCurrent({ ownerId: user.id, ...turn.memoryReference }, turn.memoryReference.epoch)) {
+      throw new ConflictException("Assistant memory changed");
     }
     if (!turn.action) {
       if (!state.selectedVehicleId && vehicles.length > 1) state.awaitingVehicleFor = message;
@@ -95,6 +109,7 @@ export class TelegramConversationService {
       return;
     }
     if (action.operation === "request_report") {
+      await this.actions.ensureReportAccess(user.id);
       const vin = target?.vin?.trim().toUpperCase();
       if (!vin || !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
         await ctx.reply(botText(language, "Спочатку додайте коректний VIN у профіль авто. Запит до провайдера не запускався.", "Najpierw dodaj prawidłowy VIN do profilu auta. Nie wysłano zapytania do dostawcy.", "Add a valid VIN to the car profile first. No provider request was made."));
@@ -110,16 +125,22 @@ export class TelegramConversationService {
         return;
       }
       action.expectedReminderRevision = currentReminder.revision;
+      if(currentReminder.maintenanceRuleId&&["update_reminder","complete_reminder"].includes(action.operation)) {
+        await ctx.reply(botText(language,
+          "Це нагадування за регламентом ТО. Для виконаних робіт додайте сервісний запис, а для зміни строків — змініть регламент.",
+          "To przypomnienie wynika z harmonogramu serwisu. Wykonane prace zapisz jako wpis serwisowy, a terminy zmień w harmonogramie.",
+          "This reminder comes from a maintenance rule. Record completed work as a service entry, or edit the rule to change its schedule."));
+        return;
+      }
     }
     const id = randomBytes(8).toString("hex");
-    state.pending = { id, action, expiresAt: Date.now() + 10 * 60 * 1000 };
-    delete state.awaitingVehicleFor;
     const targetName = target ? [target.make, target.model, target.nickname, target.licensePlate].filter(Boolean).join(" ") : "";
     const isReport = action.operation === "request_report";
-    let warning = isReport ? "\n\n" + botText(language,
-      "Запит може витратити квоту або бути платним за тарифом провайдера. Точну вартість не визначаю. Натисніть кнопку лише якщо погоджуєтеся на цей запит.",
-      "Zapytanie może zużyć limit lub być płatne według taryfy dostawcy. Nie znam dokładnej ceny. Potwierdź tylko, jeśli zgadzasz się na to zapytanie.",
-      "This request may use quota or incur charges under the provider's plan. I don't know the exact price. Confirm only if you agree to this request.") : "";
+    let warning = isReport ? "\n\n" + vinConsentText(language) : "";
+    if(currentReminder?.maintenanceRuleId&&action.operation==='cancel_reminder')warning+='\n\n'+botText(language,
+      "Буде вимкнено всі сповіщення цього регламенту ТО, а не лише одне нагадування.",
+      "Zostaną wyłączone wszystkie powiadomienia dla tego harmonogramu serwisu, nie tylko to przypomnienie.",
+      "All notifications for this maintenance rule will be disabled, not just this reminder.");
     if (["reminder", "update_reminder"].includes(action.operation)) {
       const schedule = buildReminderSchedule(action.input as unknown as ReminderInput);
       warning = "\n\n" + botText(language, "Дати сповіщень у Telegram:", "Terminy powiadomień w Telegramie:", "Telegram notification dates:") + "\n"
@@ -142,6 +163,8 @@ export class TelegramConversationService {
       Markup.button.callback(isReport ? botText(language, "Запросити звіт", "Pobierz raport", "Fetch report") : botText(language, "Зберегти", "Zapisz", "Save"), `confirm:${id}`),
       Markup.button.callback(botText(language, "Скасувати", "Anuluj", "Cancel"), `cancel:${id}`),
     ]));
+    state.pending = { id, action, expiresAt: Date.now() + 10 * 60 * 1000, memory: turn.memoryReference };
+    delete state.awaitingVehicleFor;
   }
 
   async confirm(ctx: Context, user: User, state: ConversationState, id?: string, checkpoint?: ConversationCheckpoint): Promise<void> {
@@ -156,6 +179,14 @@ export class TelegramConversationService {
     if (!pending || pending.expiresAt < Date.now() || (id !== undefined && pending.id !== id)) {
       if (pending && pending.expiresAt < Date.now()) delete state.pending;
       await ctx.reply(botText(language, "Це підтвердження вже неактуальне. Опишіть дію ще раз.", "To potwierdzenie jest nieaktualne. Opisz czynność ponownie.", "This confirmation is no longer valid. Describe the action again."));
+      return;
+    }
+    if (!pending.memory || !await this.memory.isCurrent({ ownerId: user.id, ...pending.memory }, pending.memory.epoch)) {
+      delete state.pending;
+      await ctx.reply(botText(language,
+        "Історію цього чату очищено або оновлено. Опишіть дію ще раз; старе підтвердження не виконано.",
+        "Historia tego czatu została wyczyszczona lub zaktualizowana. Opisz operację ponownie; stare potwierdzenie nie zostało wykonane.",
+        "This chat history was cleared or reset. Describe the action again; the old confirmation was not executed."));
       return;
     }
     if (pending.action.operation !== "add_vehicle") {
@@ -198,15 +229,18 @@ export class TelegramConversationService {
     }
     state.lastEffect.status = "completed";
     await checkpoint();
+    await this.memory.record({ ownerId: user.id, ...pending.memory }, pending.memory.epoch, [{ role: "assistant", content: answer }], "telegram")
+      .catch(() => this.logger.warn("Completed Telegram action could not be added to assistant memory"));
     await ctx.reply(answer);
   }
 
-  private operationLabel(operation: string, language: BotLanguage): string {
-    const labels: Record<string, [string, string, string]> = {
+  private operationLabel(operation: ActionName, language: BotLanguage): string {
+    const labels: Record<ActionName, [string, string, string]> = {
       mileage: ["Пробіг", "Przebieg", "Mileage"], expense: ["Витрата", "Wydatek", "Expense"],
       energy: ["Заправка / заряджання", "Tankowanie / ładowanie", "Fuel / charging"],
       service: ["Сервісний запис", "Wpis serwisowy", "Service record"], document: ["Документ", "Dokument", "Document"],
       maintenance: ["Правило ТО", "Harmonogram serwisu", "Maintenance rule"], profile: ["Профіль авто", "Profil auta", "Vehicle profile"],
+      update_maintenance: ["Змінити правило ТО", "Zmień harmonogram serwisu", "Update maintenance rule"],
       add_vehicle: ["Додати авто", "Dodaj auto", "Add car"], update_vehicle: ["Оновити авто", "Edytuj auto", "Update car"],
       archive_vehicle: ["Архівувати авто", "Archiwizuj auto", "Archive car"], restore_vehicle: ["Відновити авто", "Przywróć auto", "Restore car"],
       delete_document: ["Видалити документ", "Usuń dokument", "Delete document"], deactivate_maintenance: ["Вимкнути правило ТО", "Wyłącz harmonogram", "Deactivate maintenance rule"],
@@ -258,6 +292,12 @@ export class TelegramConversationService {
       remindAt: ["Час надсилання", "Godzina wysyłki", "Notification time"],
       timeZone: ["Часовий пояс", "Strefa czasowa", "Time zone"],
       offsets: ["Нагадати за", "Przypomnij wcześniej", "Notify before"],
+      reminderOffsets: ["Нагадати за", "Przypomnij wcześniej", "Notify before"],
+      maintenanceKeys: ["Виконані роботи", "Wykonane prace", "Completed work"],
+      maintenancePlans: ["Наступне обслуговування", "Następny serwis", "Next maintenance"],
+      reminder: ["Сповіщення про закінчення дії", "Powiadomienia o wygaśnięciu", "Expiry notifications"],
+      telegramEnabled: ["Сповіщення в Telegram", "Powiadomienia w Telegramie", "Telegram notifications"],
+      notifyWhenDue: ["Сповістити при досягненні строку або пробігу", "Powiadom po osiągnięciu terminu lub przebiegu", "Notify when the date or mileage is reached"],
     };
     return labels[key] ? botText(language, ...labels[key]) : key;
   }
@@ -265,8 +305,26 @@ export class TelegramConversationService {
 }
 
 export function botFieldValue(key: string, value: unknown, language: BotLanguage): string {
+    if (value instanceof Date) return value.toLocaleDateString(language === 'uk' ? 'uk-UA' : language === 'pl' ? 'pl-PL' : 'en-GB');
+    if (key === "maintenanceKeys" && Array.isArray(value)) return value.map(task=>{
+      const label=MAINTENANCE_TASKS[task as keyof typeof MAINTENANCE_TASKS];
+      return label?botText(language,label[0],label[1],label[2]):String(task);
+    }).join(', ');
+    if (key === "maintenancePlans" && Array.isArray(value)) return value.map(plan=>{
+      const units: [string,string,string][] = [["км","km","km"],["міс.","mies.","months"],["мотогодин","motogodzin","engine hours"]];
+      const intervals=[plan.intervalKm,plan.intervalMonths,plan.intervalEngineHours].map((amount,index)=>amount==null?null:`${amount} ${botText(language,...units[index])}`).filter(Boolean);
+      const notifications=plan.telegramEnabled==null?'':`\n${botText(language,'Telegram','Telegram','Telegram')}: ${botFieldValue('telegramEnabled',plan.telegramEnabled,language)}`;
+      const schedule=plan.reminderOffsets?`\n${botFieldValue('offsets',plan.reminderOffsets,language)} · ${plan.remindAt??'09:00'} · ${plan.timeZone??'Europe/Warsaw'}`:'';
+      const due=plan.notifyWhenDue==null?'':`\n${botText(language,'У строк ТО','W terminie serwisu','When due')}: ${botFieldValue('notifyWhenDue',plan.notifyWhenDue,language)}`;
+      const warnings=[['warningKmBefore','km'],['warningDaysBefore','day'],['warningEngineHoursBefore','hour']].flatMap(([field,unit])=>plan[field]==null?[]:[`${botText(language,'Попередження','Ostrzeżenie','Warning')}: ${new Intl.NumberFormat(language==='uk'?'uk-UA':language==='pl'?'pl-PL':'en-GB',{style:'unit',unit:unit==='km'?'kilometer':unit,unitDisplay:'long'}).format(plan[field])}`]);
+      return `${plan.title}: ${intervals.join(' / ')}${notifications}${schedule}${due}${warnings.length?'\n'+warnings.join('\n'):''}`;
+    }).join('\n\n');
+    if(key==='reminder'&&value&&typeof value==='object') {
+      const prefs=value as {offsets?:unknown;remindAt?:string;timeZone?:string};
+      return `${botFieldValue('offsets',prefs.offsets??[{amount:1,unit:'months'},{amount:1,unit:'weeks'}],language)} · ${prefs.remindAt??'09:00'} · ${prefs.timeZone??'Europe/Warsaw'}`;
+    }
     if (key === "dueDate" && typeof value === "string") return value.split("-").reverse().join(".");
-    if (key === "offsets" && Array.isArray(value)) return value.map(offset => {
+    if (["offsets","reminderOffsets"].includes(key) && Array.isArray(value)) return value.map(offset => {
       if (offset.amount === 0) return botText(language, "у день події", "w dniu wydarzenia", "on the event date");
       return new Intl.NumberFormat(language === "uk" ? "uk-UA" : language === "pl" ? "pl-PL" : "en-GB", {
         style: "unit", unit: offset.unit.slice(0, -1), unitDisplay: "long",

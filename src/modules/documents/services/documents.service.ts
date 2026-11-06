@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import type { ConfirmDocumentFieldsDto } from "../dto/confirm-document-fields.dto";
 
 import { GarageService } from "../../garage/services/garage.service";
 import {
@@ -98,6 +99,16 @@ export class DocumentsService {
     }
 
     return uploadTarget;
+  }
+
+  async confirmFields(ownerId: string, vehicleId: string, documentId: string, input: ConfirmDocumentFieldsDto): Promise<VehicleDocumentWithFields> {
+    await this.garageService.getVehicle(ownerId, vehicleId);
+    if (!input.fields.length || input.fields.length > 100 || new Set(input.fields.map(field=>field.id)).size!==input.fields.length || input.fields.some(field=>!field.valueText.trim()||field.valueText.length>4000)) {
+      throw new BadRequestException("Invalid document field confirmation");
+    }
+    const result=await this.documentsDbService.confirmFields(vehicleId,documentId,input);
+    if(!result)throw new NotFoundException("Vehicle document not found");
+    return result;
   }
 
   async confirmUpload(

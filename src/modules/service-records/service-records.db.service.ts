@@ -88,12 +88,13 @@ export class ServiceRecordsDbService {
         for (const plan of data.maintenancePlans) {
           const existing = await tx.select().from(maintenanceRules).where(and(eq(maintenanceRules.vehicleId, data.vehicleId), eq(maintenanceRules.key, plan.key), eq(maintenanceRules.isActive, true))).for("update");
           if (existing.length > 1) throw new BadRequestException("Для цієї роботи є кілька регламентів. Уточніть правило.");
+          const previous = existing[0];
           const values = { vehicleId: data.vehicleId, key: plan.key, title: plan.title.trim(), source: "manual",
-            intervalKm: plan.intervalKm ?? null, intervalMonths: plan.intervalMonths ?? null, intervalEngineHours: plan.intervalEngineHours ?? null,
-            warningKmBefore: plan.warningKmBefore ?? null, warningDaysBefore: plan.warningDaysBefore ?? null, warningEngineHoursBefore: plan.warningEngineHoursBefore ?? null,
-            completionEventType: `maintenance.${plan.key}.completed`, telegramEnabled: plan.telegramEnabled ?? true,
-            notifyWhenDue: plan.notifyWhenDue ?? true, reminderOffsets: plan.reminderOffsets ?? (plan.warningDaysBefore != null ? [{ amount: plan.warningDaysBefore, unit: "days" as const }] : DEFAULT_OFFSETS),
-            remindAt: plan.remindAt ?? "09:00", timeZone: plan.timeZone ?? "Europe/Warsaw", updatedAt: new Date() };
+            intervalKm: plan.intervalKm ?? previous?.intervalKm ?? null, intervalMonths: plan.intervalMonths ?? previous?.intervalMonths ?? null, intervalEngineHours: plan.intervalEngineHours ?? previous?.intervalEngineHours ?? null,
+            warningKmBefore: plan.warningKmBefore ?? previous?.warningKmBefore ?? null, warningDaysBefore: plan.warningDaysBefore ?? previous?.warningDaysBefore ?? null, warningEngineHoursBefore: plan.warningEngineHoursBefore ?? previous?.warningEngineHoursBefore ?? null,
+            completionEventType: `maintenance.${plan.key}.completed`, telegramEnabled: plan.telegramEnabled ?? previous?.telegramEnabled ?? true,
+            notifyWhenDue: plan.notifyWhenDue ?? previous?.notifyWhenDue ?? true, reminderOffsets: plan.reminderOffsets ?? (plan.warningDaysBefore != null ? [{ amount: plan.warningDaysBefore, unit: "days" as const }] : previous?.reminderOffsets ?? DEFAULT_OFFSETS),
+            remindAt: plan.remindAt ?? previous?.remindAt ?? "09:00", timeZone: plan.timeZone ?? previous?.timeZone ?? "Europe/Warsaw", updatedAt: new Date() };
           if (existing.length) await tx.update(maintenanceRules).set(values).where(eq(maintenanceRules.id, existing[0].id));
           else await tx.insert(maintenanceRules).values(values);
         }

@@ -148,6 +148,27 @@
       "when": 1793458655516,
       "tag": "0020_service_reminder_links",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793894400000,
+      "tag": "0021_assistant_memory",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793894400001,
+      "tag": "0022_assistant_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793894400002,
+      "tag": "0023_vin_check_access",
+      "breakpoints": true
     }
   ]
 }

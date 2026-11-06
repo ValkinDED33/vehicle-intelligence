@@ -13,7 +13,7 @@ import { urgencyScore } from "./formatters";
 
 export function pickMainCurrency(summary: ExpenseMonthlySummary | null) {
   if (!summary || !summary.currencies.length) return null;
-  return [...summary.currencies].sort((a, b) => b.totalCost - a.totalCost)[0];
+  return summary.currencies.find(row=>row.currency==='PLN')??[...summary.currencies].sort((a,b)=>a.currency.localeCompare(b.currency))[0];
 }
 
 export function pickNextService(
@@ -31,7 +31,12 @@ export function pickNextService(
 export function computeHealthScore(
   statuses: MaintenanceStatus[],
 ): number | null {
-  if (!statuses.length) return null;
+  if (!statuses.length || statuses.some(s =>
+    s.rule.intervalKm != null && s.kmRemaining == null ||
+    s.rule.intervalMonths != null && s.daysRemaining == null ||
+    s.rule.intervalEngineHours != null && s.engineHoursRemaining == null ||
+    s.kmRemaining == null && s.daysRemaining == null && s.engineHoursRemaining == null
+  )) return null;
   const weights = statuses.map((s) => urgencyScore(s.urgency));
   const avg = weights.reduce((acc, v) => acc + v, 0) / weights.length;
   return Math.max(10, Math.min(100, Math.round(avg)));

@@ -1,3 +1,4 @@
+import type { MemoryReference } from "../assistant/assistant-memory.types";
 export type BotLanguage = "uk" | "pl" | "en";
 
 export interface ConversationMessage {
@@ -27,7 +28,8 @@ export interface BotAction {
 export interface ConversationState {
   history: ConversationMessage[];
   selectedVehicleId?: string;
-  pending?: { id: string; action: BotAction; expiresAt: number };
+  pending?: { id: string; action: BotAction; expiresAt: number; memory?: MemoryReference };
+  pendingVin?: { id: string; vin: string; expiresAt: number };
   awaitingVehicleFor?: string;
   processedUpdates: number[];
   lastEffect?: { id: string; operation: string; status: "started" | "completed" | "uncertain"; at: number };

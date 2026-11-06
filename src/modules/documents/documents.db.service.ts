@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
+import type { ConfirmDocumentFieldsDto } from "./dto/confirm-document-fields.dto";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
@@ -208,9 +209,11 @@ export class DocumentsDbService {
           ),
         );
 
+      const confirmed=await tx.select({key:documentFields.fieldKey}).from(documentFields).where(and(eq(documentFields.documentId,documentId),eq(documentFields.source,'manual')));
+      const confirmedKeys=new Set(confirmed.map(field=>field.key));
       const values = this.documentFieldsRepository.mapFields(
         documentId,
-        data.fields,
+        data.fields.filter(field=>!confirmedKeys.has(field.fieldKey.trim().toLowerCase())),
         "ai",
       );
 
@@ -263,5 +266,35 @@ export class DocumentsDbService {
     documentId: string,
   ): Promise<VehicleDocument | null> {
     return this.documentRepository.delete(vehicleId, documentId);
+  }
+
+  async confirmFields(vehicleId: string, documentId: string, input: ConfirmDocumentFieldsDto): Promise<VehicleDocumentWithFields|null> {
+    return this.databaseService.connection.transaction(async (tx) => {
+      const [document] = await tx.select().from(vehicleDocuments)
+        .where(and(eq(vehicleDocuments.id, documentId), eq(vehicleDocuments.vehicleId, vehicleId)))
+        .for("update");
+      if (!document) return null;
+      if (document.processingStatus === "processing" || document.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
+        throw new ConflictException("Документ змінився. Оновіть дані перед підтвердженням.");
+      }
+      const fields = await tx.select().from(documentFields).where(eq(documentFields.documentId, documentId));
+      const owned = new Set(fields.map((field) => field.id));
+      if (input.fields.some((field) => !owned.has(field.id))) {
+        throw new BadRequestException("Field does not belong to this document");
+      }
+      for (const field of input.fields) {
+        await tx.update(documentFields).set({
+          valueType: "string", valueText: field.valueText.trim(), valueNumber: null, valueJson: null,
+          source: "manual", confidence: "1.0000", updatedAt: new Date(),
+        }).where(and(eq(documentFields.id, field.id), eq(documentFields.documentId, documentId)));
+      }
+      const [updated] = await tx.update(vehicleDocuments)
+        .set({ updatedAt: new Date(Math.max(Date.now(), document.updatedAt.getTime() + 1)) })
+        .where(eq(vehicleDocuments.id, documentId)).returning();
+      return {
+        document: updated,
+        fields: await tx.select().from(documentFields).where(eq(documentFields.documentId, documentId)),
+      };
+    });
   }
 }

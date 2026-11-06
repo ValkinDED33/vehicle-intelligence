@@ -40,5 +40,5 @@ export function reportLabel(key: string, language: BotLanguage): string {
   return LABELS[key] ? botText(language, ...LABELS[key]) : key;
 }
 
-export const REPORT_ACTION_GUIDE = `request_report: input={sourceKey: one exact key below}. Requests ONE new external report for the selected car's current VIN. The provider may charge money or quota. Never promise a price, free access, a clean history or a completed lookup. The server requires confirmation with a cost warning. If the user wants all reports, ask which report to fetch first. Only propose this for an explicit new lookup, not a question about already saved records.
+export const REPORT_ACTION_GUIDE = `request_report: input={sourceKey: one exact key below}. Requests ONE new external report for the selected car's current VIN. Propose only when current vinAccess.state is available. One free source request is allowed per account, including no-data results; then further checks are locked until payments are enabled. Never invent a price, checkout link, a clean history or a completed lookup. The server requires explicit confirmation of this policy. If the user wants all reports, explain that only one source can be checked and ask which one. Only propose this for an explicit new lookup, not a question about already saved records.
 Allowed report keys: ${TELEGRAM_REPORT_KEYS.join(", ")}.`;

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { IsIn } from "class-validator";
 import { GarageService } from "../garage/services/garage.service";
+import { VinAccessService } from "../vin-access/vin-access.service";
 import { OneAutoReportsService } from "../external-reports/services/one-auto-reports.service";
 import { VehicleDatabasesSourcesService } from "../external-reports/services/vehicle-databases-sources.service";
 import { TELEGRAM_REPORT_KEYS, TELEGRAM_REPORT_SOURCES, reportLabel } from "./telegram-report-catalog";
@@ -17,7 +18,10 @@ export class TelegramReportsService {
     private readonly garage: GarageService,
     private readonly vehicleDatabases: VehicleDatabasesSourcesService,
     private readonly oneAuto: OneAutoReportsService,
+    private readonly access: VinAccessService,
   ) {}
+
+  ensureAccess(ownerId: string) { return this.access.ensureAvailable(ownerId); }
 
   async request(ownerId: string, vehicleId: string, sourceKey: string, expectedVin: string | undefined, language: BotLanguage): Promise<string> {
     const source = TELEGRAM_REPORT_SOURCES.find(item => item.key === sourceKey);

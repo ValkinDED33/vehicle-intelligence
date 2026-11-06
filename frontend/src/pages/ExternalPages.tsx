@@ -1,5 +1,8 @@
 import { t, enumLabel } from "../i18n";
 import { LanguagePicker } from "../components/LanguagePicker";
+import { AssistantPreferencesForm } from "../components/AssistantPreferencesForm";
+import { VinAccessNotice, vinConsent } from "../components/VinAccessNotice";
+import { StandaloneVinChecks } from "../components/StandaloneVinChecks";
 import { useEffect, useState, type ReactNode } from "react";
 import { ChartNoAxesCombined, Check, ChevronDown, Download, Loader2, LogOut, MessageCircle, PlugZap } from "lucide-react";
 import { API_BASE, authApi, externalReportsApi, fmtDate, profileApi, type ExternalReport, type ReportSource, type SourceFetchSummary, type UserLanguage, type Vehicle, type VehicleProfile } from "../api";
@@ -40,39 +43,30 @@ function IntegrationsPage(props:PageProps){
   },[vehicleId]);
   if(!vehicle)return <><TelegramIntegrationCard/><NoVehicle onGoGarage={()=>props.navigate('Гараж')}/></>;
   if(sources===null)return <Spinner/>;
-  const vinSources=sources.filter(s=>s.fetchableByVehicleVin&&!s.key.startsWith('oneauto-'));
   const oneAutoSources=sources.filter(s=>s.key.startsWith('oneauto-'));
   const vehicleDatabaseSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&s.input==='vin'&&s.fetchableByVehicleVin);
   const otherSources=sources.filter(s=>!s.key.startsWith('oneauto-')&&s.key!=='cepik-pojazdy'&&s.fetchableByVehicleVin&&s.input!=='vin');
   const wojewodztwoOptions=CEPIK_WOJEWODZTWA;
   const toggleProvider=(key:string)=>setOpenProviders(prev=>({...prev,[key]:!prev[key]}));
-  const fetchAll=async()=>{
-    setBusy('all');setMessage(null);setResults(null);
-    try{
-      const res=await externalReportsApi.fetchAll(vehicle.id);
-      setResults(res);
-      const ok=res.filter(r=>r.status==='success'||r.status==='no-data').length;
-      setMessage({kind:'ok',text:t("Опрацьовано VIN-джерел: {0} з {1} (успішно/без даних: {2}).", { 0: res.length, 1: vinSources.length, 2: ok })});
-      await afterMutate();
-    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
-  };
   const fetchOne=async(key:string)=>{
+    if(data.vinAccess?.state!=="available"||!window.confirm(`${key}\nVIN: ${vehicle.vin}\n\n${vinConsent()}`))return;
     setBusy(key);setMessage(null);
     try{
       const res=await fetchOneSource(vehicle.id,key);
       setResults([res]);
       setMessage({kind:res.status==='error'?'err':'ok',text:`${key}: ${enumLabel(res.status)}${res.error?` — ${res.error}`:''}`});
       await afterMutate();
-    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null);void props.refresh()}
   };
   const fetchOneAuto=async(key:string)=>{
+    if(data.vinAccess?.state!=="available"||!window.confirm(`${key}\nVIN: ${vehicle.vin}\n\n${vinConsent()}`))return;
     setBusy(key);setMessage(null);
     try{
       const res=await externalReportsApi.fetchOneAutoSource(vehicle.id,key);
       setResults([{source:key,status:res.report.status,reportId:res.report.id}]);
       setMessage({kind:'ok',text:t("{0}: звіт OneAutoAPI збережено. Перевірте raw-відповідь перед перенесенням у підтверджений профіль.", { 0: key })});
       await afterMutate();
-    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null)}
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setBusy(null);void props.refresh()}
   };
   const fetchCepik=async()=>{
     setBusy('cepik-pojazdy');setMessage(null);setResults(null);
@@ -101,15 +95,12 @@ function IntegrationsPage(props:PageProps){
   };
   return <>
    <TelegramIntegrationCard />
-   <div className="page-actions">
-    <button className="primary" onClick={()=>void fetchAll()} disabled={busy!==null||vinSources.length===0||!vehicle.vin}>{busy==='all'?<Loader2 size={15} className="spin"/>:<Download size={15}/>} {busy==='all'?t("ЗАБИРАЄМО ЗВІТИ..."):t("ЗАВАНТАЖИТИ VIN-ЗВІТИ")}</button>
-    <span className="hint-note">{t("Vehicle Databases працює за VIN. CEPiK нижче — окрема польська альтернатива за регіоном і періодом реєстрації.")}</span>
-   </div>
+   <VinAccessNotice access={data.vinAccess}/>
    {!vehicle.vin&&<div className="state-note">{t("VIN-джерела недоступні, бо для автомобіля не вказано VIN. CEPiK можна запросити окремо, якщо відомі регіон і період реєстрації в Польщі.")}</div>}
    {message&&<div className={message.kind==='ok'?'ok-note':'auth-error'}>{message.text}</div>}
    <ProviderAccordion title="OneAutoAPI" meta={t("{0} VIN-джерел", { 0: oneAutoSources.length })} open={openProviders.oneauto} onToggle={()=>toggleProvider('oneauto')}>
     <div className="sources-grid">
-     {oneAutoSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOneAuto(s.key)}/>)}
+     {oneAutoSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} accessAllowed={!data.loading&&data.vinAccess?.state==='available'} onClick={()=>void fetchOneAuto(s.key)}/>)}
      {!oneAutoSources.length&&<div className="state-note">{t("Джерела OneAutoAPI не знайдено.")}</div>}
     </div>
    </ProviderAccordion>
@@ -129,12 +120,12 @@ function IntegrationsPage(props:PageProps){
    </ProviderAccordion>
    <ProviderAccordion title="Vehicle Databases" meta={t("{0} VIN-джерел", { 0: vehicleDatabaseSources.length })} open={openProviders.vehicleDatabases} onToggle={()=>toggleProvider('vehicleDatabases')}>
     <div className="sources-grid">
-     {vehicleDatabaseSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
+     {vehicleDatabaseSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} accessAllowed={!data.loading&&data.vinAccess?.state==='available'} onClick={()=>void fetchOne(s.key)}/>)}
     </div>
    </ProviderAccordion>
    {otherSources.length>0&&<ProviderAccordion title={t("Окремі потоки")} meta={t("{0} джерел", { 0: otherSources.length })} open={openProviders.other} onToggle={()=>toggleProvider('other')}>
     <div className="sources-grid">
-     {otherSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} onClick={()=>void fetchOne(s.key)}/>)}
+     {otherSources.map(s=><SourceCard key={s.key} source={s} result={results?.find(r=>r.source===s.key)} busy={busy} vehicleHasVin={Boolean(vehicle.vin)} accessAllowed={!data.loading&&data.vinAccess?.state==='available'} onClick={()=>void fetchOne(s.key)}/>)}
     </div>
    </ProviderAccordion>}
    {results&&results.length>1&&<div className="panel list-panel">
@@ -197,10 +188,10 @@ function ProviderAccordion({title,meta,open,onToggle,children}:{title:string;met
   </section>;
 }
 
-function SourceCard({source,result,busy,vehicleHasVin,onClick}:{source:ReportSource;result:SourceFetchSummary|undefined;busy:string|null;vehicleHasVin:boolean;onClick:()=>void}){
+function SourceCard({source,result,busy,vehicleHasVin,accessAllowed,onClick}:{source:ReportSource;result:SourceFetchSummary|undefined;busy:string|null;vehicleHasVin:boolean;accessAllowed:boolean;onClick:()=>void}){
   const copy=copyForSource(source);
   const separateFlow=!source.fetchableByVehicleVin&&source.key!=='cepik-pojazdy';
-  const disabled=busy!==null||separateFlow||(!vehicleHasVin&&source.fetchableByVehicleVin);
+  const disabled=busy!==null||separateFlow||(!vehicleHasVin&&source.fetchableByVehicleVin)||!accessAllowed;
   return <div className="panel source-card">
    <div className={'icon-disc '+(result?.status==='success'?'green':'')}><PlugZap size={17}/></div>
    <div className="source-copy"><b>{copy.title}</b><small>{copy.description}</small></div>
@@ -282,6 +273,10 @@ async function fetchOneSource(vehicleId:string,key:string):Promise<SourceFetchSu
 }
 
 function ReportsPage(props:PageProps){
+  return <><StandaloneVinChecks/><VehicleReportsPage {...props}/></>;
+}
+
+function VehicleReportsPage(props:PageProps){
   const {vehicle}=props;
   const [reports,setReports]=useState<ExternalReport[]|null>(null);
   const [error,setError]=useState<string|null>(null);
@@ -650,6 +645,7 @@ function SettingsPage(props:PageProps){
      <button className="ghost-btn danger" onClick={logout}><LogOut size={15}/> {t("Вийти з акаунта")}</button>
     </div>
    </div>
+   <AssistantPreferencesForm key={user?.id}/>
    <TelegramIntegrationCard/>
    <div className="panel list-panel">
     <h2>{t("ПРО ПЛАТФОРМУ")}</h2>

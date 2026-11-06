@@ -10,6 +10,7 @@ const { TelegramConversationService, splitTelegramText } = require('../dist/modu
 const { TelegramController } = require('../dist/modules/telegram/telegram.controller');
 const { TelegramSessionService } = require('../dist/modules/telegram/telegram-session.service');
 const { AssistantService } = require('../dist/modules/assistant/assistant.service');
+const { AssistantConversationService } = require('../dist/modules/assistant/assistant-conversation.service');
 const { AuthService } = require('../dist/modules/identity/services/auth.service');
 const { GroqProvider } = require('../dist/common/ai-gateway/providers/groq.provider');
 const { AssistantChatDto } = require('../dist/modules/assistant/dto/assistant-chat.dto');
@@ -34,14 +35,14 @@ function car(id = CAR) {
   return { id, ownerId: OWNER, make: id === CAR ? 'Nissan' : 'Toyota', model: 'Test', nickname: null, isArchived: false, vin: 'WBA12345678901234', country: 'PL' };
 }
 
-function harness({ cars = [car()], language = 'uk', plan } = {}) {
+function harness({ cars = [car()], language = 'uk', plan, vinEnabled = false } = {}) {
   const h = { chatId: ++sequence, replies: [], writes: [], reportCalls: [], turns: [], states: new Map(), authCalls: 0 };
   transports.set(h.chatId, h);
   h.user = { id: OWNER, language };
   const garage = {
     getVehicles: async () => cars,
     getVehicle: async (owner, id) => { assert.equal(owner, OWNER); const v = cars.find(v => v.id === id); if (!v) throw new Error('Not owned'); return v; },
-    createVehicle: async (owner, input) => { h.writes.push({ kind: 'add', owner, input }); return { ...car(), ...input }; },
+    createVehicle: async (owner, input) => { h.writes.push({ kind: 'add', owner, input }); const created={ ...car(), ...input };cars.push(created);return created; },
     updateVehicle: async (owner, id, input) => h.writes.push({ kind: 'update', owner, id, input }),
     archiveVehicle: async (owner, id) => h.writes.push({ kind: 'archive', owner, id }),
     restoreVehicle: async (owner, id) => h.writes.push({ kind: 'restore', owner, id }),
@@ -64,26 +65,37 @@ function harness({ cars = [car()], language = 'uk', plan } = {}) {
   const documents = { createDocument: async (owner, id, input) => {
     h.writes.push({ kind: 'document', owner, id, input }); return { document: input };
   }, deleteDocument: async () => h.writes.push({ kind: 'delete' }) };
-  const maintenance = { createRule: async () => h.writes.push({ kind: 'maintenance' }), deactivateRule: async () => h.writes.push({ kind: 'deactivate' }) };
+  const maintenance = { createRule: async () => h.writes.push({ kind: 'maintenance' }), deactivateRule: async () => h.writes.push({ kind: 'deactivate' }), updateRule: async (owner,id,ruleId,input) => {h.writes.push({kind:'update-maintenance',owner,id,ruleId,input});return input;} };
   const profiles = { createProfileVersion: async () => h.writes.push({ kind: 'profile' }) };
   const reportProvider = provider => ({ fetchSource: async (owner, id, source) => {
     h.reportCalls.push({ provider, owner, id, source });
     return { report: { id: 'report', status: h.reportStatus || 'success' } };
   } });
-  const reports = new TelegramReportsService(garage, reportProvider('vehicle-databases'), reportProvider('oneauto'));
+  const reports = new TelegramReportsService(garage, reportProvider('vehicle-databases'), reportProvider('oneauto'), { ensureAvailable: async () => {} });
   const reminders = {
     deliveryEnabled: true,
     save: async (owner, id, input, reminderId) => h.writes.push({ kind: 'reminder', owner, id, input, reminderId }),
     setStatus: async (owner, id, reminderId, status) => h.writes.push({ kind: 'reminder-status', owner, id, reminderId, status }),
     list: async () => ({ telegramLinked: true, deliveryEnabled: true, reminders: [] }),
-    get: async (owner, vehicleId, id) => ({ id, title: 'Inspection', dueDate: '2027-11-10', status: 'active', revision: h.reminderRevision ?? 1 }),
+    get: async (owner, vehicleId, id) => ({ id, title: 'Inspection', dueDate: '2027-11-10', status: 'active', revision: h.reminderRevision ?? 1, maintenanceRuleId:h.reminderRule??null }),
   };
   const actions = new TelegramActionsService(garage, mileage, expenses, energy, services, documents, maintenance, profiles, reports, reminders);
   const assistant = { planTurn: async (input) => {
     h.turns.push(structuredClone(input));
     return plan ? plan(input) : { answer: 'Що саме цікавить?', action: null };
   } };
-  const conversation = new TelegramConversationService(assistant, garage, actions);
+  const memories=new Map();
+  const memoryKey=scope=>JSON.stringify([scope.ownerId,scope.vehicleId,scope.language]);
+  const memory={
+    preferences:async()=>({detailLevel:'concise',priority:'balanced',drivingPattern:'unspecified',revision:0}),
+    get:async scope=>structuredClone(memories.get(memoryKey(scope))??{messages:[],epoch:0,expiresAt:new Date(Date.now()+86400000)}),
+    isCurrent:async(scope,epoch)=>(await memory.get(scope)).epoch===epoch,
+    clear:async scope=>{const row=await memory.get(scope);row.messages=[];row.epoch++;memories.set(memoryKey(scope),row);return row;},
+    record:async(scope,epoch,messages,channel)=>{const row=await memory.get(scope);assert.equal(row.epoch,epoch);row.messages.push(...messages.map(message=>({...message,channel})));memories.set(memoryKey(scope),row);},
+    run:async(scope,channel,work)=>{const row=await memory.get(scope);const result=await work(row);await memory.record(scope,row.epoch,result.messages??[],channel);return result.value;},
+  };
+  h.memory=memory;
+  const conversation = new TelegramConversationService(new AssistantConversationService(assistant,memory), garage, actions,memory);
   let queue = Promise.resolve();
   const sessions = { run: (userId, updateId, fn) => {
     const next = queue.then(async () => {
@@ -103,8 +115,14 @@ function harness({ cars = [car()], language = 'uk', plan } = {}) {
     updateProfile: async (id, dto) => { h.user.language = dto.language; },
     linkTelegram: async () => h.user,
   };
-  const config = { get: key => key === 'TELEGRAM_WEBHOOK_SECRET' ? 'test-secret' : undefined };
-  const service = new TelegramService(config, auth, assistant, documents, energy, expenses, garage, mileage, services, {}, sessions, conversation, reminders);
+  const config = { get: key => key === 'TELEGRAM_WEBHOOK_SECRET' ? 'test-secret' : key === 'TELEGRAM_VIN_LOOKUP_ENABLED' && vinEnabled ? 'true' : undefined };
+  h.vinCalls=[];
+  const vin={
+    ensureAccess:async()=>{if(h.vinUsed)throw new (require('@nestjs/common').HttpException)({code:'VIN_TRIAL_USED'},402);},
+    decodeStandaloneVin:async(owner,vinCode)=>{await vin.ensureAccess();h.vinCalls.push({owner,vin:vinCode});h.vinUsed=true;return {make:'Fixture'};},
+    decodeVehicleVin:async()=>{h.vinCalls.push({unexpectedAutoDecode:true});},
+  };
+  const service = new TelegramService(config, auth, assistant, documents, energy, expenses, garage, mileage, services, vin, sessions, conversation, reminders,memory);
   service.bot = new Telegraf('123456:test-token');
   service.bot.botInfo = { id: 123456, is_bot: true, username: 'testbot', first_name: 'Test' };
   service.registerHandlers();
@@ -132,9 +150,92 @@ function harness({ cars = [car()], language = 'uk', plan } = {}) {
 
 const expense = { operation: 'expense', vehicleId: CAR, input: { category: 'wash', title: 'Мийка', totalCost: 80, currency: 'PLN' } };
 
+test('standalone VIN checks in all languages require explicit consent, cannot repeat, and leave AI questions available',async()=>{
+  for(const language of ['uk','pl','en']){
+    const h=harness({language,vinEnabled:true});
+    await h.send('/vin WBA12345678901234');assert.equal(h.vinCalls.length,0);
+    let button=h.replies.at(-1).reply_markup.inline_keyboard[0][0].callback_data;
+    assert.match(button,/^vin-confirm:/);assert.ok(h.state().pendingVin);
+    await h.click(button.replace('confirm','cancel'));assert.equal(h.vinCalls.length,0);
+    await h.send('WBA12345678901234');button=h.replies.at(-1).reply_markup.inline_keyboard[0][0].callback_data;
+    await h.click(button);await h.click(button);
+    assert.deepEqual(h.vinCalls,[{owner:OWNER,vin:'WBA12345678901234'}]);
+    const message=await h.send('/vin WBA98765432109876');
+    assert.match(message,language==='uk'?/вже використано/:language==='pl'?/już wykorzystane/:/already been used/);
+    assert.equal(h.vinCalls.length,1);
+    await h.send('When should I change oil?');assert.equal(h.turns.length,1);
+  }
+});
+
+test('adding a car never silently consumes the free VIN lookup',async()=>{
+  const h=harness({cars:[],vinEnabled:true});await h.send('/addcar WBA12345678901234 Fixture');
+  assert.equal(h.writes[0].kind,'add');assert.equal(h.vinCalls.length,0);
+});
+
+test('every operation has a readable confirmation label in all three languages',()=>{
+  const {ACTION_NAMES}=require('../dist/modules/telegram/telegram-conversation.types');
+  const conversation=new TelegramConversationService();
+  for(const language of ['uk','pl','en'])for(const operation of ACTION_NAMES){
+    const label=conversation.operationLabel(operation,language);
+    assert.ok(label.length>2);assert.notEqual(label,operation);
+    if(language!=='uk')assert.doesNotMatch(label,/[А-Яа-яІіЇїЄєҐґ]/);
+  }
+});
+
+test('maintenance changes are previewed and executed only after confirmation',async()=>{
+  for(const language of ['uk','pl','en']){
+    const action={operation:'update_maintenance',vehicleId:CAR,input:{id:CAR2,key:'engine_oil',title:'Oil',completionEventType:'maintenance.engine_oil.completed',intervalKm:10000,telegramEnabled:true}};
+    const h=harness({language,plan:()=>({answer:'Review',action})});
+    const reply=await h.send('Change oil interval to 10000 km');
+    assert.ok(h.state().pending);assert.equal(h.writes.length,0);assert.match(reply,/10000/);
+    assert.doesNotMatch(reply,/telegramEnabled|update_maintenance/);
+    await h.click(`confirm:${h.state().pending.id}`);
+    assert.equal(h.writes.length,1);assert.equal(h.writes[0].kind,'update-maintenance');
+  }
+});
+
+test('a failed confirmation preview leaves no hidden action to confirm',async()=>{
+  const state={history:[{role:'user',content:'Save'}],processedUpdates:[]};
+  const conversation=new TelegramConversationService({planTurn:async()=>({answer:'Review',action:expense,memoryReference:{vehicleId:CAR,language:'en',epoch:0}})},{getVehicles:async()=>[car()]},{prepare:async value=>value},{isCurrent:async()=>true});
+  const ctx={sendChatAction:async()=>{},reply:async()=>{throw new Error('Simulated Telegram outage')}};
+  await assert.rejects(()=>conversation.handle(ctx,{id:OWNER,language:'en'},state,'Save'));
+  assert.equal(state.pending,undefined);
+});
+
+test('generated maintenance reminders cannot be completed as calendar events and cancellation explains its full scope',async()=>{
+  const h=harness({language:'en',plan:()=>({answer:'Review',action:{operation:'complete_reminder',vehicleId:CAR,input:{id:CAR2}}})});
+  h.reminderRule=CAR2;
+  assert.match(await h.send('Complete this reminder'),/maintenance rule/);
+  assert.equal(h.state().pending,undefined);assert.equal(h.writes.length,0);
+  const cancel=harness({language:'en',plan:()=>({answer:'Review',action:{operation:'cancel_reminder',vehicleId:CAR,input:{id:CAR2}}})});
+  cancel.reminderRule=CAR2;
+  assert.match(await cancel.send('Cancel this reminder'),/All notifications for this maintenance rule will be disabled/);
+  assert.ok(cancel.state().pending);assert.equal(cancel.writes.length,0);
+});
+
+test('maintenance and document schedules show human-readable details instead of raw JSON',()=>{
+  const {botFieldValue}=require('../dist/modules/telegram/telegram-conversation.service');
+  for(const language of ['uk','pl','en']){
+    const keys=botFieldValue('maintenanceKeys',['engine_oil','timing_belt'],language);
+    assert.doesNotMatch(keys,/engine_oil|timing_belt/);
+    const plans=botFieldValue('maintenancePlans',[{title:'Oil',intervalKm:10000,intervalMonths:12,telegramEnabled:true,notifyWhenDue:false,reminderOffsets:[{amount:1,unit:'weeks'}]}],language);
+    assert.match(plans,/10000/);assert.match(plans,/12/);assert.doesNotMatch(plans,/[{}]|intervalKm|reminderOffsets/);
+    assert.doesNotMatch(botFieldValue('reminder',{offsets:[{amount:1,unit:'months'}],remindAt:'10:00'},language),/[{}]|offsets/);
+  }
+});
+
 test('a mileage question goes to the assistant without recording mileage', async () => {
   const h = harness(); await h.send('Чи нормально, що пробіг 120000 км?');
   assert.equal(h.turns.length, 1); assert.equal(h.writes.length, 0);
+});
+
+test('forget clears shared history without recording setup commands, keeping vehicle data intact',async()=>{
+  const h=harness({language:'en'});await h.send('What about my car?');
+  const scope={ownerId:OWNER,vehicleId:CAR,language:'en'};
+  assert.equal((await h.memory.get(scope)).messages.length,2);
+  await h.send('/help');assert.equal((await h.memory.get(scope)).messages.length,2);
+  assert.match(await h.send('/forget'),/shared history.*cleared/);
+  assert.equal((await h.memory.get(scope)).messages.length,0);assert.equal(h.writes.length,0);assert.equal(h.state().pending,undefined);
 });
 test('general questions work with an empty garage', async () => {
   const h = harness({ cars: [], plan: () => ({ answer: 'Перевірте тиск на холодних шинах.', action: null }) });
@@ -288,7 +389,7 @@ test('assistant receives expenses, energy, service, documents and unavailable-mo
     { getVehicles: async () => [car()], getVehicle: async () => car() },
     { getCurrentProfile: async () => null }, { getLatestReading: async () => ({ odometerKm: 120000, recordedAt: new Date('2026-10-20') }) },
     { getStatus: async () => [{ rule: { title: 'Oil change' }, urgency: 'attention', currentMileageKm: 120000, kmRemaining: 1500, daysRemaining: 30 }] }, { getLatestDecode: async () => null },
-    { getHistory: async () => [{ title: 'OC', expiresAt: '2027-01-01' }] },
+    { getHistory: async () => [{ id:CAR2,title: 'OC', expiresAt: '2027-01-01' }],getDocument:async()=>({fields:[{fieldKey:'policy_number',valueText:'VERIFIED-123',source:'manual'},{fieldKey:'guess',valueText:'UNCONFIRMED-GUESS',source:'ai'}]}) },
     { getHistory: async () => [], calculateLatestFullToFullConsumption: async () => null },
     { getMonthlyCostOfOwnership: async () => ({ total: 80 }), getHistory: async () => [{ title: 'Мийка', totalCost: '80.00' }] },
     { getHistory: async () => [{ title: 'Заміна оливи' }] },
@@ -301,6 +402,15 @@ test('assistant receives expenses, energy, service, documents and unavailable-mo
   assert.match(context, /externalReports.*unavailable/); assert.equal(request.responseFormat, 'json');
   assert.match(context, /kmRemaining=1500, dueOdometerKm=121500/);
   assert.match(context,/Техогляд/); assert.match(context,/2027-11-10/);
+  assert.match(context,/VERIFIED-123/);assert.doesNotMatch(context,/UNCONFIRMED-GUESS/);
+});
+
+test('document review accepts bounded fields but never model-controlled ownership or provenance',async()=>{
+  const {ConfirmDocumentFieldsDto}=require('../dist/modules/documents/dto/confirm-document-fields.dto');
+  const input={expectedUpdatedAt:new Date().toISOString(),fields:[{id:CAR,valueText:'Verified'}]};
+  const options={whitelist:true,forbidNonWhitelisted:true};
+  assert.equal((await validate(plainToInstance(ConfirmDocumentFieldsDto,input),options)).length,0);
+  for(const fields of [[],[{id:CAR,valueText:'x',source:'manual'}],[{id:CAR,valueText:'x'.repeat(4001)}],[{id:'not-uuid',valueText:'x'}]])assert.ok((await validate(plainToInstance(ConfirmDocumentFieldsDto,{...input,fields}),options)).length);
 });
 test('future-dated Telegram credentials are rejected even with a valid HMAC', () => {
   const { createHmac } = require('crypto');
@@ -461,11 +571,12 @@ test('a failed reply after a domain write cannot cause a second write on confirm
   assert.match(h.replies.at(-1).text, /Check the website records/);
 });
 
-test('external reports show a cost warning and require one confirmation before the correct provider is called', async () => {
+test('external reports explain the single free check and require confirmation before calling the correct provider', async () => {
   for (const [sourceKey, provider] of [['basic-vin-decode', 'vehicle-databases'], ['oneauto-oe-build-sheet-europe-vin', 'oneauto']]) {
     const h = harness({ language: 'en', plan: () => ({ answer: 'Review', action: { operation: 'request_report', vehicleId: CAR, input: { sourceKey } } }) });
     const preview = await h.send('Fetch a new report');
-    assert.match(preview, /may use quota or incur charges/);
+    assert.match(preview, /only free VIN check/);
+    assert.match(preview, /no-data result also counts/);
     assert.match(preview, /VIN: WBA12345678901234/);
     assert.equal(h.reportCalls.length, 0);
     const id = h.state().pending.id;

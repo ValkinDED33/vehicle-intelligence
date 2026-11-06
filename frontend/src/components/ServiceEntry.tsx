@@ -20,13 +20,14 @@ export function ServiceEntry({ vehicleId, rules, afterSave }: { vehicleId: strin
   const labels = { ...MAINTENANCE_TASK_LABELS, ...Object.fromEntries(rules.filter(item => !MAINTENANCE_TASK_LABELS[item.rule.key]).map(item => [item.rule.key, item.rule.title])) };
   const label = (key: string) => MAINTENANCE_TASK_LABELS[key] ? t(MAINTENANCE_TASK_LABELS[key]) : labels[key];
   const updateInterval = (key: string, field: "km" | "months" | "warning", value: string) => setIntervals(current => ({ ...current, [key]: { ...current[key], [field]: value } }));
-  const needsOdometer = selected.some(key => rules.some(item => item.rule.key === key && item.rule.intervalKm) || setupPlan && intervals[key]?.km);
+  const needsOdometer = setupPlan && selected.some(key => intervals[key]?.km);
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setMessage(undefined);
     try {
       if (setupPlan && (!selected.length || selected.some(key => !intervals[key]?.km && !intervals[key]?.months))) throw new Error(t("Укажіть інтервал для кожної вибраної роботи."));
+      const combinedTitle = selected.map(label).join(", ");
       await serviceRecordsApi.create(vehicleId, {
-        type: "maintenance", title: title.trim() || selected.map(label).join(", "), maintenanceKeys: selected,
+        type: "maintenance", title: title.trim() || (combinedTitle.length <= 180 ? combinedTitle : t("Комплексне обслуговування")), maintenanceKeys: selected,
         odometerKm: odometer ? Number(odometer) : undefined, occurredAt: date ? new Date(date).toISOString() : undefined,
         maintenancePlans: setupPlan ? selected.map(key => ({ key, title: label(key), completionEventType: `maintenance.${key}.completed`,
           intervalKm: intervals[key]?.km ? Number(intervals[key].km) : undefined,
@@ -43,7 +44,7 @@ export function ServiceEntry({ vehicleId, rules, afterSave }: { vehicleId: strin
   return <form className="form-card service-entry" onSubmit={submit}>
     <h2><Wrench size={17}/>{t("Виконане обслуговування")}</h2>
     <fieldset className="service-task-list" disabled={busy}><legend>{t("Виконані роботи")}</legend>{Object.keys(labels).map(key => <label className="toggle-line" key={key}>
-      <input type="checkbox" checked={selected.includes(key)} onChange={e => setSelected(current => e.target.checked ? [...current, key] : current.filter(value => value !== key))}/>{label(key)}
+      <input type="checkbox" checked={selected.includes(key)} onChange={e => { const next=e.target.checked?[...selected,key]:selected.filter(value=>value!==key);setSelected(next);if(!next.length)setSetupPlan(false); }}/>{label(key)}
     </label>)}</fieldset>
     <div className="form-grid">
       <Field label={t("Назва")}><input disabled={busy} required={!selected.length} maxLength={180} value={title} onChange={e => setTitle(e.target.value)} placeholder={selected.map(label).join(", ")}/></Field>
