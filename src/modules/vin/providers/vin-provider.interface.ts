@@ -45,6 +45,8 @@ export interface VinDecodeResult {
   fuelType?: VinFuelType;
   transmissionType?: VinTransmissionType;
   driveType?: VinDriveType;
+  bodyType?: "hatchback" | "sedan" | "wagon" | "coupe" | "suv" | "mpv" | "van" | "pickup" | "convertible";
+  exteriorColor?: string;
 
   rawPayload?: Record<string, unknown>;
 }

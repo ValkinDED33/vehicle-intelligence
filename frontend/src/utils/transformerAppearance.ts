@@ -25,7 +25,7 @@ const PAINTS: [RegExp, string][] = [
   [/brown|коричн|brąz/i, "#775346"], [/beige|беж|beż/i, "#b9ad91"],
 ];
 
-export function transformerAppearance(vehicle: Vehicle | null, profile?: VehicleProfile | null): TransformerAppearance {
+export function transformerAppearance(vehicle: Vehicle | null, profile?: Pick<VehicleProfile, "bodyType" | "exteriorColor"> | null): TransformerAppearance {
   const seed = appearanceHash(vehicle?.id.toLowerCase() ?? "cara-general");
   const body = profile?.bodyType?.toLowerCase() ?? "";
   const frame = /suv|crossover|pickup|пікап|позашлях/.test(body) ? "utility"

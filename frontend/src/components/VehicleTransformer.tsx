@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Vehicle, VehicleProfile } from "../api";
+import type { Vehicle, VehicleProfile, VinDecode } from "../api";
 import { t } from "../i18n";
 import { transformerAppearance } from "../utils/transformerAppearance";
+import { profileDisplayFacts } from "../utils/profileDisplayFacts";
 
-export function VehicleTransformer({ vehicle, profile, hero = false, className = "" }: {
-  vehicle: Vehicle | null; profile?: VehicleProfile | null; hero?: boolean; className?: string;
+export function VehicleTransformer({ vehicle, profile, decode, hero = false, className = "" }: {
+  vehicle: Vehicle | null; profile?: VehicleProfile | null; decode?: VinDecode | null; hero?: boolean; className?: string;
 }) {
-  const appearance = useMemo(() => transformerAppearance(vehicle, profile), [vehicle?.id, vehicle?.make, vehicle?.model, vehicle?.nickname, profile?.bodyType, profile?.exteriorColor]);
+  const { bodyType, exteriorColor } = profileDisplayFacts(vehicle, profile, decode);
+  const appearance = useMemo(() => transformerAppearance(vehicle, { bodyType, exteriorColor }), [vehicle?.id, vehicle?.make, vehicle?.model, vehicle?.nickname, bodyType, exteriorColor]);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [portrait, setPortrait] = useState<{ key: string; url: string } | null>(null);
   const [ready, setReady] = useState(false);

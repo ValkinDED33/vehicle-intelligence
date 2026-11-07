@@ -9,6 +9,7 @@ import { URGENCY_META } from "../constants/dashboard";
 import type { PageProps } from "../types/dashboard";
 import type { VinDecode } from "../api";
 import { serviceProgress } from "../utils/calculations";
+import { profileDisplayFacts } from "../utils/profileDisplayFacts";
 import { errText, intervalLines, reminderDetail, urgencyScore, vehicleLine, vehicleTitle } from "../utils/formatters";
 import { ServiceEntry } from "../components/ServiceEntry";
 import { DocumentFileActions } from "../components/DocumentFileActions";
@@ -62,6 +63,7 @@ function ProfilePage(props: PageProps) {
     exteriorColor:'',
   });
   const profile=data.profile;
+  const displayFacts=profileDisplayFacts(vehicle,profile,data.vinDecode);
   useEffect(()=>{
     setCorrection({
       fuelType:profile?.fuelType??'',
@@ -104,16 +106,16 @@ function ProfilePage(props: PageProps) {
   const rows:[string,string][]=profile?[
     [t("Двигун"),[profile.engineFamily,profile.engineCode].filter(Boolean).join(' ')||'—'],
     [t("Об’єм"),profile.displacementCc?t("{0} см³", { 0: fmtNumber(profile.displacementCc) }):'—'],
-    [t("Пальне"),formatFuel(profile.fuelType)],
+    [t("Пальне"),formatFuel(displayFacts.fuelType)],
     [t("Наддув"),formatAspiration(profile.aspirationType)],
     [t("Потужність"),profile.powerHp?t("{0} к.с. ({1} кВт)", { 0: fmtNumber(profile.powerHp), 1: fmtNumber(profile.powerKw) }):'—'],
     [t("Коробка"),[formatTransmission(profile.transmissionType),profile.transmissionCode].filter(v=>v&&v!=='—').join(' ')||'—'],
     [t("Привід"),formatDrive(profile.driveType)],
-    [t("Кузов"),formatBody(profile.bodyType)],
+    [t("Кузов"),formatBody(displayFacts.bodyType)],
     [t("Дверей"),profile.doorCount!=null?String(profile.doorCount):'—'],
     [t("Місць"),profile.seatCount!=null?String(profile.seatCount):'—'],
     [t("Комплектація"),profile.trimLevel??'—'],
-    [t("Колір"),profile.exteriorColor??'—'],
+    [t("Колір"),displayFacts.exteriorColor??'—'],
     [t("Бак"),profile.fuelTankCapacityLiters?t("{0} л", { 0: profile.fuelTankCapacityLiters }):'—'],
     [t("Батарея"),profile.batteryUsableCapacityKwh?t("{0} кВт⋅год (повна {1})", { 0: profile.batteryUsableCapacityKwh, 1: profile.batteryGrossCapacityKwh??'—' }):'—'],
     [t("Версія профілю"),`v${profile.version} · ${formatProfileSource(profile.source)}`],

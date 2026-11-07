@@ -36,3 +36,15 @@ test('unknown maintenance baselines cannot produce a reassuring score and curren
   assert.equal(computeHealthScore([{...status,kmRemaining:5000,rule:{intervalKm:10000,intervalMonths:12}}]),null);
   assert.equal(pickMainCurrency({currencies:[{currency:'UAH',totalCost:99999},{currency:'PLN',totalCost:10}]}).currency,'PLN');
 });
+
+test('saved VIN facts fill missing display fields without overriding a profile or crossing VINs',()=>{
+  const {profileDisplayFacts}=load('frontend/src/utils/profileDisplayFacts.ts');
+  const vehicle={vin:'WBA12345678901234'},decode={vin:'wba12345678901234',fuelType:'petrol',bodyType:'wagon',exteriorColor:'silver'};
+  const facts=profileDisplayFacts(vehicle,{fuelType:null,bodyType:null},decode);
+  assert.equal(facts.fuelType,'petrol');assert.equal(facts.bodyType,'wagon');assert.equal(facts.exteriorColor,'silver');
+  const confirmed=profileDisplayFacts(vehicle,{fuelType:'lpg',bodyType:'hatchback',exteriorColor:'red'},decode);
+  assert.equal(confirmed.fuelType,'lpg');assert.equal(confirmed.bodyType,'hatchback');assert.equal(confirmed.exteriorColor,'red');
+  assert.equal(profileDisplayFacts({vin:'JTD12345678901234'},null,decode).fuelType,null);
+  assert.equal(profileDisplayFacts(null,null,decode).bodyType,null);
+  assert.equal(profileDisplayFacts(vehicle,null,null).exteriorColor,null);
+});

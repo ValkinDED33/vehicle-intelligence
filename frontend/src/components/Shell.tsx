@@ -156,7 +156,7 @@ export function Shell(){
     <nav>{sections.slice(0,11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{t(name)}</span>{name==='AI Асистент'&&<i>BETA</i>}</button>)}</nav>
     <nav className="lower-nav">{sections.slice(11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{t(name)}</span></button>)}</nav>
     <button className="assistant-tile" onClick={openAi}>
-     <VehicleTransformer className="bot-avatar" vehicle={vehicle} profile={data.profile}/>
+     <VehicleTransformer className="bot-avatar" vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/>
      <span className="assistant-copy"><b>{t("AI Асистент")}</b><em>{t("Запитати CARA")}</em><svg className="waveform" viewBox="0 0 110 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 10,11 14,4 18,18 22,7 26,15 30,11 40,11 44,2 48,20 52,9 56,13 60,11 70,11 74,5 78,17 82,8 86,14 90,11 110,11"/></svg><small>{vehicle?currentVehicleTitle:t("Оберіть авто")}</small></span>
     </button>
    </aside>
@@ -181,7 +181,7 @@ export function Shell(){
    {mobile&&<div className="scrim" onClick={()=>setMobile(false)}/>}
    {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}>
     <button className="modal-close" aria-label={t("Закрити")} onClick={closeAi}><X/></button>
-    <VehicleTransformer className="dialog-bot" vehicle={vehicle} profile={data.profile}/><h2 id="ai-dialog-title">{t("CARA AI Асистент")}</h2>
+    <VehicleTransformer className="dialog-bot" vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/><h2 id="ai-dialog-title">{t("CARA AI Асистент")}</h2>
     <p>{t("Запитайте мене про автомобіль — я відповім з урахуванням поточного профілю, пробігу й нагадувань.")}</p>
     <div className="chat-vehicle">{vehicle?currentVehicleTitle:t("Загальні запитання")} · {currentLanguage.toUpperCase()}</div>
     <div className="chat-history-tools"><small>{t("Спільна історія сайту й Telegram: до 7 днів")}</small><div><button className="ghost-btn" title={t("Оновити")} aria-label={t("Оновити")} disabled={historyLoading||aiBusy} onClick={()=>void refreshAiHistory()}><RefreshCw size={16}/></button><button className="ghost-btn" title={t("Очистити історію чату")} aria-label={t("Очистити історію чату")} disabled={historyLoading||!aiMessages.length&&!aiBusy} onClick={()=>{if(!window.confirm(t("Очистити історію цього чату на сайті й у Telegram? Записи автомобіля залишаться.")))return;aiConversationId.current+=1;setAiBusy(false);setAiPendingMessage(null);setAiError(null);void clearAiHistory();}}><Trash2 size={16}/></button></div></div>

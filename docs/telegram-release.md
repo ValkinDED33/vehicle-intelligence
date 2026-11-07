@@ -59,8 +59,10 @@ the new live-model fixture scenarios have not been run against a paid provider.
 
 ## Behavior
 
-Conversation state survives restarts and expires after 24 hours. Each user has
-an isolated history and selected car. Natural-language writes require a preview
+Telegram action state survives restarts and expires after 24 hours. Shared
+assistant history is scoped by account, car and language, with up to 24 messages
+and a seven-day limit per message; owner preferences persist separately.
+Natural-language writes require a preview
 and an unexpired confirmation; explicit legacy slash commands remain direct.
 All writes use the existing domain services with the authenticated owner ID.
 New expenses do not inherit an old odometer reading from the vehicle profile.
@@ -83,3 +85,46 @@ Confirmations are consumed in a durable checkpoint before domain writes or
 provider requests. A process failure can leave an unknown outcome, but it never
 automatically replays that effect; check the saved record before a fresh request.
 Conversation leases release database pool connections during model requests.
+
+## Production Check: 2026-11-07
+
+Read-only checks confirmed migration `0023_vin_check_access` with no pending
+migrations. `@IACarsBot` has a configured webhook and no pending updates or
+reported delivery error, but subscribes only to `message`, not `callback_query`.
+The current source registers both types during initialization; a regression test
+checks that registration does not discard pending updates.
+
+The owner approved adding callbacks. A safety check of the locally configured
+webhook secret returned 401, so the repair stopped BEFORE `setWebhook` and did
+not change the existing URL, secret or queue. Access to the current Render
+configuration is required; the owner deferred signing in. Never work around
+this by removing the secret header or disabling webhook authentication.
+
+The live test account reports `deliveryEnabled:false` and is not linked to
+Telegram. Real reminder delivery and button confirmation remain unverified.
+Do not enable a production worker indiscriminately: queued reminders for other
+accounts may become eligible. Arrange a controlled test after deployment and
+account linkage. The latest VIN/assistant fixes are local, not yet deployed.
+
+### Render Configuration Inspection
+
+After the owner signed in, the active service was identified as
+`srv-d9u99h61egvs739e0ltg` (`vehicle-intelligence`) in the `hw3-crud` project.
+Its public URL matches `https://vehicle-intelligence-o9mi.onrender.com`.
+The similarly named `vehicle-intelligence-1` in the `vehicle-intelligence`
+project uses a different hostname and has failed deploys; do not configure
+or redeploy that duplicate in an attempt to repair the production bot.
+
+The active service's environment has no `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_WEBHOOK_URL` or `TELEGRAM_WEBHOOK_SECRET`, and no linked environment
+groups or secret files supplying them. This explains the initialization guard
+disabling Telegram and the webhook secret check returning 401. It is not
+evidence that the local secret differs from an existing production secret.
+
+A three-variable import was prepared from the existing local configuration in
+ignored `scratch/render-telegram-import.env`, with a Windows ACL restricted to
+the current user. No credential values were printed or added to Git. The Render
+import dialog was opened, but no credentials were entered or uploaded by the
+agent. Importing and saving credentials is handed to the owner. Do not claim
+that the bot is enabled until the owner saves the environment, deployment
+completes and read-only webhook checks confirm message and callback updates.

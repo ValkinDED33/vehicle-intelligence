@@ -742,6 +742,8 @@ export const maintenanceApi = {
 // ---------- VIN ----------
 
 export interface VinDecode {
+  bodyType?: string;
+  exteriorColor?: string;
   status?: string;
   id?: string;
   vehicleId?: string;

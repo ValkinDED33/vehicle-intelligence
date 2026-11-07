@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, Injectable, Logger, OnModuleInit, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, HttpException, Injectable, Logger, OnModuleDestroy, OnModuleInit, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Markup, Telegraf, type Context } from "telegraf";
 import type { Update } from "telegraf/types";
@@ -24,11 +24,19 @@ import { randomBytes } from "crypto";
 import { vinConsentText, vinErrorText } from "./telegram-vin-text";
 
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
+type TelegramCallOptions = NonNullable<Parameters<Telegraf["telegram"]["callApi"]>[2]>;
+function setupRequestOptions(): TelegramCallOptions {
+  // node-fetch accepts native signals; Telegraf still declares the older abort-controller type.
+  return { signal: AbortSignal.timeout(8_000) as unknown as TelegramCallOptions["signal"] };
+}
 
 @Injectable()
-export class TelegramService implements OnModuleInit {
+export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TelegramService.name);
   private bot?: Telegraf;
+  private setupRetry?: ReturnType<typeof setTimeout>;
+  private setupAttempts = 0;
+  private stopping = false;
   private readonly sessions = new WeakMap<Context, ConversationState>();
   private readonly authenticatedUsers = new WeakMap<Context, User>();
   private readonly checkpoints = new WeakMap<Context, ConversationCheckpoint>();
@@ -74,6 +82,44 @@ export class TelegramService implements OnModuleInit {
       }
     });
 
+    await this.setupTelegram();
+  }
+
+  onModuleDestroy() {
+    this.stopping = true;
+    if (this.setupRetry) clearTimeout(this.setupRetry);
+    this.setupRetry = undefined;
+  }
+
+  private async setupTelegram(): Promise<void> {
+    if (!this.bot || this.stopping || this.setupAttempts >= 3) return;
+    if (this.setupRetry) clearTimeout(this.setupRetry);
+    this.setupRetry = undefined;
+    this.setupAttempts++;
+    try {
+      // Register incoming updates before the optional command menus. Never discard queued updates.
+      await this.bot.telegram.callApi("setWebhook", {
+        url: this.webhookUrl, secret_token: this.webhookSecret,
+        allowed_updates: ["message", "callback_query"], drop_pending_updates: false,
+      }, setupRequestOptions());
+      await this.registerCommands();
+      this.logger.log(`Telegram webhook connected: ${this.webhookUrl}`);
+    } catch {
+      // Transport errors can contain the bot token in their URL; never log or rethrow them.
+      if (this.stopping) return;
+      if (this.setupAttempts >= 3) {
+        this.logger.warn("Telegram setup unavailable after 3 attempts; API remains running. Check the bot configuration and restart after recovery.");
+        return;
+      }
+      this.logger.warn("Telegram setup unavailable; API remains running and setup will retry shortly.");
+      this.setupRetry = setTimeout(() => { void this.setupTelegram(); }, this.setupAttempts * 30_000);
+      this.setupRetry.unref();
+    }
+  }
+
+  private async registerCommands(): Promise<void> {
+    const bot = this.bot;
+    if (!bot) return;
     const commands = [
       {
         command: "start",
@@ -134,7 +180,7 @@ export class TelegramService implements OnModuleInit {
       { command: "reminders", description: "Мої нагадування" },
       { command: "forget", description: "Очистити спільну історію цього чату" },
     ];
-    await this.bot.telegram.setMyCommands(commands);
+    await bot.telegram.callApi("setMyCommands", { commands }, setupRequestOptions());
     const descriptions: Record<string, [string, string]> = {
       start: ["Uruchom CARA", "Start CARA"], vin: ["Sprawdź VIN", "Check a VIN"],
       garage: ["Pokaż garaż", "Show your garage"], addcar: ["Dodaj auto po VIN", "Add a car by VIN"],
@@ -148,15 +194,10 @@ export class TelegramService implements OnModuleInit {
       forget: ["Wyczyść wspólną historię tego czatu", "Clear this chat's shared history"],
     };
     for (const [index, language_code] of ["pl", "en"].entries()) {
-      await this.bot.telegram.setMyCommands(commands.map(({ command }) => ({ command, description: descriptions[command][index] })), { language_code });
+      await bot.telegram.callApi("setMyCommands", {
+        commands: commands.map(({ command }) => ({ command, description: descriptions[command][index] })), language_code,
+      }, setupRequestOptions());
     }
-
-    await this.bot.telegram.setWebhook(this.webhookUrl, {
-      secret_token: this.webhookSecret,
-      allowed_updates: ["message", "callback_query"],
-    });
-
-    this.logger.log(`Telegram webhook connected: ${this.webhookUrl}`);
   }
 
   async processUpdate(update: Update): Promise<void> {

@@ -31,6 +31,73 @@ Telegram.prototype.callApi = async function(method, payload) {
 };
 after(() => { Telegram.prototype.callApi = originalCallApi; });
 
+test('Telegram initialization registers messages and confirmation callbacks without dropping pending updates',async()=>{
+  const previous=Telegram.prototype.callApi,calls=[];
+  Telegram.prototype.callApi=async(method,payload,options)=>{calls.push({method,payload});assert.ok(options.signal instanceof AbortSignal);return true;};
+  try {
+    const values={TELEGRAM_BOT_TOKEN:'fixture-token',TELEGRAM_WEBHOOK_URL:'https://fixture.example/telegram/webhook',TELEGRAM_WEBHOOK_SECRET:'fixture-secret'};
+    const service=new TelegramService({get:key=>values[key]});
+    await service.onModuleInit();
+    const webhooks=calls.filter(call=>call.method==='setWebhook');assert.equal(webhooks.length,1);
+    assert.equal(webhooks[0].payload.url,values.TELEGRAM_WEBHOOK_URL);
+    assert.deepEqual(webhooks[0].payload.allowed_updates,['message','callback_query']);
+    assert.equal(webhooks[0].payload.secret_token,values.TELEGRAM_WEBHOOK_SECRET);
+    assert.notEqual(webhooks[0].payload.drop_pending_updates,true);
+    assert.equal(calls.filter(call=>call.method==='setMyCommands').length,3);
+    assert.equal(calls[0].method,'setWebhook');service.onModuleDestroy();
+    calls.length=0;await new TelegramService({get:()=>undefined}).onModuleInit();assert.equal(calls.length,0);
+  } finally {Telegram.prototype.callApi=previous;}
+});
+
+test('a Telegram setup timeout never crashes API initialization or logs a credential-bearing URL',async()=>{
+  const previous=Telegram.prototype.callApi,calls=[],warnings=[];
+  const values={TELEGRAM_BOT_TOKEN:'private-fixture-token',TELEGRAM_WEBHOOK_URL:'https://fixture.example/telegram/webhook',TELEGRAM_WEBHOOK_SECRET:'fixture-secret'};
+  const service=new TelegramService({get:key=>values[key]});service.logger.warn=message=>warnings.push(message);
+  Telegram.prototype.callApi=async(method)=>{calls.push(method);throw Error('ETIMEDOUT https://api.telegram.org/botprivate-fixture-token/setWebhook');};
+  try {
+    await assert.doesNotReject(service.onModuleInit());assert.deepEqual(calls,['setWebhook']);
+    assert.ok(service.setupRetry);assert.ok(service.bot);assert.ok(service.isValidSecret('fixture-secret'));
+    assert.doesNotMatch(warnings.join(' '),/private-fixture-token|fixture-secret|api.telegram.org/);
+    service.onModuleDestroy();assert.equal(service.setupRetry,undefined);
+    await service.setupTelegram();assert.equal(calls.length,1);
+  } finally {service.onModuleDestroy();Telegram.prototype.callApi=previous;}
+});
+
+test('optional menu failure preserves webhook registration and a retry can restore all supported menus',async()=>{
+  const previous=Telegram.prototype.callApi,calls=[];let failMenu=true;
+  const values={TELEGRAM_BOT_TOKEN:'fixture-token',TELEGRAM_WEBHOOK_URL:'https://fixture.example/telegram/webhook',TELEGRAM_WEBHOOK_SECRET:'fixture-secret'};
+  const service=new TelegramService({get:key=>values[key]});service.logger.warn=()=>{};
+  Telegram.prototype.callApi=async(method,payload)=>{calls.push({method,payload});if(method==='setMyCommands'&&failMenu)throw Error('Network unavailable');return true;};
+  try {
+    await service.onModuleInit();assert.equal(calls[0].method,'setWebhook');assert.ok(service.setupRetry);
+    failMenu=false;await service.setupTelegram();assert.equal(service.setupRetry,undefined);
+    const menus=calls.filter(call=>call.method==='setMyCommands').slice(-3);
+    assert.deepEqual(menus.map(call=>call.payload.language_code??'uk'),['uk','pl','en']);
+    assert.ok(calls.filter(call=>call.method==='setWebhook').every(call=>call.payload.drop_pending_updates===false));
+  } finally {service.onModuleDestroy();Telegram.prototype.callApi=previous;}
+});
+
+test('Telegram setup retries are bounded and leave no timer after exhaustion',async()=>{
+  const previous=Telegram.prototype.callApi;let calls=0;
+  const values={TELEGRAM_BOT_TOKEN:'fixture-token',TELEGRAM_WEBHOOK_URL:'https://fixture.example/telegram/webhook',TELEGRAM_WEBHOOK_SECRET:'fixture-secret'};
+  const service=new TelegramService({get:key=>values[key]});service.logger.warn=()=>{};
+  Telegram.prototype.callApi=async()=>{calls++;throw Error('Unavailable');};
+  try {
+    await service.onModuleInit();await service.setupTelegram();await service.setupTelegram();await service.setupTelegram();
+    assert.equal(calls,3);assert.equal(service.setupRetry,undefined);
+  } finally {service.onModuleDestroy();Telegram.prototype.callApi=previous;}
+});
+
+test('Telegraf HTTP transport accepts and respects the native Node abort signal',async()=>{
+  const {createServer}=require('node:http');
+  const server=createServer((_request,_response)=>{});
+  try {
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const telegram=new Telegram('fixture-only',{apiRoot:`http://127.0.0.1:${server.address().port}`});
+    await assert.rejects(originalCallApi.call(telegram,'getMe',{}, {signal:AbortSignal.timeout(50)}),{name:'AbortError'});
+  } finally {server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
 function car(id = CAR) {
   return { id, ownerId: OWNER, make: id === CAR ? 'Nissan' : 'Toyota', model: 'Test', nickname: null, isArchived: false, vin: 'WBA12345678901234', country: 'PL' };
 }

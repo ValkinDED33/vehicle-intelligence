@@ -82,7 +82,7 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
       ]),
     ),
     fuelType: mapFuelType(
-      firstString(decode, attributes, vehicle, ["Fuel Type", "Fuel", "Fuel System", "fuel"], 64) ??
+      firstString(decode, attributes, vehicle, ["Fuel Type - Primary", "Fuel Type", "Fuel", "Fuel System", "fuel"], 64) ??
         engineType,
     ),
     transmissionType: mapTransmissionType(
@@ -95,8 +95,30 @@ export function mapVincarioResponse(payload: UnknownRecord): VinDecodeResult {
     driveType: mapDriveType(
       firstString(decode, attributes, vehicle, ["Drive", "Drive Type", "Drivetrain", "Driven Wheels"], 64),
     ),
-    rawPayload: payload,
+    bodyType: mapBodyType(firstString(decode, attributes, vehicle, ["Body", "Body Type", "Body Style"], 64)),
+    exteriorColor: firstString(decode, attributes, vehicle, ["Exterior Color", "Exterior Colour", "Color", "Colour"], 120),
+    rawPayload: publicVincarioPayload(payload),
   };
+}
+
+export function publicVincarioPayload(payload: UnknownRecord): UnknownRecord {
+  // Provider billing/account data is not vehicle data, including in older saved reports.
+  return Object.fromEntries(["decode", "attributes", "vehicle"].filter(key => payload[key] !== undefined).map(key => [key, payload[key]]));
+}
+
+function mapBodyType(value?: string): VinDecodeResult["bodyType"] {
+  const body = value?.toLowerCase().trim();
+  if (!body) return undefined;
+  if (/wagon|estate|combi/.test(body)) return "wagon";
+  if (/hatchback/.test(body)) return "hatchback";
+  if (/sedan|saloon/.test(body)) return "sedan";
+  if (/convertible|cabriolet|roadster/.test(body)) return "convertible";
+  if (/coupe|coupé/.test(body)) return "coupe";
+  if (/pickup|pick-up/.test(body)) return "pickup";
+  if (/suv|sport utility|crossover/.test(body)) return "suv";
+  if (/mpv|minivan/.test(body)) return "mpv";
+  if (/van/.test(body)) return "van";
+  return undefined;
 }
 
 function getRecord(record: UnknownRecord, key: string): UnknownRecord {

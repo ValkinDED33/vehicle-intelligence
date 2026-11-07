@@ -176,15 +176,22 @@ describe('one VIN trial shared across website, Telegram, cars and providers',()=
         await storage.saveStandalone(OWNER,VIN,{provider:'fixture',make:'Receipt fixture',rawPayload:{secretRaw:'RAW-MUST-NOT-ENTER-PROMPT'}});
         await storage.saveStandalone(OTHER,VIN,{provider:'fixture',make:'FOREIGN-RECEIPT'});
       }
-      const input={ownerId:OWNER,language:'en',message:'Can I check another VIN?',history:[{role:'assistant',content:'Unlimited free VIN checks are available.'}]};
+      const input={ownerId:OWNER,language:'en',message:'Explain the context you received.',history:[{role:'assistant',content:'Unlimited free VIN checks are available.'}]};
       await assistant.chat(input);await assistant.planTurn(input);
       for(const request of requests.filter(row=>row.systemPrompt.startsWith('You are CARA')).slice(-2)){
         assert.equal(JSON.parse(request.userPrompt).vinAccess.state,expected);
-        assert.equal(JSON.parse(request.userPrompt).savedVinChecks.length,expected==='available'?0:1);
+        assert.equal(JSON.parse(request.userPrompt).standaloneVinChecks.length,expected==='available'?0:1);
         assert.doesNotMatch(request.userPrompt,/FOREIGN-RECEIPT|RAW-MUST-NOT-ENTER-PROMPT/);
         assert.match(request.systemPrompt,/Payments are not enabled/);assert.match(request.systemPrompt,/AI questions do not consume/);
       }
     }
     assert.equal(calls,0);
+  });
+  test('old cached Vincario results are normalized and billing is removed from vehicle and standalone read endpoints without new lookups',async()=>{
+    const data={provider:'vincario',rawPayload:{balance:'PRIVATE-BALANCE',price:'PRIVATE-PRICE',decode:[{label:'Fuel Type - Primary',value:'Gasoline'},{label:'Body',value:'Wagon'},{label:'Engine Power (kW)',value:55}]}};
+    const storage=new VinDbService(db);await storage.saveDecodeResult({vehicleId:CAR,vin:VIN,result:data});await storage.saveStandalone(OWNER,VIN,data);
+    const latest=await vin.getLatestDecode(OWNER,CAR);assert.equal(latest.fuelType,'petrol');assert.equal(latest.bodyType,'wagon');assert.equal(latest.powerKw,55);
+    for(const value of [latest,await vin.getDecodeHistory(OWNER,CAR),await vin.getStandaloneChecks(OWNER)])assert.doesNotMatch(JSON.stringify(value),/PRIVATE-/);
+    assert.equal((await access.status(OWNER)).freeRemaining,1);assert.equal(calls,0);
   });
 });

@@ -2,11 +2,13 @@ import { HttpService } from "@nestjs/axios";
 import {
   BadGatewayException,
   Injectable,
+  HttpException,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash } from "crypto";
 import { firstValueFrom } from "rxjs";
+import { isAxiosError } from "axios";
 
 import {
   type VinDecodeResult,
@@ -51,13 +53,22 @@ export class VincarioVinProvider implements VinProvider {
         }),
       );
 
-      return mapVincarioResponse(response.data);
+      const payload = response.data;
+      if (!payload || typeof payload !== "object" || payload.error || !["decode", "attributes", "vehicle"].some(key => {
+        const section = payload[key];
+        return section && typeof section === "object" && Object.keys(section).length > 0;
+      })) throw new BadGatewayException({ code: "VINCARIO_INVALID_RESPONSE", message: "Vincario returned no vehicle data" });
+      return mapVincarioResponse(payload);
     } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (isAxiosError(error) && [401, 403, 429].includes(error.response?.status ?? 0)) {
+        throw new ServiceUnavailableException({
+          code: error.response?.status === 429 ? "VIN_PROVIDER_RATE_LIMITED" : "VIN_PROVIDER_AUTH_FAILED",
+          message: "Vincario rejected the request",
+        });
+      }
       throw new BadGatewayException({
-        message:
-          error instanceof Error
-            ? `Vincario request failed: ${error.message}`
-            : "Vincario request failed",
+        message: "Vincario request failed",
         code: "VINCARIO_REQUEST_FAILED",
       });
     }

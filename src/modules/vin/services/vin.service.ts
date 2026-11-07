@@ -12,6 +12,9 @@ import { type VinDecode } from "../schemas/vin-decode.schema";
 import { VinDbService } from "../vin.db.service";
 import { VinAccessService } from "../../vin-access/vin-access.service";
 import { VehicleDatabasesNoRecordsError } from "../../../common/vehicle-databases/vehicle-databases-client.service";
+import { mapVincarioResponse } from "../providers/vincario/vincario.mapper";
+
+type ResolvedVinDecode = VinDecode & Pick<Partial<VinDecodeResult>, "powerKw" | "powerHp" | "bodyType" | "exteriorColor">;
 
 @Injectable()
 export class VinService {
@@ -27,7 +30,13 @@ export class VinService {
 
   ensureAccess(ownerId: string) { return this.access.ensureAvailable(ownerId); }
   getAccessStatus(ownerId: string) { return this.access.status(ownerId); }
-  getStandaloneChecks(ownerId: string) { return this.vinDbService.listStandalone(ownerId); }
+  async getStandaloneChecks(ownerId: string) {
+    return (await this.vinDbService.listStandalone(ownerId)).map(check => {
+      if (check.result.provider !== "vincario") return check;
+      const mapped = mapVincarioResponse(check.result.rawPayload ?? {});
+      return { ...check, result: { ...mapped, ...check.result, fuelType: check.result.fuelType ?? mapped.fuelType, rawPayload: mapped.rawPayload } };
+    });
+  }
 
   async decodeVehicleVin(
     ownerId: string,
@@ -83,19 +92,26 @@ export class VinService {
   async getLatestDecode(
     ownerId: string,
     vehicleId: string,
-  ): Promise<VinDecode | null> {
+  ): Promise<ResolvedVinDecode | null> {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
-    return this.vinDbService.findLatestForVehicle(vehicleId);
+    const row = await this.vinDbService.findLatestForVehicle(vehicleId);
+    return row ? this.publicDecode(row) : null;
   }
 
   async getDecodeHistory(
     ownerId: string,
     vehicleId: string,
-  ): Promise<VinDecode[]> {
+  ): Promise<ResolvedVinDecode[]> {
     await this.garageService.getVehicle(ownerId, vehicleId);
 
-    return this.vinDbService.listForVehicle(vehicleId);
+    return (await this.vinDbService.listForVehicle(vehicleId)).map(row => this.publicDecode(row));
+  }
+
+  private publicDecode(row: VinDecode): ResolvedVinDecode {
+    if (row.provider !== "vincario") return row;
+    const mapped = mapVincarioResponse(row.rawPayload ?? {});
+    return { ...mapped, ...row, fuelType: row.fuelType ?? mapped.fuelType ?? null, rawPayload: mapped.rawPayload ?? null };
   }
 
   private async updateVehicleIdentityFromDecode(
@@ -143,6 +159,8 @@ export class VinService {
       fuelType: result.fuelType,
       transmissionType: result.transmissionType,
       driveType: result.driveType,
+      bodyType: result.bodyType,
+      exteriorColor: result.exteriorColor,
     };
 
     const hasProfileData = Object.values(profileData).some(

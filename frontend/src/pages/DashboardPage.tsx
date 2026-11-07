@@ -49,7 +49,7 @@ function Dashboard(props:PageProps){
    </section>}
    <div className="top-grid">
     <section className="hero">
-     <VehicleTransformer hero vehicle={vehicle} profile={data.profile}/>
+     <VehicleTransformer hero vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/>
      <div className="hero-copy"><h1>{t("Вітаю,")} {userName}! <span className="wave">👋</span></h1><p>{t("Я — твій автомобільний AI-помічник.")}<br/>{t("Я тут, щоб дбати про твій")} {vehicleTitle(vehicle)}<br/>{t("і робити кожну поїздку кращою.")}</p></div>
      <div className="weather"><Sun size={28}/><div><b>{latest?fmtNumber(latest.odometerKm):'—'} <small>{t("км")}</small></b><small>{t("одометр")}</small></div><small className="date">{fmtDate(new Date().toISOString())}<br/>{new Date().toLocaleTimeString(getUiLocale(),{hour:'2-digit',minute:'2-digit'})}</small></div>
      <div className="hero-bubble">{data.loading?t("Синхронізую дані..."):incomplete?t("Дані завантажено не повністю"):anomalies.length?t("Знайдено аномалії пробігу: {0}. Перевір розділ «Пробіг».", { 0: anomalies.length }):t("Дані синхронізовано.")}</div>
@@ -135,7 +135,7 @@ function Dashboard(props:PageProps){
       :recentEvents.length?<div className="events">{recentEvents.map(e=><EventCard key={e.id} event={e}/>)}</div>
       :<div className="state-note"><History size={15}/> {t("Подій поки немає — вони з’являться із записів пробігу, витрат і зовнішніх звітів.")}</div>}
     </section>
-    <section className="ai-banner"><VehicleTransformer className="banner-bot" vehicle={vehicle} profile={data.profile}/><div><h3>{t("Хочете, я перевірю ваш автомобіль і підкажу, на що звернути увагу?")}</h3><button className="primary" onClick={openAi}>{t("ПЕРЕВІРИТИ АВТО")} <ArrowRight size={17}/></button></div></section>
+    <section className="ai-banner"><VehicleTransformer className="banner-bot" vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/><div><h3>{t("Хочете, я перевірю ваш автомобіль і підкажу, на що звернути увагу?")}</h3><button className="primary" onClick={openAi}>{t("ПЕРЕВІРИТИ АВТО")} <ArrowRight size={17}/></button></div></section>
    </div>
    <button className="quick-add" title={t("Додати пробіг")} onClick={()=>navigate('Пробіг','chime')}><Plus size={24}/></button>
   </div>;
