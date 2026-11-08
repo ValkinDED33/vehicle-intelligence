@@ -146,7 +146,7 @@ export function Shell(){
    <aside className={'sidebar '+(mobile?'open':'')}>
     <div className="brand"><span className="brand-mark">C</span><div><strong>CARA</strong><small>AI CAR ASSISTANT</small></div><button className="close-menu" onClick={()=>setMobile(false)}><X size={20}/></button></div>
     <button className="vehicle-picker" onClick={()=>navigate('Гараж')}>
-     <img className="vehicle-thumb" src="/car.webp" alt=""/>
+     <VehicleTransformer car className="vehicle-thumb" vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/>
      <span className="vehicle-copy">
       <b>{currentVehicleTitle}</b>
       <small>{currentVehicleLine}</small>

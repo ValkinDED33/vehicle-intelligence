@@ -1,35 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { Bot, CarFront } from "lucide-react";
 import type { Vehicle, VehicleProfile, VinDecode } from "../api";
 import { t } from "../i18n";
 import { transformerAppearance } from "../utils/transformerAppearance";
-import { profileDisplayFacts } from "../utils/profileDisplayFacts";
 
-export function VehicleTransformer({ vehicle, profile, decode, hero = false, className = "" }: {
-  vehicle: Vehicle | null; profile?: VehicleProfile | null; decode?: VinDecode | null; hero?: boolean; className?: string;
+export function VehicleTransformer({ vehicle, profile, decode, hero = false, car = false, className = "" }: {
+  vehicle: Vehicle | null; profile?: VehicleProfile | null; decode?: VinDecode | null;
+  hero?: boolean; car?: boolean; className?: string;
 }) {
-  const { bodyType, exteriorColor } = profileDisplayFacts(vehicle, profile, decode);
-  const appearance = useMemo(() => transformerAppearance(vehicle, { bodyType, exteriorColor }), [vehicle?.id, vehicle?.make, vehicle?.model, vehicle?.nickname, bodyType, exteriorColor]);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const [portrait, setPortrait] = useState<{ key: string; url: string } | null>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false, dispose: (() => void) | undefined;
-    setReady(false);
-    void import("./transformerScene").then(async scene => {
-      if (cancelled) return;
-      if (hero && canvas.current) {
-        dispose = scene.mountTransformer(canvas.current, appearance);
-        setReady(true);
-      } else {
-        const url = await scene.transformerPortrait(appearance);
-        if (!cancelled) { setPortrait({ key: appearance.key, url }); setReady(true); }
-      }
-    }).catch(() => { if (!cancelled) setReady(false); });
-    return () => { cancelled = true; dispose?.(); };
-  }, [appearance.key, hero]);
-  return <span className={`vehicle-transformer ${hero ? "transformer-hero" : "transformer-portrait"} ${className}`} data-appearance={appearance.key} data-ready={ready} role="img" aria-label={t("Трансформер авто: {0}", { 0: appearance.label })}>
-    {hero && <canvas key={appearance.key} ref={canvas} aria-hidden="true"/>}
-    {!hero && portrait?.key === appearance.key && <img src={portrait.url} alt=""/>}
-    {!ready && <span className="transformer-fallback" style={{ color: appearance.accent, borderColor: appearance.paint }}><b>{appearance.label.slice(0, 2).toUpperCase()}</b><small>{appearance.code.slice(-4)}</small></span>}
+  const appearance = transformerAppearance(vehicle, profile, decode);
+  const { artwork } = appearance;
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = artwork?.src;
+  const ready = !!src && loaded === src && failed !== src;
+  const crop = artwork && (car ? artwork.carCrop : artwork.robotCrop);
+  const cropStyle: CSSProperties | undefined = !hero && crop ? {
+    width: `${1536 / crop[2] * 100}%`, height: `${1024 / crop[3] * 100}%`,
+    left: `${-crop[0] / crop[2] * 100}%`, top: `${-crop[1] / crop[3] * 100}%`,
+  } : undefined;
+  const status = !artwork ? t("Образ моделі ще не готовий") : failed === src ? t("Не вдалося завантажити образ")
+    : appearance.exteriorColor ? t("Концепт · колір не відтворено") : t("Концепт · колір не вказано");
+  return <span className={`vehicle-transformer ${hero ? "transformer-hero" : car ? "vehicle-artwork" : "transformer-portrait"} ${className}`}
+    data-appearance={appearance.key} data-artwork={artwork?.id ?? "unavailable"} data-ready={ready}
+    role="img" aria-label={`${car ? appearance.label : t("Трансформер авто: {0}", { 0: appearance.label })}. ${status}`} title={status}>
+    {src && failed !== src && <img key={src} src={src} alt="" style={cropStyle} className={hero ? "transformer-scene" : "transformer-crop"}
+      fetchPriority={hero ? "high" : "auto"} decoding="async" onLoad={() => setLoaded(src)} onError={() => setFailed(src)}/>}
+    {!ready && <span className="transformer-fallback">{car ? <CarFront aria-hidden="true"/> : <Bot aria-hidden="true"/>}</span>}
+    {hero && <span className="artwork-status">{status}</span>}
   </span>;
 }

@@ -4,5 +4,5 @@
   "installCommand": "echo skipped-root-install",
   "buildCommand": "npm --prefix frontend ci --no-audit --no-fund && npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
-  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!assets/|vehicle-artwork/).*)", "destination": "/index.html" }]
 }

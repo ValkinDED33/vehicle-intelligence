@@ -1,5 +1,9 @@
 // Source keys are Ukrainian; values are Polish and English.
 export const translations: Record<string, readonly [string, string]> = {
+  "Концепт · колір не вказано": ["Koncepcja · kolor niepodany", "Concept · color not specified"],
+  "Концепт · колір не відтворено": ["Koncepcja · kolor nieodwzorowany", "Concept · color not reproduced"],
+  "Образ моделі ще не готовий": ["Wizualizacja modelu nie jest jeszcze gotowa", "Model artwork not yet available"],
+  "Не вдалося завантажити образ": ["Nie udało się wczytać wizualizacji", "Artwork could not be loaded"],
   "VIN-перевірки з Telegram": ["Sprawdzenia VIN z Telegrama", "VIN checks from Telegram"],
   "VIN-провайдер зараз недоступний. Безкоштовну перевірку не використано. Зверніться до підтримки.": ["Dostawca VIN jest obecnie niedostępny. Bezpłatne sprawdzenie nie zostało wykorzystane. Skontaktuj się z pomocą techniczną.", "The VIN provider is currently unavailable. Your free check has not been used. Contact support."],
   "Трансформер авто: {0}": ["Transformer auta: {0}", "Vehicle transformer: {0}"],

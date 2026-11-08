@@ -11,22 +11,51 @@ test('local frontend forwards VIN eligibility and saved checks to the backend in
   const target='http://127.0.0.1:12345';
   const config=load('frontend/vite.config.ts',{vite:{defineConfig:value=>value}},{process:{env:{VITE_PROXY_TARGET:target}}}).default;
   assert.equal(config.server.proxy['/vin-access'].target,target);assert.equal(config.server.proxy['/vin'].target,target);
+  const {VEHICLE_ARTWORK}=artworkModule(),rewrites=JSON.parse(fs.readFileSync('vercel.json','utf8')).rewrites;
+  for(const {src} of VEHICLE_ARTWORK){
+    assert.ok(!Object.keys(config.server.proxy).some(prefix=>src.startsWith(prefix)),`Artwork must not hit the API proxy: ${src}`);
+    assert.ok(!rewrites.some(rule=>new RegExp('^'+rule.source+'$').test(src)),`Artwork must not become SPA HTML: ${src}`);
+  }
 });
 
-test('each car has a stable independent transformer and confirmed body and paint affect its appearance',()=>{
-  const {transformerAppearance}=load('frontend/src/utils/transformerAppearance.ts');
-  const a={id:'11111111-1111-4111-8111-111111111111',make:'Nissan',model:'Qashqai'};
-  const b={...a,id:'22222222-2222-4222-8222-222222222222'};
-  const first=transformerAppearance(a,{bodyType:'suv',exteriorColor:'white'});
-  assert.deepEqual(transformerAppearance({...a},{bodyType:'suv',exteriorColor:'white'}),first);
-  assert.equal(first.paint,'#e3e9ed');assert.equal(first.frame,'utility');
-  assert.notEqual(transformerAppearance(b,{bodyType:'suv',exteriorColor:'white'}).key,first.key);
-  const updated=transformerAppearance(a,{bodyType:'coupe',exteriorColor:'czerwony'});
-  assert.equal(updated.frame,'sport');assert.equal(updated.paint,'#b62c39');assert.notEqual(updated.key,first.key);assert.equal(updated.code,first.code);
-  for(const color of ['сріблястий','srebrny','silver'])assert.equal(transformerAppearance(a,{exteriorColor:color}).paint,'#a7b8c1');
-  assert.equal(transformerAppearance(a,{bodyType:'mpv',exteriorColor:'#123456'}).frame,'van');
-  assert.equal(transformerAppearance(a,{exteriorColor:'#123456'}).paint,'#123456');
-  assert.ok(transformerAppearance(null).key);
+function artworkModule(){
+  return load('frontend/src/utils/transformerAppearance.ts',{'./profileDisplayFacts':load('frontend/src/utils/profileDisplayFacts.ts')});
+}
+
+test('model artwork is specific to the make, model and generation, never a random body or color',()=>{
+  const {transformerAppearance,VEHICLE_ARTWORK}=artworkModule();
+  const golf={id:'golf',vin:'WVWZZZ1KZ7B071116',make:'Volkswagen',model:'Golf',modelYear:'2007'};
+  const a=transformerAppearance(golf);
+  assert.equal(a.artwork.id,'volkswagen-golf-5');assert.equal(a.exteriorColor,null);
+  assert.deepEqual(a,transformerAppearance({...golf}));
+  assert.equal(transformerAppearance({...golf,id:'other-account-car'}).artwork.src,a.artwork.src);
+  assert.notEqual(transformerAppearance({...golf,id:'other-account-car'}).key,a.key);
+  assert.equal(transformerAppearance({...golf,make:'vw'}).artwork.id,a.artwork.id);
+  assert.equal(transformerAppearance({...golf,modelYear:'2022'}).artwork,null);
+  assert.equal(transformerAppearance({...golf,modelYear:null}).artwork,null);
+  assert.equal(transformerAppearance({...golf,make:'Toyota'}).artwork,null);
+  assert.equal(transformerAppearance({...golf,model:'Golf Plus'}).artwork,null);
+  assert.equal(transformerAppearance({...golf,make:'SKODA SITIGO',model:'Citigo',modelYear:'2016'}).label,'Škoda Citigo');
+  assert.equal(transformerAppearance({...golf,make:'Skoda',model:'Citigo',modelYear:'2016'}).artwork.id,'skoda-citigo-2012');
+  assert.equal(transformerAppearance({...golf,make:'Nissan',model:'Qashqai',modelYear:'2017'},{bodyType:'wagon'}).artwork.id,'nissan-qashqai-j11');
+  assert.equal(transformerAppearance({...golf,make:'Nissan',model:'Qashqai',modelYear:'2016'}).artwork,null);
+  const {vehicleTitle}=load('frontend/src/utils/formatters.ts',{'./../i18n':{t:x=>x},'../api':{},'../constants/dashboard':{}});
+  assert.equal(vehicleTitle({...golf,make:'SKODA SITIGO',model:'Citigo'}),'Škoda Citigo');
+  assert.equal(transformerAppearance(null).artwork,null);
+  assert.equal(new Set(VEHICLE_ARTWORK.map(x=>x.src)).size,3);
+  for(const item of VEHICLE_ARTWORK){assert.ok(fs.statSync('frontend/public'+item.src).size>100000);assert.equal(item.robotCrop[2],item.robotCrop[3]);assert.equal(item.carCrop[2]/item.carCrop[3],4/3);}
+});
+
+test('artwork uses only matching saved VIN and profile facts, and never treats a concept paint as VIN data',()=>{
+  const {transformerAppearance}=artworkModule();
+  const car={id:'a',vin:'ABC123',make:null,model:null,modelYear:null};
+  const decode={vehicleId:'a',vin:'abc123',make:'Volkswagen',model:'Golf',modelYear:2007,exteriorColor:'red'};
+  assert.equal(transformerAppearance(car,null,decode).artwork.id,'volkswagen-golf-5');
+  assert.equal(transformerAppearance(car,{vehicleId:'a',exteriorColor:'black'},decode).exteriorColor,'black');
+  assert.equal(transformerAppearance(car,{vehicleId:'b',exteriorColor:'black'},decode).exteriorColor,'red');
+  assert.equal(transformerAppearance(car,null,{...decode,vin:'OTHER'}).artwork,null);
+  assert.equal(transformerAppearance(car,null,{...decode,vehicleId:'b'}).artwork,null);
+  assert.equal(transformerAppearance(car,null,{...decode,exteriorColor:undefined}).exteriorColor,null);
 });
 test('unknown maintenance baselines cannot produce a reassuring score and currencies are not ranked by nominal amount',()=>{
   const {computeHealthScore,pickMainCurrency}=load('frontend/src/utils/calculations.ts',{'../api':{},'../constants/dashboard':{},'../i18n':{},'./formatters':{urgencyScore:value=>value==='normal'?100:50}});
@@ -47,4 +76,11 @@ test('saved VIN facts fill missing display fields without overriding a profile o
   assert.equal(profileDisplayFacts({vin:'JTD12345678901234'},null,decode).fuelType,null);
   assert.equal(profileDisplayFacts(null,null,decode).bodyType,null);
   assert.equal(profileDisplayFacts(vehicle,null,null).exteriorColor,null);
+});
+
+test('all persisted reminder delivery states have translated labels, including claimed jobs',()=>{
+  const {reminderDeliveryStatus}=load('frontend/src/utils/reminders.ts',{'../api':{},'../i18n':{t:value=>'translated:'+value}});
+  for(const status of ['pending','claimed','sent','failed','uncertain','skipped','expired','cancelled'])assert.match(reminderDeliveryStatus(status),/^translated:/);
+  assert.equal(reminderDeliveryStatus('claimed'),reminderDeliveryStatus('sending'));
+  assert.equal(reminderDeliveryStatus('claimed'),'translated:Надсилання');
 });

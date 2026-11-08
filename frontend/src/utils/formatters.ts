@@ -36,6 +36,7 @@ export function humanizeType(type: string) {
 }
 
 export function vehicleTitle(v: Vehicle): string {
+  if (v.make?.trim().toUpperCase() === "SKODA SITIGO" && v.model?.trim().toLowerCase() === "citigo") return "Škoda Citigo";
   const parts = [v.make, v.model].filter(Boolean);
   if (parts.length) return parts.join(" ");
   if (v.nickname) return v.nickname;

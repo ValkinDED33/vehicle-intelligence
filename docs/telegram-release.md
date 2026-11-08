@@ -128,3 +128,55 @@ import dialog was opened, but no credentials were entered or uploaded by the
 agent. Importing and saving credentials is handed to the owner. Do not claim
 that the bot is enabled until the owner saves the environment, deployment
 completes and read-only webhook checks confirm message and callback updates.
+
+### Render Activation Completed: 2026-11-07
+
+The owner imported Telegram settings and deployed commit `8261dd6` as
+`dep-dbnmloe7bikc73cvql0g`. Render reported Live and startup logged a connected
+webhook. Read-only Telegram checks confirmed `callback_query` enabled, zero
+pending updates and no delivery error. An authenticated no-op update returned
+200; the same request without a secret returned 401. No chat message was sent.
+
+The owner then explicitly approved enabling automatic reminders. Before the
+change, PostgreSQL had zero pending/due/claimed deliveries and zero active
+Telegram-enabled maintenance rules. Only `REMINDERS_WORKER_ENABLED=true` was
+added; existing environment keys, bot credentials and VIN settings were preserved.
+
+The first worker deployment (`dep-dbnmophsrm7s739sogsg`) failed because an
+uncaught Telegram `setMyCommands` network error (`ETIMEDOUT`) aborted startup,
+not because of the worker setting. The preceding version remained Live. One
+retry of the same main commit succeeded as `dep-dbnmqqff3r2c7393e2b0`; no
+rollback, cache purge, Auto-Deploy change or second code version was involved.
+Post-deployment API checks confirmed `deliveryEnabled:true`, a used VIN trial
+and exactly one saved VIN result. Telegram readiness checks still pass. The
+test account remains unlinked, so real message receipt is not yet verified.
+
+The observed startup failure is fixed locally: register incoming updates before
+optional menus, bound each setup request to eight seconds, keep the API running
+on provider failure, retry setup at most three times with delay, cancel retry
+timers during shutdown and never rethrow/log credential-bearing transport errors.
+Tests include the actual Telegraf HTTP client's native abort handling against a
+local server. `npm test`: 136/136 passed. The owner explicitly deferred committing
+and pushing these fixes; production still runs `8261dd6` without this protection
+or the other pending local VIN/assistant changes.
+
+Remaining release checks: link the intended website account to Telegram, confirm
+a harmless proposed action using a real button, and receive a short-lived test
+reminder. The free Render service still sleeps; activation alone does not provide
+an always-awake scheduler or guarantee delivery while the process is asleep.
+
+### Follow-up Check: 2026-11-08
+
+A later external push deployed `8b88ade` as `dep-dbnmtfi9lscs73c7rleg`, superseding
+the earlier `8261dd6` checkpoint above. The bounded Telegram setup and saved VIN /
+assistant fixes are therefore no longer only local. The agent did not commit or
+push them. Reminder delivery is enabled; the read-only queue check was empty.
+The owner reports Telegram linked to the intended account, not the separate test
+account. A real confirmed action and receipt of a scheduled Telegram message are
+still not verified. No paid plan or external scheduler has been activated.
+
+Additional local dependency updates passed clean installation and `npm audit`
+with zero known vulnerabilities. The malformed compressed-body regression returns
+400 and leaves the HTTP server usable. Claimed reminder jobs display a translated
+sending state. After the vehicle artwork changes, `npm test` passes 139 tests.
+These newer local changes have not been pushed or deployed by the agent.

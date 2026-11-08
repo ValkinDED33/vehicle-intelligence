@@ -49,10 +49,12 @@ function Dashboard(props:PageProps){
    </section>}
    <div className="top-grid">
     <section className="hero">
+     <div className="hero-visual">
      <VehicleTransformer hero vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/>
      <div className="hero-copy"><h1>{t("Вітаю,")} {userName}! <span className="wave">👋</span></h1><p>{t("Я — твій автомобільний AI-помічник.")}<br/>{t("Я тут, щоб дбати про твій")} {vehicleTitle(vehicle)}<br/>{t("і робити кожну поїздку кращою.")}</p></div>
      <div className="weather"><Sun size={28}/><div><b>{latest?fmtNumber(latest.odometerKm):'—'} <small>{t("км")}</small></b><small>{t("одометр")}</small></div><small className="date">{fmtDate(new Date().toISOString())}<br/>{new Date().toLocaleTimeString(getUiLocale(),{hour:'2-digit',minute:'2-digit'})}</small></div>
      <div className="hero-bubble">{data.loading?t("Синхронізую дані..."):incomplete?t("Дані завантажено не повністю"):anomalies.length?t("Знайдено аномалії пробігу: {0}. Перевір розділ «Пробіг».", { 0: anomalies.length }):t("Дані синхронізовано.")}</div>
+     </div>
      <div className="status-cards">
       <div><span className="icon-disc green"><Gauge size={17}/></span><span>{t("ПРОБІГ")}<small>{t("останній запис")}</small><b>{latest?t("{0} км", { 0: fmtNumber(latest.odometerKm) }):t("немає даних")}</b></span></div>
       <div><span className="icon-disc orange"><Fuel size={17}/></span><span>{electric?t("ЗАРЯДЖЕНО"):t("ВИТРАТА")}<small>{electric?t("за місяць"):'full-to-full'}</small><b>{electric?(data.energyMonth?t("{0} кВт⋅год",{0:fmtNumber(data.energyMonth.energyKwh,1)}):'—'):consumption!==null?t("{0} л/100км", { 0: consumption.toFixed(1) }):'—'}</b></span></div>

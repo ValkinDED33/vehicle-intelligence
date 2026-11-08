@@ -4,7 +4,7 @@ import { remindersApi, type ReminderInput, type RemindersResponse, type Schedule
 import { getUiLocale, t } from "../i18n";
 import { Field, Spinner } from "./CommonComponents";
 import { errText } from "../utils/formatters";
-import { reminderCondition } from "../utils/reminders";
+import { reminderCondition, reminderDeliveryStatus } from "../utils/reminders";
 
 const initialForm = (): ReminderInput => ({ title: "", dueDate: "", remindAt: "09:00", timeZone: "Europe/Warsaw", offsets: [{ amount: 1, unit: "months" }, { amount: 1, unit: "weeks" }] });
 
@@ -61,7 +61,6 @@ export function ScheduledReminders({ vehicleId, onSettings, onService, onChanged
     } catch (err) { if (current === generation.current) setError(errText(err)); }
     finally { if (current === generation.current) setBusy(false); }
   };
-  const deliveryStatus = (status: string) => ({ pending: t("Заплановано"), sending: t("Надсилання"), sent: t("Надіслано"), failed: t("Не доставлено"), uncertain: t("Доставку не підтверджено"), skipped: t("Пропущено"), expired: t("Строк минув"), cancelled: t("Скасовано") }[status] ?? status);
   const unitName = (amount: number, unit: string) => new Intl.NumberFormat(getUiLocale(), { style: "unit", unit: unit.slice(0, -1), unitDisplay: "long" }).formatToParts(amount).find(part => part.type === "unit")?.value ?? unit;
   return <section className="scheduled-reminders">
     <h2><Bell size={18}/>{t("Нагадування в Telegram")}<button className="ghost-btn icon-btn" aria-label={t("Оновити")} title={t("Оновити")} disabled={busy} onClick={() => { void reload().catch(err => setError(errText(err))); }}><RefreshCw size={16}/></button></h2>
@@ -99,7 +98,7 @@ export function ScheduledReminders({ vehicleId, onSettings, onService, onChanged
           <button className="ghost-btn icon-btn" disabled={busy} title={t("Скасувати нагадування")} aria-label={t("Скасувати нагадування")} onClick={() => void close(reminder, "cancelled")}><X size={16}/></button>
         </div>}
       </div>
-      <ul className="reminder-deliveries">{reminder.deliveries.map(delivery => <li key={delivery.id}><span>{dateTime(delivery.scheduledAt, reminder.timeZone)} · {reminder.timeZone}</span><b>{deliveryStatus(delivery.status)}</b>{delivery.lastError === "bot_blocked" && <span className="auth-error">{t("Бот заблокований у Telegram.")}</span>}</li>)}</ul>
+      <ul className="reminder-deliveries">{reminder.deliveries.map(delivery => <li key={delivery.id}><span>{dateTime(delivery.scheduledAt, reminder.timeZone)} · {reminder.timeZone}</span><b>{reminderDeliveryStatus(delivery.status)}</b>{delivery.lastError === "bot_blocked" && <span className="auth-error">{t("Бот заблокований у Telegram.")}</span>}</li>)}</ul>
       {reminder.deliveries.some(delivery=>delivery.status==='uncertain')&&<p className="auth-error">{t("Доставку не підтверджено. Перевірте Telegram перед повторним надсиланням.")}</p>}
     </article>)}
     {result && !result.reminders.some(reminder => showClosed || reminder.status === "active") && <p className="state-note">{t("Активних нагадувань немає.")}</p>}

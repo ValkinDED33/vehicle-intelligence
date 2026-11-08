@@ -7,7 +7,8 @@ import { VinAccessNotice, vinConsent } from "../components/VinAccessNotice";
 import { EmptyState, Field, NoVehicle, Spinner } from "../components/CommonComponents";
 import { URGENCY_META } from "../constants/dashboard";
 import type { PageProps } from "../types/dashboard";
-import type { VinDecode } from "../api";
+import type { Vehicle, VehicleProfile, VinDecode } from "../api";
+import { VehicleTransformer } from "../components/VehicleTransformer";
 import { serviceProgress } from "../utils/calculations";
 import { profileDisplayFacts } from "../utils/profileDisplayFacts";
 import { errText, intervalLines, reminderDetail, urgencyScore, vehicleLine, vehicleTitle } from "../utils/formatters";
@@ -16,6 +17,23 @@ import { DocumentFileActions } from "../components/DocumentFileActions";
 import { ProfileHistory } from "../components/ProfileHistory";
 import { ReminderPreferenceFields, defaultReminderPreferences } from "../components/ReminderPreferenceFields";
 import type { MaintenanceRule } from "../api";
+
+function GarageVehicleImage({ vehicle, selected, profile, decode }: {
+  vehicle: Vehicle; selected: boolean; profile: VehicleProfile | null; decode: VinDecode | null;
+}) {
+  const [saved, setSaved] = useState<{ id: string; profile: VehicleProfile | null; decode: VinDecode | null } | null>(null);
+  useEffect(() => {
+    if (selected) return;
+    let cancelled = false;
+    // Read existing facts only. Never spend a VIN check to render a thumbnail.
+    void Promise.allSettled([profileApi.current(vehicle.id), vinApi.latest(vehicle.id)]).then(([p, d]) => {
+      if (!cancelled) setSaved({ id: vehicle.id, profile: p.status === "fulfilled" ? p.value : null, decode: d.status === "fulfilled" ? d.value : null });
+    });
+    return () => { cancelled = true; };
+  }, [vehicle.id, vehicle.vin, selected]);
+  const facts = selected ? { profile, decode } : saved?.id === vehicle.id ? saved : null;
+  return <VehicleTransformer car vehicle={vehicle} profile={facts?.profile} decode={facts?.decode}/>;
+}
 
 function GaragePage(props: PageProps) {
   const {vehicles,vehicle,selectVehicle,loadVehicles,vehiclesLoading,vehiclesError,navigate,data}=props;
@@ -29,7 +47,7 @@ function GaragePage(props: PageProps) {
    </div>
    <div className="vehicles-grid">
     {visible.map(v=><div key={v.id} className={'vehicle-card'+(vehicle?.id===v.id?' selected':'')}>
-      <img src="/car.webp" alt=""/>
+      <GarageVehicleImage vehicle={v} selected={vehicle?.id===v.id} profile={data.profile} decode={data.vinDecode}/>
       <div className="vehicle-card-body">
        <b>{vehicleTitle(v)}{v.isArchived&&<span className="badge">{t("АРХІВ")}</span>}</b>
        <small>{vehicleLine(v,v.id===vehicle?.id?data.latest:null)}</small>
