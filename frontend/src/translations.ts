@@ -1,5 +1,11 @@
 // Source keys are Ukrainian; values are Polish and English.
 export const translations: Record<string, readonly [string, string]> = {
+  "Персональний AI-образ": ["Indywidualna wizualizacja AI", "Personal AI artwork"],
+  "Створюємо образ автомобіля…": ["Tworzymy wizualizację samochodu…", "Creating your vehicle artwork…"],
+  "Результат генерації потребує перевірки": ["Wynik generowania wymaga sprawdzenia", "Generation result needs review"],
+  "Не вдалося створити образ": ["Nie udało się utworzyć wizualizacji", "Could not create artwork"],
+  "Ліміт генерацій вичерпано": ["Limit generowania został wykorzystany", "Generation limit reached"],
+  "Уточнити дані авто": ["Uzupełnij dane samochodu", "Complete vehicle details"],
   "Концепт · колір не вказано": ["Koncepcja · kolor niepodany", "Concept · color not specified"],
   "Концепт · колір не відтворено": ["Koncepcja · kolor nieodwzorowany", "Concept · color not reproduced"],
   "Образ моделі ще не готовий": ["Wizualizacja modelu nie jest jeszcze gotowa", "Model artwork not yet available"],

@@ -1,8 +1,11 @@
 # Telegram assistant release
 
-The bot uses the existing Groq credentials. Conversational requests use
-`GROQ_ASSISTANT_MODEL` (default: `openai/gpt-oss-120b`); document vision keeps
-the existing `GROQ_MODEL`. `GROQ_ASSISTANT_MAX_TOKENS` defaults to 2048.
+The bot uses the same centralized capability-aware gateway as the website.
+Configured and privacy-approved providers are tried in order: Google, Groq,
+optional NVIDIA, optional Cloudflare, OpenRouter. Groq is text-only; it never
+receives document images or PDF pages. `GROQ_ASSISTANT_MODEL` and its 2048-token
+default budget remain supported. See [AI routing](ai-gateway-routing.md) for
+exact models, privacy gates, quotas, fallback conditions and disabled retries.
 
 ## Before rollout
 
@@ -30,10 +33,12 @@ another website account. Linking refuses that situation to preserve both garages
 domain services, action validation, confirmation/cancellation, repeated updates,
 vehicle selection, clarification history, account links, and persisted state.
 
-`npm run test:telegram:live` calls Groq with fixture vehicle data and never
+`npm run test:telegram:live` calls the configured central gateway with fixture vehicle data and never
 writes to the user's garage or sends a Telegram chat message. Results are written
 to ignored `scratch/telegram-ai-check.json`. Optional `TELEGRAM_AI_DELAY_MS`
-spaces requests when the provider's token or request quota is low.
+spaces requests when the provider's token or request quota is low. This is an
+explicit live diagnostic, not part of `npm test`; it consumes provider quota
+and may be billed according to the account plan. Do not run it automatically.
 
 The language choices are Ukrainian (default), Polish, and English. The bot follows
 the account language; `/language uk`, `/language pl`, and `/language en` change it.

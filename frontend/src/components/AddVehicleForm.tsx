@@ -9,6 +9,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
   const [vin, setVin] = useState("");
   const [nickname, setNickname] = useState("");
   const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
   const [modelYear, setModelYear] = useState("");
   const [plate, setPlate] = useState("");
   const [country, setCountry] = useState("PL");
@@ -25,6 +26,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
         vin: vin.trim() ? vin.trim().toUpperCase() : undefined,
         nickname: nickname.trim() || undefined,
         make: make.trim() || undefined,
+        model: model.trim() || undefined,
         modelYear: modelYear.trim() || undefined,
         licensePlate: plate.trim() || undefined,
         country: country.trim() || undefined,
@@ -32,6 +34,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
       setVin("");
       setNickname("");
       setMake("");
+      setModel("");
       setModelYear("");
       setPlate("");
       onDone();
@@ -71,6 +74,7 @@ export function AddVehicleForm({ onDone }: { onDone: () => void }) {
             placeholder="Nissan"
           />
         </Field>
+        <Field label={t("Модель")}><input value={model} onChange={e=>setModel(e.target.value)} maxLength={120} placeholder="Qashqai"/></Field>
         <Field label={t("Рік випуску")}>
           <input
             value={modelYear}

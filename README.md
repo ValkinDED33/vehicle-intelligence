@@ -6,7 +6,7 @@
 
 ## Стек
 
-- **Backend:** NestJS 10, TypeScript (strict), Drizzle ORM + PostgreSQL (Neon), JWT + bcrypt, @nestjs/throttler, AWS S3-совместимое хранилище (Backblaze B2), pdfjs-dist + @napi-rs/canvas (рендер PDF), Groq (LLM/Vision) через AI Gateway.
+- **Backend:** NestJS 10, TypeScript (strict), Drizzle ORM + PostgreSQL (Neon), JWT + bcrypt, @nestjs/throttler, AWS S3-совместимое хранилище (Backblaze B2), pdfjs-dist + @napi-rs/canvas (рендер PDF), централизованный AI Gateway с маршрутизацией по возможностям провайдеров.
 - **Frontend:** Vite + React 19 (`frontend/`).
 
 ## Быстрый старт
@@ -52,7 +52,47 @@ npm run dev:web        # фронтенд на http://localhost:5173
 | `expenses` | расходы на автомобиль |
 | `documents` | загрузка документов в B2, OCR/AI-извлечение фактов |
 
-Общая инфраструктура — `src/common/`: `database`, `object-storage`, `ai-gateway` (Groq), `auth` (глобальный JwtModule), `health`, `guards`, `pipes`.
+Общая инфраструктура — `src/common/`: `database`, `object-storage`, `ai-gateway`, `auth` (глобальный JwtModule), `health`, `guards`, `pipes`.
+
+## AI Gateway
+
+Сайт, Telegram и анализ документов используют один путь:
+`AiGatewayService → AI_PROVIDER → AiProviderRouter → adapters`.
+Для текста/JSON порядок: Google → Groq → NVIDIA → Cloudflare → OpenRouter;
+для изображений и страниц PDF Groq пропускается. В цепочке участвуют только
+провайдеры с ключами и допусками по обработке данных. Без новых ключей текст
+продолжает работать через существующий Groq; без подходящего vision-провайдера
+возвращается явная ошибка, изображения не отправляются текстовой модели.
+
+Модели, переменные, бесплатные квоты и условия приватности описаны в
+[отчёте AI Gateway](docs/ai-gateway-routing.md) и `.env.example`.
+`GOOGLE_API_KEY` (или существующий `GEMINI_API_KEY`), `GROQ_API_KEY`,
+`NVIDIA_API_KEY`, `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`,
+`OPENROUTER_API_KEY` хранятся только на сервере. Новые ключи не обязательны
+для старта API. Не заменяйте свой `.env` целиком примером.
+
+Fallback срабатывает только при 408/429/500/502/503/504 и сетевой недоступности.
+Ошибки авторизации, модели, запроса, ответа и JSON-валидации не скрываются
+переключением. SDK-повторы отключены; на провайдер приходится одна попытка.
+Подтверждение действий, общая память, настройки помощника и напоминания не менялись.
+
+Free Tier не означает безлимитный или гарантированно бесплатный production:
+план аккаунта и условия обработки данных проверяются отдельно. Google/NVIDIA/
+Cloudflare/OpenRouter по умолчанию закрыты до проверки этих условий. В частности,
+контекст обычного чата тоже может содержать VIN и персональные данные.
+Счета, платные тарифы, кредиты и Unified Billing автоматически не подключаются.
+
+Прямого OpenAI-провайдера в этом gateway нет; `OPENAI_API_KEY` ему не нужен.
+Независимая незавершённая функция изображений автомобилей в рабочем дереве
+использует отдельный ключ и платную генерацию; она не входит в routing, должна
+оставаться выключенной без отдельного согласованного бюджета и не запускалась
+во время этой модернизации.
+
+После сборки `node scripts/check-ai-gateway-config.cjs` показывает активную
+цепочку без сетевых запросов. Флаг `--check-access` добавляет только GET-проверки
+доступа к моделям и метаданных аккаунтов, без генерации, личных документов или
+изменений production. Видимость модели не гарантирует свободную квоту и качество
+ответа. Подробности подготовки Render и проверок: [отчёт](docs/ai-gateway-routing.md).
 
 ## Внешние источники
 

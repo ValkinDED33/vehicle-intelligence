@@ -27,6 +27,11 @@ export class CreateVehicleDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  model?: string;
+
+  @IsOptional()
+  @IsString()
   @Matches(/^\d{4}$/, {
     message: "modelYear має бути чотиризначним роком",
   })

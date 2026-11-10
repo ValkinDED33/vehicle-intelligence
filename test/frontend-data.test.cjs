@@ -22,6 +22,28 @@ function artworkModule(){
   return load('frontend/src/utils/transformerAppearance.ts',{'./profileDisplayFacts':load('frontend/src/utils/profileDisplayFacts.ts')});
 }
 
+test('all avatars share one artwork request and reuse it without a new generation on remount',async()=>{
+  const {createArtworkStore}=load('frontend/src/utils/vehicleArtworkStore.ts',{'../api':{}},{setTimeout,clearTimeout});
+  let reads=0,writes=0,resolveRead,resolveWrite;
+  const read=new Promise(r=>resolveRead=r),write=new Promise(r=>resolveWrite=r);
+  const get=createArtworkStore({current:()=>{reads++;return read;},ensure:()=>{writes++;return write;}},()=> 'owner');
+  const a=get('owner:car:v1','owner','car'),b=get('owner:car:v1','owner','car');assert.equal(a,b);
+  const off=a.activate(()=>{}),off2=b.activate(()=>{});assert.equal(reads,1);
+  resolveRead({vehicleId:'car',state:'available',fingerprint:'f',missing:[]});await new Promise(setImmediate);assert.equal(writes,1);assert.equal(a.data.state,'generating');
+  resolveWrite({vehicleId:'car',state:'ready',fingerprint:'f',missing:[],imageDataUrl:'fixture'});await new Promise(setImmediate);assert.equal(b.data.state,'ready');off();off2();
+  const off3=a.activate(()=>{});assert.equal(reads,1);assert.equal(writes,1);off3();
+});
+
+test('a delayed artwork reply cannot cross accounts or substitute another car',async()=>{
+  const {createArtworkStore}=load('frontend/src/utils/vehicleArtworkStore.ts',{'../api':{}},{setTimeout,clearTimeout});
+  let owner='first',resolveRead,writes=0;
+  const get=createArtworkStore({current:()=>new Promise(r=>resolveRead=r),ensure:()=>{writes++;}},()=>owner);
+  const first=get('first:car','first','car'),off=first.activate(()=>{});owner='second';resolveRead({vehicleId:'car',state:'available',fingerprint:'f',missing:[]});await new Promise(setImmediate);
+  assert.equal(first.data,null);assert.equal(writes,0);off();
+  const second=get('second:car','second','car'),off2=second.activate(()=>{});resolveRead({vehicleId:'foreign',state:'ready',fingerprint:'f',missing:[],imageDataUrl:'foreign'});await new Promise(setImmediate);
+  assert.equal(second.data,null);assert.equal(writes,0);off2();
+});
+
 test('model artwork is specific to the make, model and generation, never a random body or color',()=>{
   const {transformerAppearance,VEHICLE_ARTWORK}=artworkModule();
   const golf={id:'golf',vin:'WVWZZZ1KZ7B071116',make:'Volkswagen',model:'Golf',modelYear:'2007'};

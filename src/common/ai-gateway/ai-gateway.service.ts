@@ -3,6 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import {
   AI_PROVIDER,
   type AiProvider,
+  type RoutableAiProvider,
   type AiTextRequest,
   type AiTextResponse,
   type AiVisionRequest,
@@ -26,5 +27,9 @@ export class AiGatewayService {
 
   getProviderName(): string {
     return this.provider.providerName;
+  }
+
+  isConfigured(): boolean {
+    return (this.provider as Partial<RoutableAiProvider>).configured === true;
   }
 }

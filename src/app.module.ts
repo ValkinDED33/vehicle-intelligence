@@ -25,6 +25,7 @@ import { VehicleProfileModule } from "./modules/vehicle-profile/vehicle-profile.
 import { VinModule } from "./modules/vin/vin.module";
 import { TelegramModule } from "./modules/telegram/telegram.module";
 import { RemindersModule } from "./modules/reminders/reminders.module";
+import { VehicleArtworkModule } from "./modules/vehicle-artwork/vehicle-artwork.module";
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { RemindersModule } from "./modules/reminders/reminders.module";
     AssistantModule,
     TelegramModule,
     RemindersModule,
+    VehicleArtworkModule,
   ],
   providers: [
     {

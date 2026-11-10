@@ -30,15 +30,15 @@ function normalize(value: string | null | undefined): string {
 export function transformerAppearance(vehicle: Vehicle | null, profile?: VehicleProfile | null, decode?: VinDecode | null) {
   const saved = decode?.vin && vehicle?.vin && normalize(decode.vin) === normalize(vehicle.vin)
     && (!decode.vehicleId || decode.vehicleId === vehicle.id) ? decode : null;
-  const make = normalize(saved?.make || vehicle?.make);
-  const model = normalize(saved?.model || vehicle?.model);
-  const year = Number(saved?.modelYear || vehicle?.modelYear);
+  const make = normalize(vehicle?.make || saved?.make);
+  const model = normalize(vehicle?.model || saved?.model);
+  const year = Number(vehicle?.modelYear || saved?.modelYear);
   const artwork = VEHICLE_ARTWORK.find(item => {
     // A legacy garage value combined the misspelled model with the make.
     const sameMake = make === normalize(item.make) || (item.make === "Škoda" && make === "skoda sitigo") || (item.make === "Volkswagen" && make === "vw");
     return sameMake && model === normalize(item.model) && Number.isInteger(year) && year >= item.years[0] && year <= item.years[1];
   }) ?? null;
-  const label = artwork ? `${artwork.make} ${artwork.model}` : [saved?.make || vehicle?.make, saved?.model || vehicle?.model].filter(Boolean).join(" ") || vehicle?.nickname || "CARA";
+  const label = artwork ? `${artwork.make} ${artwork.model}` : [vehicle?.make || saved?.make, vehicle?.model || saved?.model].filter(Boolean).join(" ") || vehicle?.nickname || "CARA";
   const { exteriorColor } = profileDisplayFacts(vehicle, profile, saved);
   return {
     key: `${artwork?.id ?? "unavailable"}:${vehicle?.id ?? "general"}:${exteriorColor?.trim() || "unknown"}`,

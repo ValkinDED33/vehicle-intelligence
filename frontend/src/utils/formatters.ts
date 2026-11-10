@@ -53,7 +53,9 @@ export function resolvedVehicleTitle(
   v: Vehicle,
   vinDecode: VinDecode | null,
 ): string {
-  const decodedParts = [vinDecode?.make, vinDecode?.model].filter(Boolean);
+  if(v.make&&v.model)return vehicleTitle(v);
+  const matches=vinDecode?.vin&&vinDecode.vin.toUpperCase()===v.vin?.toUpperCase();
+  const decodedParts = matches?[v.make||vinDecode?.make,v.model||vinDecode?.model].filter(Boolean):[];
   if (decodedParts.length) return decodedParts.join(" ");
   return vehicleTitle(v);
 }
@@ -64,7 +66,8 @@ export function resolvedVehicleLine(
   vinDecode: VinDecode | null,
   profile: VehicleProfile | null,
 ): string {
-  const year = vinDecode?.modelYear ? String(vinDecode.modelYear) : v.modelYear;
+  const matches=vinDecode?.vin&&vinDecode.vin.toUpperCase()===v.vin?.toUpperCase();
+  const year = v.modelYear || (matches&&vinDecode?.modelYear?String(vinDecode.modelYear):null);
   const trimOrPlate = profile?.trimLevel ?? v.licensePlate;
   const bits = [year, trimOrPlate].filter(Boolean) as string[];
   if (latest) bits.push(t("{0} км", { 0: fmtNumber(latest.odometerKm) }));

@@ -2,17 +2,27 @@ require('reflect-metadata');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const { GroqProvider } = require('../dist/common/ai-gateway/providers/groq.provider');
+const { GoogleProvider } = require('../dist/common/ai-gateway/providers/google.provider');
+const { OpenRouterProvider } = require('../dist/common/ai-gateway/providers/openrouter.provider');
+const { NvidiaProvider } = require('../dist/common/ai-gateway/providers/nvidia.provider');
+const { CloudflareProvider } = require('../dist/common/ai-gateway/providers/cloudflare.provider');
+const { AiProviderRouter } = require('../dist/common/ai-gateway/ai-provider-router');
+const { createAiProviderChain } = require('../dist/common/ai-gateway/ai-gateway.module');
 const { AiGatewayService } = require('../dist/common/ai-gateway/ai-gateway.service');
 const { AssistantService } = require('../dist/modules/assistant/assistant.service');
 const { TelegramActionsService } = require('../dist/modules/telegram/telegram-actions.service');
 const env = fs.existsSync('.env') ? require('dotenv').parse(fs.readFileSync('.env')) : {};
 const config = { get: key => process.env[key] || env[key] };
+const gateway = new AiGatewayService(new AiProviderRouter(createAiProviderChain(
+  new GoogleProvider(config), new GroqProvider(config), new OpenRouterProvider(config),
+  new NvidiaProvider(config), new CloudflareProvider(config),
+), config));
 const CAR = '11111111-1111-4111-8111-111111111111';
 const OWNER = '33333333-3333-4333-8333-333333333333';
 const vehicle = { id: CAR, make: 'Nissan', model: 'Qashqai', modelYear: '2017', country: 'PL' };
 const garage = { getVehicles: async () => [vehicle], getVehicle: async () => vehicle };
 const assistant = new AssistantService(
-  new AiGatewayService(new GroqProvider(config)), garage,
+  gateway, garage,
   { getCurrentProfile: async () => ({ engineCode: 'K9K', fuelType: 'diesel' }) },
   { getLatestReading: async () => ({ odometerKm: 120000, recordedAt: new Date('2026-10-20') }) },
   { getStatus: async () => [{ rule: { id: 'oil-rule', title: 'Заміна оливи', intervalKm: 10000 }, urgency: 'attention', kmRemaining: 1500, daysRemaining: 60 }] },
@@ -62,7 +72,7 @@ const cases = [
   const reportPath = process.env.TELEGRAM_AI_CASE
     ? `scratch/telegram-ai-check-${process.env.TELEGRAM_AI_CASE.replace(/[^a-z0-9]+/gi, '-').slice(0, 80)}.json`
     : 'scratch/telegram-ai-check.json';
-  fs.writeFileSync(reportPath, JSON.stringify({ checkedAt: new Date().toISOString(), model: config.get('GROQ_ASSISTANT_MODEL') || 'openai/gpt-oss-120b', results }, null, 2));
+  fs.writeFileSync(reportPath, JSON.stringify({ checkedAt: new Date().toISOString(), gateway: gateway.getProviderName(), results }, null, 2));
   console.log(`${results.filter(r => r.passed).length}/${results.length} live scenarios passed (fixture data only).`);
   if (results.some(r => !r.passed)) process.exitCode = 1;
 })().catch(error => { console.log('Live checks failed: ' + error.name); process.exitCode = 1; });

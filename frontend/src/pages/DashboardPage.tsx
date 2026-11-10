@@ -50,7 +50,7 @@ function Dashboard(props:PageProps){
    <div className="top-grid">
     <section className="hero">
      <div className="hero-visual">
-     <VehicleTransformer hero vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/>
+     <VehicleTransformer hero vehicle={vehicle} profile={data.profile} decode={data.vinDecode} onEditFacts={()=>navigate('Профіль авто')}/>
      <div className="hero-copy"><h1>{t("Вітаю,")} {userName}! <span className="wave">👋</span></h1><p>{t("Я — твій автомобільний AI-помічник.")}<br/>{t("Я тут, щоб дбати про твій")} {vehicleTitle(vehicle)}<br/>{t("і робити кожну поїздку кращою.")}</p></div>
      <div className="weather"><Sun size={28}/><div><b>{latest?fmtNumber(latest.odometerKm):'—'} <small>{t("км")}</small></b><small>{t("одометр")}</small></div><small className="date">{fmtDate(new Date().toISOString())}<br/>{new Date().toLocaleTimeString(getUiLocale(),{hour:'2-digit',minute:'2-digit'})}</small></div>
      <div className="hero-bubble">{data.loading?t("Синхронізую дані..."):incomplete?t("Дані завантажено не повністю"):anomalies.length?t("Знайдено аномалії пробігу: {0}. Перевір розділ «Пробіг».", { 0: anomalies.length }):t("Дані синхронізовано.")}</div>

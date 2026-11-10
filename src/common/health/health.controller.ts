@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { DatabaseService } from "../database/database.service";
 import { OBJECT_STORAGE } from "../object-storage/object-storage.constants";
 import { type ObjectStorageProvider } from "../object-storage/object-storage.types";
+import { AiGatewayService } from "../ai-gateway/ai-gateway.service";
 
 interface HealthCheckResponse {
   status: "ok" | "degraded";
@@ -25,6 +26,7 @@ export class HealthController {
 
     @Inject(OBJECT_STORAGE)
     private readonly objectStorage: ObjectStorageProvider,
+    private readonly aiGateway: AiGatewayService,
   ) {}
 
   @Get()
@@ -55,9 +57,7 @@ export class HealthController {
     }
 
     const aiGatewayStatus =
-      this.configService.get<string>("GROQ_API_KEY") &&
-      this.configService.get<string>("GROQ_MODEL") &&
-      this.configService.get<string>("GROQ_BASE_URL")
+      this.aiGateway.isConfigured()
         ? "configured"
         : "not_configured";
 

@@ -223,6 +223,7 @@ export interface CreateVehicleInput {
   vin?: string;
   nickname?: string;
   make?: string;
+  model?: string;
   modelYear?: string;
   licensePlate?: string;
   country?: string;
@@ -243,6 +244,20 @@ export const garageApi = {
 };
 
 // ---------- vehicle profile ----------
+
+export interface VehicleArtworkResponse {
+  vehicleId: string;
+  state: "disabled" | "missing_details" | "available" | "generating" | "ready" | "failed" | "uncertain" | "limit";
+  fingerprint: string | null;
+  missing: string[];
+  imageDataUrl?: string;
+  facts?: { make: string; model: string; year: number; color: string; body: string; doors: number | null };
+  framing?: { carCrop: number[]; robotCrop: number[] };
+}
+export const vehicleArtworkApi = {
+  current: (id: string) => request<VehicleArtworkResponse>(`/vehicles/${id}/artwork`),
+  ensure: (id: string, fingerprint: string) => request<VehicleArtworkResponse>(`/vehicles/${id}/artwork`, { method: "POST", body: JSON.stringify({ fingerprint }) }),
+};
 
 export interface VehicleProfile {
   id: string;

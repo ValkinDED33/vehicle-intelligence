@@ -111,6 +111,7 @@ header{height:78px;display:flex;align-items:center;gap:16px;position:relative}
 .transformer-hero .transformer-fallback{inset:30% 12% 20% 50%}
 .transformer-hero .transformer-fallback svg{width:80px;height:80px}
 .artwork-status{position:absolute;left:22px;bottom:10px;max-width:45%;font-size:10px;color:#bdcfdf;text-shadow:0 1px 4px #000}
+.artwork-edit{display:flex;align-items:center;gap:5px;font-size:11px;padding:4px 0;color:#7fddf2}
 .vin-access-note{display:flex;align-items:flex-start;gap:12px;padding:16px 0;margin:0 0 16px;border-bottom:1px solid #244453;color:#c4e1e9;font-size:13px;line-height:1.6}
 .vin-access-note>svg{flex:none;margin-top:3px;color:#5ee0b7}
 .vin-access-note p{margin:4px 0 0;color:#9aacb9}

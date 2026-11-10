@@ -73,6 +73,7 @@ function ProfilePage(props: PageProps) {
   const [savingProfile,setSavingProfile]=useState(false);
   const [message,setMessage]=useState<{kind:'ok'|'err',text:string}|null>(null);
   const [correction,setCorrection]=useState({
+    make:'',model:'',modelYear:'',
     fuelType:'',
     bodyType:'',
     doorCount:'',
@@ -84,6 +85,7 @@ function ProfilePage(props: PageProps) {
   const displayFacts=profileDisplayFacts(vehicle,profile,data.vinDecode);
   useEffect(()=>{
     setCorrection({
+      make:vehicle?.make??'',model:vehicle?.model??'',modelYear:vehicle?.modelYear??'',
       fuelType:profile?.fuelType??'',
       bodyType:profile?.bodyType??'',
       doorCount:profile?.doorCount!=null?String(profile.doorCount):'',
@@ -91,7 +93,7 @@ function ProfilePage(props: PageProps) {
       trimLevel:profile?.trimLevel??'',
       exteriorColor:profile?.exteriorColor??'',
     });
-  },[profile?.id]);
+  },[profile?.id,vehicle?.id,vehicle?.make,vehicle?.model,vehicle?.modelYear]);
   if(!vehicle)return <NoVehicle onGoGarage={()=>props.navigate('Гараж')}/>;
   const decode=async()=>{
     if(!vehicle.vin){setMessage({kind:'err',text:t("В автомобіля не вказано VIN — спочатку додайте його в гаражі.")});return}
@@ -108,6 +110,9 @@ function ProfilePage(props: PageProps) {
     e.preventDefault();
     setSavingProfile(true);setMessage(null);
     try{
+      if(correction.make.trim()!== (vehicle.make??'') || correction.model.trim()!== (vehicle.model??'') || correction.modelYear!== (vehicle.modelYear??'')){
+        await garageApi.update(vehicle.id,{make:emptyToUndefined(correction.make),model:emptyToUndefined(correction.model),modelYear:emptyToUndefined(correction.modelYear)});
+      }
       await profileApi.create(vehicle.id,{
         source:'manual-confirmed',
         fuelType:emptyToUndefined(correction.fuelType),
@@ -118,8 +123,7 @@ function ProfilePage(props: PageProps) {
         exteriorColor:emptyToUndefined(correction.exteriorColor),
       });
       setMessage({kind:'ok',text:t("Підтверджені дані збережено — тепер вони мають вищий пріоритет, ніж відповідь VIN-провайдера.")});
-      await afterMutate();
-    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSavingProfile(false)}
+    }catch(err){setMessage({kind:'err',text:errText(err)})}finally{setSavingProfile(false);void afterMutate()}
   };
   const rows:[string,string][]=profile?[
     [t("Двигун"),[profile.engineFamily,profile.engineCode].filter(Boolean).join(' ')||'—'],
@@ -154,6 +158,9 @@ function ProfilePage(props: PageProps) {
    <form className="panel profile-correction-panel" onSubmit={saveCorrection}>
     <div className="panel-heading"><h2>{t("ПІДТВЕРДЖЕНІ ДАНІ ВЛАСНИКА")}</h2><span className="tag green">{t("вище VIN-провайдера")}</span></div>
     <div className="correction-grid">
+     <Field label={t("Марка")}><input value={correction.make} onChange={e=>setCorrection({...correction,make:e.target.value})} maxLength={120}/></Field>
+     <Field label={t("Модель")}><input value={correction.model} onChange={e=>setCorrection({...correction,model:e.target.value})} maxLength={120}/></Field>
+     <Field label={t("Рік випуску")}><input value={correction.modelYear} onChange={e=>setCorrection({...correction,modelYear:e.target.value.replace(/\D/g,'').slice(0,4)})} inputMode="numeric" pattern="[0-9]{4}"/></Field>
      <Field label={t("Пальне")}><select value={correction.fuelType} onChange={e=>setCorrection({...correction,fuelType:e.target.value})}>
       <option value="">{t("Не вказано")}</option><option value="petrol">{t("Бензин")}</option><option value="diesel">{t("Дизель")}</option><option value="lpg">LPG</option><option value="cng">CNG</option><option value="hybrid">{t("Гібрид")}</option><option value="phev">PHEV</option><option value="electric">{t("Електро")}</option>
      </select></Field>

@@ -508,7 +508,7 @@ test('malformed model output is rejected instead of becoming an action', async (
 });
 test('assistant model selection preserves the configured model for other AI work', async () => {
   const calls = [];
-  const provider = new GroqProvider({ get: key => ({ GROQ_API_KEY: 'test-only', GROQ_MODEL: 'qwen/qwen3.8-27b', GROQ_BASE_URL: 'https://example.test' })[key] });
+  const provider = new GroqProvider({ get: key => ({ GROQ_API_KEY: 'test-only', GROQ_MODEL: 'qwen/qwen3.8-27b', GROQ_BASE_URL: 'https://api.groq.com/openai/v1' })[key] });
   provider.client = { chat: { completions: { create: async payload => {
     calls.push(payload); return { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }], model: payload.model };
   } } } };

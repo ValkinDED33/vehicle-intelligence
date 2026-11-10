@@ -169,6 +169,13 @@
       "when": 1793894400002,
       "tag": "0023_vin_check_access",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794096000000,
+      "tag": "0024_vehicle_artwork",
+      "breakpoints": true
     }
   ]
 }
