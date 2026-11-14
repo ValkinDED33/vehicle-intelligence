@@ -4,6 +4,7 @@ import { GarageService } from "../../garage/services/garage.service";
 import { MileageService } from "../../mileage/services/mileage.service";
 import { VehicleHistoryService } from "../../vehicle-history/services/vehicle-history.service";
 import { VehicleProfileService } from "../../vehicle-profile/services/vehicle-profile.service";
+import { fuelTypeProvenance } from "../../vehicle-profile/fuel-type-provenance";
 import { type VehicleExternalReport } from "../schemas/vehicle-external-report.schema";
 import { deterministicUuid } from "./deterministic-uuid";
 import {
@@ -203,7 +204,11 @@ export class SourceNormalizationService {
       );
     });
 
-    if (!isNewInformation) {
+    const source = `vdb:${reportType}`.slice(0, 32);
+    const hasNewFuelEvidence = profile.fuelType && !fuelTypeProvenance(current)?.observations?.some(
+      observation => observation.source === source && observation.value === profile.fuelType?.trim().toLowerCase(),
+    );
+    if (!isNewInformation && !hasNewFuelEvidence) {
       return false;
     }
 
@@ -211,7 +216,7 @@ export class SourceNormalizationService {
       ownerId,
       vehicleId,
       {
-        source: `vdb:${reportType}`.slice(0, 32),
+        source,
         ...fields,
       },
     );

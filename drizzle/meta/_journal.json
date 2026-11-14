@@ -176,6 +176,20 @@
       "when": 1794096000000,
       "tag": "0024_vehicle_artwork",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794614400000,
+      "tag": "0025_profile_fuel_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794614400001,
+      "tag": "0026_support",
+      "breakpoints": true
     }
   ]
 }

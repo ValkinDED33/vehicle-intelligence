@@ -4,19 +4,21 @@ import {
   ArrowRight,
   Bell,
   ChevronDown,
+  Headset,
   Menu,
   MessageSquare,
   Orbit,
   Search,
   RefreshCw,
   Send,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react";
-import { ApiError, assistantApi, garageApi, type UserLanguage, type Vehicle } from "../api";
+import { ApiError, assistantApi, garageApi, supportApi, type SupportAccess, type UserLanguage, type Vehicle } from "../api";
 import { useAuth } from "../auth";
 import { PageHeader } from "../components/CommonComponents";
 import { LanguagePicker } from "./LanguagePicker";
@@ -28,6 +30,9 @@ import { DashboardPage } from "../pages/DashboardPage";
 import { ExternalPages } from "../pages/ExternalPages";
 import { TrackingPages } from "../pages/TrackingPages";
 import { VehiclePages } from "../pages/VehiclePages";
+import { SupportPage, supportTicketFromUrl } from "../pages/SupportPage";
+import { FuelTypeNotice } from "./FuelTypeNotice";
+import { profileDisplayFacts } from "../utils/profileDisplayFacts";
 import { setSoundEnabled, sfx, soundEnabled } from "../sound";
 import type { PageProps } from "../types/dashboard";
 import { errText, resolvedVehicleLine, resolvedVehicleTitle } from "../utils/formatters";
@@ -60,13 +65,15 @@ const VEHICLE_KEY='cara.vehicleId';
 
 export function Shell(){
   const {user,logout,updateLanguage}=useAuth();
-  const [page,setPage]=useState('Головна'); const [mobile,setMobile]=useState(false); const [ai,setAi]=useState(false); const [query,setQuery]=useState(''); const [aiQuery,setAiQuery]=useState(''); const [aiBusy,setAiBusy]=useState(false); const [search,setSearch]=useState(false); const [soundOn,setSoundOn]=useState(soundEnabled());
+  const [page,setPage]=useState(()=>supportTicketFromUrl()?'Підтримка':'Головна'); const [mobile,setMobile]=useState(false); const [ai,setAi]=useState(false); const [query,setQuery]=useState(''); const [aiQuery,setAiQuery]=useState(''); const [aiBusy,setAiBusy]=useState(false); const [search,setSearch]=useState(false); const [soundOn,setSoundOn]=useState(soundEnabled());
   const [aiError,setAiError]=useState<string|null>(null);
   const [aiPendingMessage,setAiPendingMessage]=useState<string|null>(null);
   const [vehicles,setVehicles]=useState<Vehicle[]>([]);
   const [vehiclesLoading,setVehiclesLoading]=useState(true);
   const [vehiclesError,setVehiclesError]=useState<string|null>(null);
   const [vehicleId,setVehicleId]=useState<string|null>(()=>localStorage.getItem(VEHICLE_KEY));
+  const [supportAccess,setSupportAccess]=useState<SupportAccess>({isAdmin:false,notificationsConfigured:false});
+  useEffect(()=>{let active=true;void supportApi.access().then(access=>{if(!active)return;setSupportAccess(access);if(access.isAdmin&&supportTicketFromUrl())setPage(current=>current==='Підтримка'?'Адмін-панель':current)}).catch(()=>{});return()=>{active=false}},[user?.id]);
   const currentLanguage:UserLanguage=user?.language==="pl"||user?.language==="en"||user?.language==="uk"?user.language:"uk";
   const chatKey=JSON.stringify([user?.id,vehicleId,currentLanguage]);
   const {messages:aiMessages,epoch:memoryEpoch,loading:historyLoading,error:historyError,apply:applyAiHistory,refresh:refreshAiHistory,clear:clearAiHistory}=useAssistantHistory(chatKey,vehicleId,currentLanguage,ai);
@@ -154,7 +161,10 @@ export function Shell(){
      </span><ChevronDown size={15}/>
     </button>
     <nav>{sections.slice(0,11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{t(name)}</span>{name==='AI Асистент'&&<i>BETA</i>}</button>)}</nav>
-    <nav className="lower-nav">{sections.slice(11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{t(name)}</span></button>)}</nav>
+    <nav className="lower-nav">{sections.slice(11).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={18}/><span>{t(name)}</span></button>)}
+     <button className={page==='Підтримка'?'active':''} onClick={()=>navigate('Підтримка')}><Headset size={18}/><span>{t("Підтримка")}</span></button>
+     {supportAccess.isAdmin&&<button className={page==='Адмін-панель'?'active':''} onClick={()=>navigate('Адмін-панель')}><ShieldCheck size={18}/><span>{t("Адмін-панель")}</span></button>}
+    </nav>
     <button className="assistant-tile" onClick={openAi}>
      <VehicleTransformer className="bot-avatar" vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/>
      <span className="assistant-copy"><b>{t("AI Асистент")}</b><em>{t("Запитати CARA")}</em><svg className="waveform" viewBox="0 0 110 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 10,11 14,4 18,18 22,7 26,15 30,11 40,11 44,2 48,20 52,9 56,13 60,11 70,11 74,5 78,17 82,8 86,14 90,11 110,11"/></svg><small>{vehicle?currentVehicleTitle:t("Оберіть авто")}</small></span>
@@ -176,7 +186,7 @@ export function Shell(){
     </header>
     {languageError&&<div className="auth-error" role="alert">{languageError}</div>}
     {search&&<div className="search-panel"><Search size={18}/><input autoFocus placeholder={t("Знайти розділ...")} value={query} onChange={e=>setQuery(e.target.value)}/>{sections.filter(x=>t(x.name).toLowerCase().includes(query.toLowerCase())).slice(0,5).map(x=><button key={x.name} onClick={()=>navigate(x.name)}>{t(x.name)}</button>)}</div>}
-    {page==='Головна'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
+    {page==='Підтримка'||page==='Адмін-панель'&&supportAccess.isAdmin?<SupportPage key={`${user?.id}:${page}`} admin={page==='Адмін-панель'} vehicles={vehicles} vehicleId={vehicleId} notificationsConfigured={supportAccess.notificationsConfigured}/>:page==='Головна'?<DashboardPage {...pageProps}/>:<InnerPage page={page} {...pageProps}/>}
    </main>
    {mobile&&<div className="scrim" onClick={()=>setMobile(false)}/>}
    {ai&&<div className="modal-backdrop" onClick={closeAi}><div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" onClick={e=>e.stopPropagation()}>
@@ -184,6 +194,7 @@ export function Shell(){
     <VehicleTransformer className="dialog-bot" vehicle={vehicle} profile={data.profile} decode={data.vinDecode}/><h2 id="ai-dialog-title">{t("CARA AI Асистент")}</h2>
     <p>{t("Запитайте мене про автомобіль — я відповім з урахуванням поточного профілю, пробігу й нагадувань.")}</p>
     <div className="chat-vehicle">{vehicle?currentVehicleTitle:t("Загальні запитання")} · {currentLanguage.toUpperCase()}</div>
+    <FuelTypeNotice facts={profileDisplayFacts(vehicle,data.profile,data.vinDecode)} conflictsOnly/>
     <div className="chat-history-tools"><small>{t("Спільна історія сайту й Telegram: до 7 днів")}</small><div><button className="ghost-btn" title={t("Оновити")} aria-label={t("Оновити")} disabled={historyLoading||aiBusy} onClick={()=>void refreshAiHistory()}><RefreshCw size={16}/></button><button className="ghost-btn" title={t("Очистити історію чату")} aria-label={t("Очистити історію чату")} disabled={historyLoading||!aiMessages.length&&!aiBusy} onClick={()=>{if(!window.confirm(t("Очистити історію цього чату на сайті й у Telegram? Записи автомобіля залишаться.")))return;aiConversationId.current+=1;setAiBusy(false);setAiPendingMessage(null);setAiError(null);void clearAiHistory();}}><Trash2 size={16}/></button></div></div>
     {historyError&&<div className="auth-error" role="alert">{historyError} <button className="ghost-btn" onClick={()=>void refreshAiHistory()}>{t("Оновити")}</button></div>}
     <div className="ai-messages" ref={aiMessagesBox} role="log" aria-live="polite">{historyLoading&&!aiMessages.length?<div className="chat-placeholder">{t("Завантажуємо історію чату...")}</div>:aiMessages.length===0?<div className="chat-placeholder">{t("Вітаю,")} {userName}{t("! Чим допомогти")}{vehicle?t(" з {0}", { 0: currentVehicleTitle }):''}?</div>:aiMessages.map(m=><div key={m.id} className={'ai-message '+m.role}><small className="ai-message-source">{m.channel==='telegram'?'Telegram':t("Сайт")}</small><div className="ai-message-body">{m.content}</div></div>)}{aiPendingMessage&&<div className="ai-message user">{aiPendingMessage}</div>}{aiBusy&&<div className="ai-message assistant">{t("Думаю...")}</div>}</div>

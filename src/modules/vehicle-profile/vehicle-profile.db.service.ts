@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { resolveFuelTypeUpdate } from "./fuel-type-provenance";
 import {
   type NewVehicleProfile,
   type VehicleProfile,
@@ -87,16 +88,17 @@ export class VehicleProfileDbService {
         .limit(1);
 
       const nextVersion = (latestProfile?.version ?? 0) + 1;
+      const source = data.source !== undefined
+        ? (this.normalizeText(data.source) ?? "manual")
+        : (latestProfile?.source ?? "manual");
+      const fuel = resolveFuelTypeUpdate(latestProfile ?? null, { ...data, source });
 
       const newProfile: NewVehicleProfile = {
         vehicleId: data.vehicleId,
         version: nextVersion,
         isCurrent: true,
 
-        source:
-          data.source !== undefined
-            ? (this.normalizeText(data.source) ?? "manual")
-            : (latestProfile?.source ?? "manual"),
+        source,
 
         engineCode:
           data.engineCode !== undefined
@@ -113,10 +115,7 @@ export class VehicleProfileDbService {
             ? data.displacementCc
             : (latestProfile?.displacementCc ?? null),
 
-        fuelType:
-          data.fuelType !== undefined
-            ? this.normalizeLowercase(data.fuelType)
-            : (latestProfile?.fuelType ?? null),
+        ...fuel,
 
         aspirationType:
           data.aspirationType !== undefined

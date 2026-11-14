@@ -26,6 +26,41 @@ export interface VinAccessStatus {
 }
 export const vinAccessApi = { status: () => request<VinAccessStatus>("/vin-access") };
 
+export type SupportStatus = "open" | "in_progress" | "resolved";
+export type SupportCategory = "technical" | "report" | "account" | "other";
+export interface SupportTicket {
+  id: string;
+  subject: string;
+  category: SupportCategory;
+  status: SupportStatus;
+  vehicleId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner?: { id: string; email: string; displayName: string | null };
+  notification?: { status: "pending" | "sending" | "sent" | "failed"; attempts: number; lastError: string | null; nextAttemptAt: string | null } | null;
+}
+export interface SupportMessage {
+  id: string;
+  body: string;
+  authorRole: "user" | "admin";
+  createdAt: string;
+}
+export interface SupportDetail { ticket: SupportTicket; messages: SupportMessage[] }
+export interface SupportList { tickets: SupportTicket[]; total: number; page: number; pageSize: number }
+export interface SupportAccess { isAdmin: boolean; notificationsConfigured: boolean }
+export const supportApi = {
+  access: () => request<SupportAccess>("/support/access"),
+  list: (admin: boolean, filters: { status?: SupportStatus; q?: string; page?: number }) =>
+    request<SupportList>(`${admin ? "/admin" : ""}/support/tickets${qs({ ...filters, pageSize: 20 })}`),
+  detail: (admin: boolean, id: string) => request<SupportDetail>(`${admin ? "/admin" : ""}/support/tickets/${id}`),
+  create: (input: { subject: string; category: SupportCategory; message: string; vehicleId?: string }) =>
+    request<SupportDetail>("/support/tickets", { method: "POST", body: JSON.stringify(input) }),
+  reply: (admin: boolean, id: string, body: string) =>
+    request<SupportDetail>(`${admin ? "/admin" : ""}/support/tickets/${id}/messages`, { method: "POST", body: JSON.stringify({ message: body }) }),
+  status: (id: string, status: SupportStatus) =>
+    request<SupportDetail>(`/admin/support/tickets/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -259,6 +294,14 @@ export const vehicleArtworkApi = {
   ensure: (id: string, fingerprint: string) => request<VehicleArtworkResponse>(`/vehicles/${id}/artwork`, { method: "POST", body: JSON.stringify({ fingerprint }) }),
 };
 
+export interface FuelTypeProvenance {
+  source: string;
+  ownerConfirmed: boolean;
+  confirmedAt: string | null;
+  observations?: { value: string; source: string }[];
+  conflicts: { value: string; source: string }[];
+}
+
 export interface VehicleProfile {
   id: string;
   vehicleId: string;
@@ -269,6 +312,7 @@ export interface VehicleProfile {
   engineFamily: string | null;
   displacementCc: number | null;
   fuelType: string | null;
+  fuelTypeProvenance?: FuelTypeProvenance | null;
   aspirationType: string | null;
   powerKw: number | null;
   powerHp: number | null;

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 
 import { GarageService } from "../../garage/services/garage.service";
 import { CreateVehicleProfileDto } from "../dto/create-vehicle-profile.dto";
+import { isOwnerFuelSource } from "../fuel-type-provenance";
 import { type VehicleProfile } from "../schemas/vehicle-profile.schema";
 import {
   VEHICLE_PROFILE_BATTERY_CAPACITY_ERROR,
@@ -78,7 +79,7 @@ export class VehicleProfileService {
         batteryGrossCapacityKwh: dto.batteryGrossCapacityKwh,
         batteryUsableCapacityKwh: dto.batteryUsableCapacityKwh,
 
-        confirmedAt: dto.source?.startsWith("manual") ? new Date() : undefined,
+        confirmedAt: isOwnerFuelSource(dto.source ?? "manual") ? new Date() : undefined,
       });
     } catch (error) {
       if (

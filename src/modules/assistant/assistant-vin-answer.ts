@@ -18,6 +18,9 @@ export function answerSavedVinQuestion(message: string, language: BotLanguage, a
   const asksAccess = /free|another|again|price|cost|purchas|\bbuy\b|\bpay\b|безкоштов|бесплат|повтор|ще раз|ещ[её] раз|вартіст|скільки кошту|сколько стоит|плат|kup|cena|koszt|darmow|bezpłat|ponown|kolejn/i.test(message)
     || requestsLookup;
   const asksFacts = /(?:list|which|what).{0,45}(?:saved|recorded|known|make|model)|які.{0,45}дані|що.{0,45}(?:збережено|відомо)|какие.{0,45}данные|jakie.{0,45}dane/i.test(message);
+  // Fuel questions/corrections need the field-level owner/provider context,
+  // not this identity-only shortcut, which cannot explain source conflicts.
+  if (asksFacts && /\bfuel\b|petrol|gasoline|diesel|пальн|палив|топлив|бензин|дизел|paliw|benzyn/i.test(message)) return null;
   if (!asksAccess && !asksFacts) return null;
   const requestedVins = message.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/g) ?? [];
   const savedVin = facts?.vin.toUpperCase();

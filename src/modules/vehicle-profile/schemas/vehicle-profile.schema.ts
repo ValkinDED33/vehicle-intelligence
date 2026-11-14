@@ -4,6 +4,7 @@ import {
   doublePrecision,
   index,
   integer,
+  jsonb,
   pgTable,
   timestamp,
   uniqueIndex,
@@ -12,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { vehicles } from "../../garage/schemas/vehicle.schema";
+import type { FuelTypeProvenance } from "../fuel-type-provenance";
 
 export const vehicleProfiles = pgTable(
   "vehicle_profiles",
@@ -47,6 +49,8 @@ export const vehicleProfiles = pgTable(
     fuelType: varchar("fuel_type", {
       length: 32,
     }),
+
+    fuelTypeProvenance: jsonb("fuel_type_provenance").$type<FuelTypeProvenance>(),
 
     aspirationType: varchar("aspiration_type", {
       length: 32,

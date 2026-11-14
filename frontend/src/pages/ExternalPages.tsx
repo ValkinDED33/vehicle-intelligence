@@ -10,6 +10,8 @@ import { useAuth } from "../auth";
 import { EmptyState, EventCard, NoVehicle, Spinner } from "../components/CommonComponents";
 import type { PageProps } from "../types/dashboard";
 import { errText } from "../utils/formatters";
+import { reportFuelDisplayFacts } from "../utils/profileDisplayFacts";
+import { FuelTypeNotice } from "../components/FuelTypeNotice";
 
 function IntegrationsPage(props:PageProps){
   const {vehicle,data,afterMutate}=props;
@@ -373,6 +375,7 @@ function ReportViewer({report,vehicle,currentProfile,afterMutate}:{report:Extern
    {warnings.length>0&&<div className="report-warnings">
     {warnings.map(w=><div key={w.text} className={'report-warning '+w.level}>{w.text}</div>)}
    </div>}
+   <FuelTypeNotice facts={reportFuelDisplayFacts(vehicle,currentProfile,report)} conflictsOnly/>
    {oneAutoBuildSheet?<OneAutoBuildSheetView payload={report.rawPayload}/>
     :facts.length?<div className="decode-grid">
     {facts.map(f=><div key={f.path} className="decode-item"><span>{f.path}</span><b>{f.value}</b></div>)}

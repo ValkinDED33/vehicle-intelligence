@@ -15,6 +15,7 @@ import { errText, intervalLines, reminderDetail, urgencyScore, vehicleLine, vehi
 import { ServiceEntry } from "../components/ServiceEntry";
 import { DocumentFileActions } from "../components/DocumentFileActions";
 import { ProfileHistory } from "../components/ProfileHistory";
+import { FuelTypeNotice } from "../components/FuelTypeNotice";
 import { ReminderPreferenceFields, defaultReminderPreferences } from "../components/ReminderPreferenceFields";
 import type { MaintenanceRule } from "../api";
 
@@ -155,6 +156,7 @@ function ProfilePage(props: PageProps) {
    {profile
     ?<div className="panel spec-panel"><h2>{t("ТЕХНІЧНИЙ ПРОФІЛЬ")}</h2><div className="spec-grid">{rows.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div></div>
     :<EmptyState icon={ClipboardList} title={t("Профіль ще не заповнено")} text={t("Натисніть «Розшифрувати VIN» — дані підтягнуться з Vehicle Databases і збережуться в профілі автомобіля.")}/>}
+   <FuelTypeNotice facts={displayFacts}/>
    <form className="panel profile-correction-panel" onSubmit={saveCorrection}>
     <div className="panel-heading"><h2>{t("ПІДТВЕРДЖЕНІ ДАНІ ВЛАСНИКА")}</h2><span className="tag green">{t("вище VIN-провайдера")}</span></div>
     <div className="correction-grid">
